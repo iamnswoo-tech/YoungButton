@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════
-// Welch PSD + HR Worker
+// Welch PSD + HR Worker (v12.2 — absolute paths)
 // Based on Health-HCI-Group/ME-rPPG-demo (Apache 2.0 License)
 // ════════════════════════════════════════════════════════════════════
 
@@ -10,20 +10,27 @@ let hrSession;
 
 ort.env.wasm.wasmPaths = "https://fastly.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
 
-ort.InferenceSession.create("me-rppg/welch_psd.onnx", {
+// ★ FIX: 절대 경로
+ort.InferenceSession.create("/me-rppg/welch_psd.onnx", {
     executionProviders: ["wasm"],
 }).then(async (session) => {
     welchSession = session;
     console.log("[ME-rPPG] Welch Session created");
     self.postMessage({type: "ready", which: "welch"});
+}).catch(err => {
+    console.error("[ME-rPPG] Welch load failed:", err);
+    self.postMessage({ type: "error", which: "welch", error: err.message });
 });
 
-ort.InferenceSession.create("me-rppg/get_hr.onnx", {
+ort.InferenceSession.create("/me-rppg/get_hr.onnx", {
     executionProviders: ["wasm"],
 }).then((session) => {
     hrSession = session;
     console.log("[ME-rPPG] HR Session created");
     self.postMessage({type: "ready", which: "hr"});
+}).catch(err => {
+    console.error("[ME-rPPG] HR load failed:", err);
+    self.postMessage({ type: "error", which: "hr", error: err.message });
 });
 
 self.onmessage = async (event) => {
@@ -37,8 +44,5 @@ self.onmessage = async (event) => {
     const freqs = outputs["freqs"];
     const psd = outputs["psd"];
     const hr = (await hrSession.run({freqs, psd}))["hr"]["cpuData"]["0"];
-
-    // Welch PSD를 통해 HRV 계산용 BVP 신호도 같이 전달
-    // (psd 데이터 중 일부를 메인으로 보내 HRV 산출에 활용)
     self.postMessage({hr, type: "data"});
 };

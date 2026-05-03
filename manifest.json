@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v12.1 ME-rPPG",
-  "short_name": "건강측정 v12.1",
-  "description": "v12.1 ME-rPPG — COEP credentialless 패치",
+  "name": "건강 측정 v12.2 ME-rPPG",
+  "short_name": "건강측정 v12.2",
+  "description": "v12.2 ME-rPPG — Worker 절대 경로 패치",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

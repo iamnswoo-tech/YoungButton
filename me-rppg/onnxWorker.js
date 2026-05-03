@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════════
-// ME-rPPG ONNX Worker
+// ME-rPPG ONNX Worker (v12.2 — absolute paths)
 // Based on Health-HCI-Group/ME-rPPG-demo (Apache 2.0 License)
-// Modified: paths point to me-rppg/ subfolder
+// FIX v12.2: 절대 경로 사용 (워커가 me-rppg/ 안에 있어도 정상 작동)
 // ════════════════════════════════════════════════════════════════════
 
 importScripts("https://fastly.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js");
@@ -13,7 +13,8 @@ let lastTimestamp = null;
 
 ort.env.wasm.wasmPaths = "https://fastly.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/";
 
-ort.InferenceSession.create("me-rppg/model.onnx", {
+// ★ FIX: 절대 경로 사용 (이전: "me-rppg/model.onnx" 상대 경로 → 중복됨)
+ort.InferenceSession.create("/me-rppg/model.onnx", {
     executionProviders: ["wasm"],
 }).then((session) => {
     onnxSession = session;
@@ -37,8 +38,14 @@ function shapeOf(array) {
     return shape;
 }
 
-fetch("./me-rppg/state.json")
-    .then((res) => res.json())
+// ★ FIX: 절대 경로 사용 (이전: "./me-rppg/state.json")
+fetch("/me-rppg/state.json")
+    .then((res) => {
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status} ${res.statusText} for ${res.url}`);
+        }
+        return res.json();
+    })
     .then((data) => {
         for (const [key, value] of Object.entries(data)) {
             const shape = shapeOf(value);
