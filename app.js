@@ -1286,23 +1286,31 @@ const App = {
     console.log('[ME-rPPG] BVP series:', series.length, 'samples,', dur.toFixed(1), 's, sr=', sr.toFixed(1), 'Hz');
 
     const bvp = series.map(s => s.bvp);
+    // ★ v12.4: timestamp를 초 단위로 변환
+    const times = series.map(s => s.t / 1000); // ms → s
 
     // === 3. HRV (BVP에서 cubic spline 업샘플링 후 피크 검출) ===
     const hrHz = hr / 60;
     const expectedRRms = 60000 / hr;
     console.log('[ME-rPPG] 기대 RR:', expectedRRms.toFixed(0), 'ms');
 
-    // ★ FIX v12.3: BVP를 0.7~3.5Hz로 사전 필터링
-    // ME-rPPG 출력은 박동 주파수 외에도 dicrotic notch 등이 섞여있음
-    // BPF로 깨끗하게 정리 후 피크 검출 (Wang 2017 표준)
-    const bvpFiltered = this._bandpass(bvp, sr, 0.7, 3.5);
-
-    // 250Hz로 업샘플링
+    // ★ FIX v12.4: 실제 timestamp로 균등 250Hz 격자 보간
+    // 이전(v12.3): 균등 sr 가정 → 시간축 왜곡 → RMSSD 부풀림
+    // 신규(v12.4): 실제 timestamp 사용 → 정확한 시간 → 정확한 RR
+    // 추가로 BVP 사전 BPF 0.7~3.5Hz로 dicrotic notch 약화
     const upSr = 250;
-    const upBvp = this._cubicSplineUpsample(bvpFiltered, sr, upSr);
-    console.log('[ME-rPPG] BVP 업샘플링:', upBvp.length, 'samples @', upSr, 'Hz');
+    const upBvpRaw = this._cubicSplineUpsampleTimed(times, bvp, upSr);
+    if (upBvpRaw.length < 100) {
+      console.warn('[ME-rPPG] 업샘플링 실패');
+      return { hr: hrInt, rmssd: null, rmssdReason: 'insufficient_data',
+               respRate: null, stressIdx: null, stressFromRMSSD: false,
+               sqi: 70, engine: 'ME-rPPG' };
+    }
+    // 사전 필터링 (250Hz BPF)
+    const upBvp = this._bandpass(Array.from(upBvpRaw), upSr, 0.7, 3.5);
+    console.log('[ME-rPPG] BVP 업샘플링 (timestamp 기반):', upBvp.length, 'samples @', upSr, 'Hz');
 
-    // ★ FIX v12.3: ME-rPPG의 정확한 HR을 활용한 적응형 피크 검출
+    // ★ ME-rPPG의 정확한 HR을 활용한 적응형 피크 검출
     // 다이크로틱 노치(2차 피크) 자동 배제 위해 minDist를 expectedRR의 70%로 강제
     const peaks = this._adaptivePeakDetect(upBvp, upSr, hrHz, 0.70);
     console.log('[ME-rPPG] 검출 피크:', peaks.length, '(기대치:', Math.round(dur * hrHz), ')');
@@ -1344,18 +1352,30 @@ const App = {
           const rmssdRaw = Math.sqrt(sumSq / (cleanRR.length - 1));
           rmssd = Math.round(rmssdRaw);
           lnRmssd = Math.log(Math.max(1, rmssdRaw)).toFixed(2);
-          console.log('[ME-rPPG] RMSSD:', rmssd, 'ms, ln=', lnRmssd);
 
-          if (rmssd < 8 || rmssd > 150) {
+          // SDNN 계산
+          const meanC = cleanRR.reduce((a,b)=>a+b,0) / cleanRR.length;
+          const sdSum = cleanRR.reduce((s,v) => s + (v-meanC)**2, 0);
+          sdnn = Math.round(Math.sqrt(sdSum / cleanRR.length));
+          console.log('[ME-rPPG] RMSSD:', rmssd, 'ms, SDNN:', sdnn, 'ms, ln=', lnRmssd);
+
+          // ★ v12.4 추가 검증: RMSSD/SDNN 비율 sanity check
+          // 정상: RMSSD ≈ 0.7 × SDNN ~ SDNN (Task Force 1996)
+          // 비정상: RMSSD > 1.5 × SDNN → 인접 RR 점프가 비정상적으로 큼 (피크 검출 오류)
+          if (rmssd > sdnn * 1.5) {
+            console.warn('[ME-rPPG] RMSSD/SDNN 비율 비정상:', (rmssd/sdnn).toFixed(2),
+                         '(정상 < 1.5) — 피크 검출 노이즈 의심');
+            rmssdReason = 'noisy_peaks';
+            rmssd = null;
+            lnRmssd = null;
+          }
+          // 임상 정상 범위 검증
+          else if (rmssd < 8 || rmssd > 150) {
+            console.warn('[ME-rPPG] RMSSD 임상 범위 벗어남:', rmssd);
             rmssdReason = 'out_of_clinical_range';
             rmssd = null;
             lnRmssd = null;
           }
-
-          // SDNN
-          const meanC = cleanRR.reduce((a,b)=>a+b,0) / cleanRR.length;
-          const sdSum = cleanRR.reduce((s,v) => s + (v-meanC)**2, 0);
-          sdnn = Math.round(Math.sqrt(sdSum / cleanRR.length));
         }
       }
     }
@@ -1406,21 +1426,18 @@ const App = {
   // ════════════════════════════════════════════════════════════════
 
   // === Cubic Spline 업샘플링 (Mejia-Mejia 2022, RapidHRV 표준) ===
-  // 30Hz → 250Hz 변환으로 RR 시간 해상도 33ms → 4ms로 개선
-  // Natural cubic spline 구현 (Mathematics of Spline curves)
+  // 균등 간격 가정 버전 (legacy)
   _cubicSplineUpsample(y, srIn, srOut) {
     const n = y.length;
     if (n < 4) return y.slice();
     const ratio = srOut / srIn;
     const outLen = Math.floor(n * ratio);
 
-    // Natural cubic spline 계수 계산
-    const h = 1.0; // 균등 간격 가정
+    const h = 1.0;
     const alpha = new Float64Array(n);
     for (let i = 1; i < n - 1; i++) {
       alpha[i] = 3 * (y[i+1] - 2*y[i] + y[i-1]) / h;
     }
-
     const l = new Float64Array(n);
     const mu = new Float64Array(n);
     const z = new Float64Array(n);
@@ -1431,7 +1448,6 @@ const App = {
       z[i] = (alpha[i] - z[i-1]) / l[i];
     }
     l[n-1] = 1; z[n-1] = 0;
-
     const c = new Float64Array(n);
     const b = new Float64Array(n);
     const d = new Float64Array(n);
@@ -1440,14 +1456,84 @@ const App = {
       b[i] = (y[i+1] - y[i]) / h - h * (c[i+1] + 2*c[i]) / 3;
       d[i] = (c[i+1] - c[i]) / (3 * h);
     }
-
-    // 업샘플링
     const out = new Float64Array(outLen);
     for (let j = 0; j < outLen; j++) {
       const t = j / ratio;
       const i = Math.min(Math.floor(t), n - 2);
       const dt = t - i;
       out[j] = y[i] + b[i] * dt + c[i] * dt * dt + d[i] * dt * dt * dt;
+    }
+    return out;
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // v12.4: Timestamp-based Cubic Spline Interpolation
+  // ME-rPPG worker는 비동기 출력 → BVP의 실제 시간 간격이 불균등
+  // 균등 간격 가정 시 RR 산출 오차 ±20-30ms (RMSSD 부풀림의 직접 원인)
+  // 해결: 실제 timestamp 활용한 정확한 250Hz 격자 보간
+  // 참고: Mejia-Mejia 2022, RapidHRV (Bishop 2022)
+  // ════════════════════════════════════════════════════════════════
+  _cubicSplineUpsampleTimed(times, values, srOut) {
+    const n = times.length;
+    if (n < 4 || values.length !== n) return new Float64Array(0);
+
+    // 1. 실제 시간 범위 (초 단위)
+    const tStart = times[0];
+    const tEnd = times[n-1];
+    const dur = tEnd - tStart;
+    const outLen = Math.floor(dur * srOut);
+    if (outLen < 100) return new Float64Array(0);
+
+    // 2. 시간 정규화 (tStart=0)
+    const t = new Float64Array(n);
+    for (let i = 0; i < n; i++) t[i] = times[i] - tStart;
+
+    // 3. 비균등 간격 cubic spline (Numerical Recipes 표준)
+    // h_i = t[i+1] - t[i] (실제 시간 간격)
+    const h = new Float64Array(n - 1);
+    for (let i = 0; i < n - 1; i++) {
+      h[i] = t[i+1] - t[i];
+      if (h[i] <= 0) h[i] = 1e-6; // 안전장치
+    }
+
+    // 4. Tridiagonal system 구성 (Natural BC: c[0]=c[n-1]=0)
+    const alpha = new Float64Array(n);
+    for (let i = 1; i < n - 1; i++) {
+      alpha[i] = (3/h[i]) * (values[i+1] - values[i]) -
+                 (3/h[i-1]) * (values[i] - values[i-1]);
+    }
+
+    const l = new Float64Array(n);
+    const mu = new Float64Array(n);
+    const z = new Float64Array(n);
+    l[0] = 1; mu[0] = 0; z[0] = 0;
+    for (let i = 1; i < n - 1; i++) {
+      l[i] = 2 * (t[i+1] - t[i-1]) - h[i-1] * mu[i-1];
+      mu[i] = h[i] / l[i];
+      z[i] = (alpha[i] - h[i-1] * z[i-1]) / l[i];
+    }
+    l[n-1] = 1; z[n-1] = 0;
+
+    // 5. 계수 c, b, d 후방 대입
+    const c = new Float64Array(n);
+    const b = new Float64Array(n - 1);
+    const d = new Float64Array(n - 1);
+    for (let i = n - 2; i >= 0; i--) {
+      c[i] = z[i] - mu[i] * c[i+1];
+      b[i] = (values[i+1] - values[i]) / h[i] - h[i] * (c[i+1] + 2*c[i]) / 3;
+      d[i] = (c[i+1] - c[i]) / (3 * h[i]);
+    }
+
+    // 6. 균등 250Hz 격자로 보간
+    const out = new Float64Array(outLen);
+    const dtOut = 1.0 / srOut;
+    let segIdx = 0;
+    for (let j = 0; j < outLen; j++) {
+      const tj = j * dtOut;
+      // tj가 속한 세그먼트 찾기 (선형 검색 — 단조 증가니 효율적)
+      while (segIdx < n - 2 && t[segIdx + 1] < tj) segIdx++;
+      const dt = tj - t[segIdx];
+      out[j] = values[segIdx] + b[segIdx]*dt + c[segIdx]*dt*dt + d[segIdx]*dt*dt*dt;
     }
     return out;
   },
@@ -1520,9 +1606,10 @@ const App = {
 
     // === Parabolic interpolation (서브샘플 정밀도) ===
     // y(t) = a*t² + b*t + c, peak at t* = -b/(2a)
+    // ★ v12.4: centered(필터 후) 신호 사용 — 더 정확한 피크 위치
     const refined = peaks.map(p => {
       if (p < 1 || p >= N - 1) return p;
-      const yL = sig[p-1], yC = sig[p], yR = sig[p+1];
+      const yL = centered[p-1], yC = centered[p], yR = centered[p+1];
       const denom = yL - 2*yC + yR;
       if (Math.abs(denom) < 1e-9) return p;
       return p + 0.5 * (yL - yR) / denom;
@@ -1687,6 +1774,8 @@ const App = {
         'too_variable': 'RR 간격 변동이 너무 큽니다. 안정된 상태에서 재측정해주세요.',
         'out_of_clinical_range': '산출된 HRV 값이 임상 정상 범위를 벗어났습니다. 측정 환경을 개선해주세요.',
         'hr_inconsistent': '주파수 분석과 피크 검출의 심박수가 일치하지 않습니다. 배경 조명 깜빡임이나 움직임의 영향이 있습니다. 더 안정된 환경에서 재측정해주세요.',
+        'noisy_peaks': '피크 검출에 노이즈가 섞였습니다. 머리·몸을 가만히 하고 정면을 보면서 다시 측정해주세요.',
+        'not_converged': '심박수 측정이 충분히 안정되지 못했습니다. 30초 이상 가만히 측정한 후 다시 시도해주세요.',
       };
       const cmt = reasonMap[r.rmssdReason] || '신호 품질이 낮아 HRV 산출이 어렵습니다.';
       setComment('fr-hv-cmt', cmt, '');
