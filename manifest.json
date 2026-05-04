@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v12.2 ME-rPPG",
-  "short_name": "건강측정 v12.2",
-  "description": "v12.2 ME-rPPG — Worker 절대 경로 패치",
+  "name": "건강 측정 v12.3 ME-rPPG",
+  "short_name": "건강측정 v12.3",
+  "description": "v12.3 ME-rPPG — HRV 정제 알고리즘 개선",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

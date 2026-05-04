@@ -1289,14 +1289,23 @@ const App = {
 
     // === 3. HRV (BVP에서 cubic spline 업샘플링 후 피크 검출) ===
     const hrHz = hr / 60;
+    const expectedRRms = 60000 / hr;
+    console.log('[ME-rPPG] 기대 RR:', expectedRRms.toFixed(0), 'ms');
+
+    // ★ FIX v12.3: BVP를 0.7~3.5Hz로 사전 필터링
+    // ME-rPPG 출력은 박동 주파수 외에도 dicrotic notch 등이 섞여있음
+    // BPF로 깨끗하게 정리 후 피크 검출 (Wang 2017 표준)
+    const bvpFiltered = this._bandpass(bvp, sr, 0.7, 3.5);
+
     // 250Hz로 업샘플링
     const upSr = 250;
-    const upBvp = this._cubicSplineUpsample(bvp, sr, upSr);
+    const upBvp = this._cubicSplineUpsample(bvpFiltered, sr, upSr);
     console.log('[ME-rPPG] BVP 업샘플링:', upBvp.length, 'samples @', upSr, 'Hz');
 
-    // 적응형 피크 검출
-    const peaks = this._adaptivePeakDetect(upBvp, upSr, hrHz);
-    console.log('[ME-rPPG] 검출 피크:', peaks.length);
+    // ★ FIX v12.3: ME-rPPG의 정확한 HR을 활용한 적응형 피크 검출
+    // 다이크로틱 노치(2차 피크) 자동 배제 위해 minDist를 expectedRR의 70%로 강제
+    const peaks = this._adaptivePeakDetect(upBvp, upSr, hrHz, 0.70);
+    console.log('[ME-rPPG] 검출 피크:', peaks.length, '(기대치:', Math.round(dur * hrHz), ')');
 
     let rmssd = null, lnRmssd = null, rmssdReason = null;
     let sdnn = null;
@@ -1320,8 +1329,8 @@ const App = {
       if (hrDiffPct > 15) {
         rmssdReason = 'hr_inconsistent';
       } else {
-        // Kubios outlier 제거
-        const cleanRR = this._removeEctopicRR(rawRR);
+        // Kubios outlier 제거 (expectedRR 기준)
+        const cleanRR = this._removeEctopicRR(rawRR, expectedRRms);
         console.log('[ME-rPPG] 정제 후 RR:', cleanRR.length);
 
         if (cleanRR.length < 8) {
@@ -1445,7 +1454,8 @@ const App = {
 
   // === 적응형 피크 검출 (HeartPy / van Gent 2019 표준) ===
   // PPG 표준: 이동평균 임계값 + RR 일관성 검증
-  _adaptivePeakDetect(sig, sr, hrHz) {
+  // v12.3: minDistRatio 파라미터 추가 (다이크로틱 노치 자동 배제)
+  _adaptivePeakDetect(sig, sr, hrHz, minDistRatio) {
     const N = sig.length;
     if (N < 100) return [];
 
@@ -1473,7 +1483,9 @@ const App = {
     // 신호가 이동평균 위로 갈 때 = 피크 후보 영역
     // 각 영역에서 최댓값 위치 = 피크
     const peaks = [];
-    const minDist = Math.round(expectedRRsamples * 0.5); // 최소 간격: 예상 RR의 50%
+    // ★ v12.3: minDist를 인자로 받음 (기본 0.5, dicrotic notch 배제 시 0.7)
+    const ratio = (typeof minDistRatio === 'number') ? minDistRatio : 0.5;
+    const minDist = Math.round(expectedRRsamples * ratio);
     let inRegion = false;
     let regStart = 0, regMaxIdx = -1, regMaxVal = -Infinity;
 
@@ -1520,18 +1532,33 @@ const App = {
   },
 
   // === RR 이상치 제거 (Tarvainen 2014, Kubios 의료기기 표준) ===
+  // v12.3 개선: expectedRR 기준 사전 필터 + 더 관대한 인접 차이 규칙
   // 1. 절대 범위: 300~2000ms (HR 30~200bpm)
-  // 2. 인접 RR과 ±20% 차이 (Karolinska 표준)
-  // 3. 평균 RR 기준 ±3 SD 규칙
-  _removeEctopicRR(rawRR) {
+  // 2. expectedRR 기준 ±35% 마진 (가짜 피크/누락 피크 자동 배제)
+  // 3. 인접 RR과 ±25% 차이 (Karolinska ±20%에서 약간 완화 — rPPG 노이즈 감안)
+  // 4. 평균 RR 기준 ±3 SD 규칙
+  _removeEctopicRR(rawRR, expectedRRms) {
     if (rawRR.length < 4) return rawRR.slice();
 
     // Step 1: 절대 범위 필터
     let rr = rawRR.filter(v => v >= 300 && v <= 2000);
     if (rr.length < 4) return [];
 
-    // Step 2: ±20% 인접 차이 규칙 (Karolinska)
-    const threshold = 0.20;
+    // ★ v12.3 Step 1.5: expectedRR 기준 ±35% 마진 사전 필터
+    // 가짜 피크 (다이크로틱 노치 등): RR이 너무 짧음 (예상의 50% 이하)
+    // 누락 피크: RR이 너무 김 (예상의 150% 이상)
+    if (typeof expectedRRms === 'number' && expectedRRms > 0) {
+      const minRR = expectedRRms * 0.65;
+      const maxRR = expectedRRms * 1.35;
+      const beforeLen = rr.length;
+      rr = rr.filter(v => v >= minRR && v <= maxRR);
+      console.log('[Kubios] expectedRR 필터:', beforeLen, '→', rr.length,
+                  '(범위:', minRR.toFixed(0), '-', maxRR.toFixed(0), 'ms)');
+      if (rr.length < 4) return rr;
+    }
+
+    // Step 2: ±25% 인접 차이 규칙 (rPPG는 ECG보다 노이즈 큼)
+    const threshold = 0.25;
     const filtered = [rr[0]];
     for (let i = 1; i < rr.length; i++) {
       const prev = filtered[filtered.length - 1];
@@ -1539,7 +1566,6 @@ const App = {
       if (ratio <= threshold) {
         filtered.push(rr[i]);
       }
-      // 너무 차이 큰 RR은 누락 (artifact 또는 ectopic)
     }
     if (filtered.length < 4) return filtered;
 
