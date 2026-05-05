@@ -107,6 +107,17 @@ const App = {
       reaction: { count: 0, total: 5, times: [], waitTimer: null, signalAt: 0, state: 'wait' },
       // 자세
       posture: { stream: null, capturedImage: null, captureTimer: null },
+    },
+    // ★ v13: 종합 Wellness Score 누적 (localStorage 동기화)
+    wellness: {
+      face: null,        // { hr, respRate, rmssd, sqi, t, score }
+      balance: null,     // { score, rms, rombergRatio, t }
+      gait: null,        // { score, stepsPerMin, regularity, t }
+      tremor: null,      // { score, peakHz, intensity, t }
+      reaction: null,    // { score, avgMs, t }
+      posture: null,     // { score, asymmetry, t }
+      bodycomp: null,    // { score, bmi, whtr, absi, age, gender, t }
+      lastUpdated: 0,
     }
   },
 
@@ -123,7 +134,7 @@ const App = {
   // ─── 초기화 ───
   init() {
     Console.init();
-    console.log('[App v11.0] 초기화');
+    console.log('[App v13.0] 초기화');
     this._setupCanvas();
     this._bindFaceButton();
     this._bindVisibilityHandler();
@@ -131,12 +142,211 @@ const App = {
     window.addEventListener('beforeunload', () => this._cleanupAll());
     history.replaceState({ page: 'home' }, '', '');
 
+    // ★ v13: 누적 Wellness 결과 복원
+    this._wellnessRestore();
+    this._wellnessRender();
+
     // ★ 첫 방문 시 권한 일괄 요청 안내
     setTimeout(() => this._maybeShowPermissionGuide(), 1000);
 
     // ★ 음성 합성 워밍업 (사용자 첫 인터랙션 후 한 번 깨우기)
     document.addEventListener('click', () => this._warmupSpeech(), { once: true, capture: true });
     document.addEventListener('touchstart', () => this._warmupSpeech(), { once: true, capture: true });
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // v13.0 종합 Wellness Score 시스템
+  // 모든 측정 결과를 단일 0-100 점수로 가중 합산
+  //
+  // 가중치 (의학적 중요도 순):
+  //   - 얼굴 측정 (HR/호흡/HRV/SQI): 35% (가장 핵심)
+  //   - 균형 (Balance): 15%  (낙상 위험, 신경계)
+  //   - 보행 (Gait): 15%  (전신 운동 능력)
+  //   - 반응속도 (Reaction): 12%  (인지 기능)
+  //   - 손떨림 (Tremor): 13%  (신경계 / 떨림 질환)
+  //   - 자세 (Posture): 10%  (근골격계)
+  //
+  // 점수 매핑:
+  //   90-100: A+ (매우 우수)
+  //   80-89:  A  (우수)
+  //   70-79:  B  (양호)
+  //   60-69:  C  (보통)
+  //   50-59:  D  (주의)
+  //   <50:    E  (관리 필요)
+  // ════════════════════════════════════════════════════════════════
+  _wellnessRestore() {
+    try {
+      const raw = localStorage.getItem('wellness_data');
+      if (raw) {
+        const data = JSON.parse(raw);
+        // 7일 지나면 만료 (최신 측정만 유효)
+        const now = Date.now();
+        const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+        for (const key of ['face', 'balance', 'gait', 'tremor', 'reaction', 'posture', 'bodycomp']) {
+          if (data[key] && (now - data[key].t) < MAX_AGE) {
+            this.state.wellness[key] = data[key];
+          }
+        }
+        console.log('[Wellness] 복원:', this.state.wellness);
+      }
+    } catch (e) {
+      console.warn('[Wellness] 복원 실패:', e);
+    }
+  },
+
+  _wellnessSave(category, data) {
+    data.t = Date.now();
+    this.state.wellness[category] = data;
+    this.state.wellness.lastUpdated = data.t;
+    try {
+      localStorage.setItem('wellness_data', JSON.stringify(this.state.wellness));
+    } catch (e) {
+      console.warn('[Wellness] 저장 실패:', e);
+    }
+    this._wellnessRender();
+  },
+
+  _wellnessClear() {
+    this.state.wellness = {
+      face: null, balance: null, gait: null,
+      tremor: null, reaction: null, posture: null,
+      bodycomp: null,
+      lastUpdated: 0,
+    };
+    try { localStorage.removeItem('wellness_data'); } catch(e) {}
+    this._wellnessRender();
+  },
+
+  // 종합 점수 계산
+  _wellnessComputeScore() {
+    const w = this.state.wellness;
+    // v13.0: 7개 항목으로 재배분 (BMI/ABSI 신체 지수 추가)
+    const weights = {
+      face:     0.30,  // 활력 징후 (HR/호흡)
+      balance:  0.13,  // 균형 (낙상 위험)
+      gait:     0.13,  // 보행 (전신 운동)
+      reaction: 0.10,  // 반응속도 (인지)
+      tremor:   0.11,  // 손떨림 (신경계)
+      posture:  0.08,  // 자세 (근골격계)
+      bodycomp: 0.15,  // 신체 지수 (BMI/허리비율 - 만성질환 위험)
+    };
+
+    let totalWeight = 0;
+    let weightedSum = 0;
+    const measured = [];
+    const missing = [];
+
+    for (const [key, weight] of Object.entries(weights)) {
+      if (w[key] && typeof w[key].score === 'number') {
+        weightedSum += w[key].score * weight;
+        totalWeight += weight;
+        measured.push(key);
+      } else {
+        missing.push(key);
+      }
+    }
+
+    if (totalWeight === 0) {
+      return { score: null, grade: '-', measured, missing, completeness: 0 };
+    }
+
+    // 누락된 측정은 평균치(70점)로 가정하지 않고, 측정된 항목만으로 비례 계산
+    const score = Math.round(weightedSum / totalWeight);
+    const grade =
+      score >= 90 ? 'A+' :
+      score >= 80 ? 'A' :
+      score >= 70 ? 'B' :
+      score >= 60 ? 'C' :
+      score >= 50 ? 'D' : 'E';
+    const completeness = Math.round(totalWeight * 100);
+
+    return { score, grade, measured, missing, completeness };
+  },
+
+  // 홈 화면에 Wellness 카드 렌더링
+  _wellnessRender() {
+    const card = document.getElementById('wellness-card');
+    if (!card) return;
+    const result = this._wellnessComputeScore();
+    if (!result.score) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+
+    // 등급 색상
+    const colorMap = {
+      'A+': '#10b981', 'A': '#10b981',
+      'B': '#06b6d4', 'C': '#f59e0b',
+      'D': '#f97316', 'E': '#ef4444',
+    };
+    const color = colorMap[result.grade] || '#9ca3af';
+
+    // 측정 항목 라벨
+    const labelMap = {
+      face: { name: '얼굴', icon: '😊' },
+      balance: { name: '균형', icon: '⚖️' },
+      gait: { name: '보행', icon: '🚶' },
+      reaction: { name: '반응', icon: '⚡' },
+      tremor: { name: '손떨림', icon: '✋' },
+      posture: { name: '자세', icon: '🧍' },
+      bodycomp: { name: '신체지수', icon: '📏' },
+    };
+
+    const measuredHTML = result.measured.map(k => {
+      const score = this.state.wellness[k].score;
+      const lbl = labelMap[k];
+      return `<div class="ws-item ok"><span class="ws-icon">${lbl.icon}</span><span class="ws-name">${lbl.name}</span><span class="ws-score">${score}</span></div>`;
+    }).join('');
+
+    const missingHTML = result.missing.map(k => {
+      const lbl = labelMap[k];
+      return `<div class="ws-item miss" onclick="App._wellnessNavigateToTest('${k}')"><span class="ws-icon">${lbl.icon}</span><span class="ws-name">${lbl.name}</span><span class="ws-score">미측정</span></div>`;
+    }).join('');
+
+    card.innerHTML = `
+      <div class="ws-header">
+        <div class="ws-title">📊 종합 건강 점수</div>
+        <div class="ws-completeness">${result.completeness}% 완료</div>
+      </div>
+      <div class="ws-score-main" style="color:${color}">
+        <div class="ws-score-num">${result.score}</div>
+        <div class="ws-score-meta">
+          <div class="ws-score-grade">${result.grade}</div>
+          <div class="ws-score-unit">/ 100</div>
+        </div>
+      </div>
+      <div class="ws-progress">
+        <div class="ws-progress-fill" style="width:${result.score}%;background:${color}"></div>
+      </div>
+      <div class="ws-grid">
+        ${measuredHTML}
+        ${missingHTML}
+      </div>
+      ${result.completeness < 100 ?
+        `<div class="ws-hint">미측정 항목을 완료하면 점수가 더 정확해져요</div>` :
+        `<div class="ws-hint" style="color:#10b981">✓ 모든 측정 완료</div>`}
+      <button class="ws-reset" type="button" onclick="App._wellnessConfirmReset()">전체 초기화</button>
+    `;
+  },
+
+  _wellnessNavigateToTest(category) {
+    if (category === 'face') {
+      this.goPage('face');
+    } else if (category === 'bodycomp') {
+      // 신체지수는 직접 페이지로 이동
+      this.openBodyComposition();
+    } else {
+      // 신체 측정 메뉴로 이동 후 해당 테스트 시작
+      this.goPage('body');
+      setTimeout(() => this.startBodyTest(category), 300);
+    }
+  },
+
+  _wellnessConfirmReset() {
+    if (confirm('모든 측정 결과를 초기화하시겠습니까?')) {
+      this._wellnessClear();
+    }
   },
 
   // 음성 합성 워밍업 (Chrome Android는 사용자 제스처 후에만 작동)
@@ -1668,6 +1878,41 @@ const App = {
     const panel = document.getElementById('face-result-panel');
     panel.classList.add('show');
 
+    // ★ v13: 얼굴 측정 종합 점수 산출 + 누적 저장
+    // HR 점수: 60-100 정상, 50-110 양호, 그 외 감점
+    let faceScore = 100;
+    if (r.hr) {
+      if (r.hr < 50 || r.hr > 110) faceScore -= 25;
+      else if (r.hr < 60 || r.hr > 100) faceScore -= 8;
+    } else {
+      faceScore -= 30;
+    }
+    // 호흡수 점수: 12-20 정상
+    if (r.respRate) {
+      if (r.respRate < 10 || r.respRate > 24) faceScore -= 15;
+      else if (r.respRate < 12 || r.respRate > 20) faceScore -= 5;
+    } else {
+      faceScore -= 10;
+    }
+    // SQI 가중 (신호 품질): 90+ 가산, 70 미만 감산
+    if (r.sqi) {
+      if (r.sqi < 70) faceScore -= 10;
+      else if (r.sqi >= 90) faceScore += 0; // 가산 없음 (이미 만점 가능)
+    }
+    // RMSSD 신뢰 가능 시만 약간 반영 (rPPG 한계 고려, 가중치 낮게)
+    if (r.rmssd && r.stressFromRMSSD) {
+      if (r.stressIdx >= 70) faceScore -= 5;
+    }
+    faceScore = Math.max(0, Math.min(100, faceScore));
+    this._wellnessSave('face', {
+      hr: r.hr,
+      respRate: r.respRate,
+      rmssd: r.rmssd,
+      stressIdx: r.stressIdx,
+      sqi: r.sqi,
+      score: faceScore,
+    });
+
     const setArc = (id, val, min, max) => {
       const arc = document.getElementById(id);
       if (!arc || val == null) return;
@@ -1782,18 +2027,25 @@ const App = {
     }
 
     if (r.stressIdx != null && r.stressFromRMSSD) {
-      // RMSSD 기반 — 신뢰 가능
-      document.getElementById('fr-st-val').textContent = r.stressIdx;
-      setArc('fr-st-arc', r.stressIdx, 0, 100);
-      const cls = r.stressIdx<35?'normal':r.stressIdx<60?'high':'bad';
-      const lbl = r.stressIdx<35?'이완':r.stressIdx<60?'보통':'스트레스';
+      // RMSSD 기반 — 신뢰 가능 (Anura 방식 1~5 단계로 추상화)
+      // 100 단위는 ms 정확도 의존이라 rPPG 한계 노출 → 단계로 추상화
+      const stress5 =
+        r.stressIdx < 25 ? 1 :    // 매우 이완
+        r.stressIdx < 40 ? 2 :    // 이완
+        r.stressIdx < 60 ? 3 :    // 보통
+        r.stressIdx < 75 ? 4 :    // 약간 스트레스
+                          5;      // 높은 스트레스
+      document.getElementById('fr-st-val').textContent = stress5.toFixed(1);
+      setArc('fr-st-arc', stress5, 1, 5);
+      const cls = stress5<=2?'normal':stress5<=3?'high':'bad';
+      const lbl = stress5<=2?'이완':stress5<=3?'보통':'스트레스';
       setBadge('fr-st-badge', lbl, cls);
       let cmt;
-      if (r.stressIdx < 25)      cmt = '매우 이완된 상태. 명상이나 휴식 후 측정한 듯합니다.';
-      else if (r.stressIdx < 40) cmt = '이완 상태. 좋은 컨디션입니다.';
-      else if (r.stressIdx < 60) cmt = '평상시 상태입니다.';
-      else if (r.stressIdx < 75) cmt = '약간의 긴장 상태. 잠시 휴식하세요.';
-      else                       cmt = '높은 스트레스. 심호흡과 휴식이 필요합니다.';
+      if (stress5 === 1)      cmt = '매우 이완된 상태입니다 (1/5). 명상이나 깊은 휴식 후 측정한 듯합니다.';
+      else if (stress5 === 2) cmt = '이완 상태입니다 (2/5). 좋은 컨디션입니다.';
+      else if (stress5 === 3) cmt = '평상시 상태입니다 (3/5). 일반적인 자율신경 균형입니다.';
+      else if (stress5 === 4) cmt = '약간 긴장된 상태입니다 (4/5). 잠시 휴식해보세요.';
+      else                    cmt = '높은 스트레스 상태입니다 (5/5). 심호흡과 휴식이 필요합니다.';
       setComment('fr-st-cmt', cmt, '');
     } else {
       // RMSSD 없으면 스트레스도 무효 — 정확도가 떨어지므로 표시 안 함
@@ -2199,6 +2451,11 @@ const App = {
       </div>
       <button class="bt-redo" type="button" onclick="App.startBodyTest('balance')">🔄 다시 측정</button>
     `;
+
+    // ★ v13: Wellness 저장
+    this._wellnessSave('balance', {
+      score, rms: closedMetrics.rms, rombergRatio,
+    });
   },
 
   _computeBalanceMetrics(samples) {
@@ -2331,6 +2588,11 @@ const App = {
       </div>
       <button class="bt-redo" type="button" onclick="App.startBodyTest('gait')">🔄 다시 측정</button>
     `;
+
+    // ★ v13: Wellness 저장
+    this._wellnessSave('gait', {
+      score, stepsPerMin: cadence, steps,
+    });
   },
 
   // ════════════════════════════════════════════════════════════════
@@ -2429,6 +2691,13 @@ const App = {
       </div>
       <button class="bt-redo" type="button" onclick="App.startBodyTest('tremor')">🔄 다시 측정</button>
     `;
+
+    // ★ v13: Wellness 저장
+    if (!r.error) {
+      this._wellnessSave('tremor', {
+        score: r.score, peakHz: r.freq, intensity: r.amp,
+      });
+    }
   },
 
   // ════════════════════════════════════════════════════════════════
@@ -2575,6 +2844,11 @@ const App = {
       </div>
       <button class="bt-redo" type="button" onclick="App.startBodyTest('reaction')">🔄 다시 측정</button>
     `;
+
+    // ★ v13: Wellness 저장
+    this._wellnessSave('reaction', {
+      score, avgMs: r.avg, minMs: r.min, maxMs: r.max,
+    });
   },
 
   // ════════════════════════════════════════════════════════════════
@@ -2683,6 +2957,193 @@ const App = {
       </div>
       <button class="bt-redo" type="button" onclick="App.startBodyTest('posture')">🔄 다시 측정</button>
     `;
+
+    // ★ v13: Wellness 저장
+    this._wellnessSave('posture', {
+      score, asymmetry: 100 - a.symmetry,
+    });
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // v13: BMI / WHtR / ABSI 신체 지수 계산
+  //
+  // BMI (Body Mass Index): kg/m²  (WHO 표준)
+  //   <18.5 저체중 / 18.5-24.9 정상 / 25-29.9 과체중 / ≥30 비만
+  //
+  // WHtR (Waist-to-Height Ratio): 허리둘레/키
+  //   <0.5 정상 / 0.5-0.6 과체중 / ≥0.6 비만
+  //   "허리둘레는 키의 절반 미만이어야 한다" (Ashwell 2012)
+  //
+  // ABSI (A Body Shape Index, Krakauer 2012):
+  //   ABSI = WC / (BMI^(2/3) × Height^(1/2))
+  //   BMI보다 사망률 예측력이 더 높다고 알려진 지표
+  //   z-score는 나이/성별 그룹별 평균에서 표준편차 거리
+  // ════════════════════════════════════════════════════════════════
+  openBodyComposition() {
+    console.log('[BodyComp] 페이지 열기');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+    document.getElementById('page-test-bodycomp').classList.add('on');
+    this.state.page = 'test-bodycomp';
+    history.pushState({ page: 'test-bodycomp' }, '', '');
+
+    // 결과/입력 화면 초기화
+    document.getElementById('bt-bodycomp-stage').style.display = 'block';
+    document.getElementById('bt-bodycomp-result').style.display = 'none';
+
+    // 저장된 값 복원 (편의)
+    try {
+      const saved = JSON.parse(localStorage.getItem('bodycomp_input') || '{}');
+      if (saved.height) document.getElementById('bc-height').value = saved.height;
+      if (saved.weight) document.getElementById('bc-weight').value = saved.weight;
+      if (saved.waist)  document.getElementById('bc-waist').value  = saved.waist;
+      if (saved.age)    document.getElementById('bc-age').value    = saved.age;
+      if (saved.gender) this.bcSelectGender(saved.gender);
+    } catch (e) {}
+
+    window.scrollTo(0, 0);
+  },
+
+  bcSelectGender(gender) {
+    document.querySelectorAll('.bc-gender-btn').forEach(b => {
+      b.classList.toggle('on', b.dataset.gender === gender);
+    });
+    this._bcGender = gender;
+  },
+
+  calcBodyComposition() {
+    const h = parseFloat(document.getElementById('bc-height').value);
+    const w = parseFloat(document.getElementById('bc-weight').value);
+    const waist = parseFloat(document.getElementById('bc-waist').value);
+    const age = parseInt(document.getElementById('bc-age').value, 10);
+    const gender = this._bcGender;
+
+    // 입력 검증
+    if (!h || h < 100 || h > 220) {
+      alert('키를 100~220cm 범위로 입력해주세요.');
+      return;
+    }
+    if (!w || w < 30 || w > 200) {
+      alert('체중을 30~200kg 범위로 입력해주세요.');
+      return;
+    }
+    if (!waist || waist < 40 || waist > 200) {
+      alert('허리둘레를 40~200cm 범위로 입력해주세요.');
+      return;
+    }
+    if (!age || age < 10 || age > 120) {
+      alert('나이를 10~120 범위로 입력해주세요.');
+      return;
+    }
+    if (!gender) {
+      alert('성별을 선택해주세요.');
+      return;
+    }
+
+    // 입력 저장
+    try {
+      localStorage.setItem('bodycomp_input', JSON.stringify({
+        height: h, weight: w, waist, age, gender
+      }));
+    } catch (e) {}
+
+    // === 1. BMI 계산 ===
+    const heightM = h / 100;
+    const bmi = w / (heightM * heightM);
+    const bmiCat =
+      bmi < 18.5  ? { label: '저체중', cls: 'under', desc: '체중이 부족한 상태입니다. 균형 잡힌 영양 섭취가 필요합니다.' } :
+      bmi < 23    ? { label: '정상',   cls: 'normal', desc: '건강한 체중 범위입니다 (아시아 기준 18.5~22.9).' } :
+      bmi < 25    ? { label: '과체중 전단계', cls: 'warn', desc: '아시아 기준 과체중 전단계입니다. 활동량을 늘려보세요.' } :
+      bmi < 30    ? { label: '과체중', cls: 'warn', desc: '과체중 범위입니다. 식이 조절과 운동을 권장합니다.' } :
+                    { label: '비만',   cls: 'bad', desc: '비만 범위입니다. 전문의 상담을 권장합니다.' };
+
+    // === 2. WHtR (허리/키 비율) ===
+    const whtr = waist / h;
+    const whtrCat =
+      whtr < 0.43 ? { label: '낮음', cls: 'under', desc: '허리둘레가 매우 작은 편입니다.' } :
+      whtr < 0.5  ? { label: '정상', cls: 'normal', desc: '허리/키 비율이 건강한 범위입니다 ("허리는 키의 절반 미만").' } :
+      whtr < 0.6  ? { label: '복부비만 주의', cls: 'warn', desc: '복부 비만 위험이 있습니다. 허리둘레 감소가 필요합니다.' } :
+                    { label: '복부비만', cls: 'bad', desc: '복부 비만 상태입니다. 심혈관 질환 위험이 높아질 수 있습니다.' };
+
+    // === 3. ABSI (A Body Shape Index) — Krakauer 2012 ===
+    // ABSI = WC / (BMI^(2/3) * Height^(1/2))
+    // WC, Height: m 단위
+    const waistM = waist / 100;
+    const absi = waistM / (Math.pow(bmi, 2/3) * Math.sqrt(heightM));
+    // ABSI z-score: NHANES 데이터 기반 나이/성별 평균
+    // 단순화 — 평균/표준편차 (Krakauer 원논문 표 4 근사)
+    let absiMean, absiSD;
+    if (gender === 'male') {
+      // 남성: 나이가 들수록 평균 증가
+      absiMean = 0.0786 + (age - 35) * 0.00012;
+      absiSD = 0.00509;
+    } else {
+      // 여성
+      absiMean = 0.0773 + (age - 35) * 0.00014;
+      absiSD = 0.00608;
+    }
+    const absiZ = (absi - absiMean) / absiSD;
+    const absiCat =
+      absiZ < -0.868 ? { label: '매우 낮음', cls: 'normal', desc: '체형 위험도가 매우 낮습니다 (사망률 위험 낮음).' } :
+      absiZ < -0.272 ? { label: '낮음', cls: 'normal', desc: '체형 위험도가 낮은 편입니다.' } :
+      absiZ <  0.229 ? { label: '평균', cls: 'normal', desc: '체형 위험도가 평균 범위입니다.' } :
+      absiZ <  0.798 ? { label: '높음', cls: 'warn', desc: '체형 위험도가 평균보다 높습니다.' } :
+                       { label: '매우 높음', cls: 'bad', desc: 'ABSI가 매우 높아 사망률 위험이 큰 체형입니다. 전문의 상담을 권장합니다.' };
+
+    // === 4. 종합 점수 ===
+    let score = 100;
+    if (bmi < 18.5 || bmi >= 25) score -= 15;
+    if (bmi >= 30) score -= 15;
+    if (whtr >= 0.5) score -= 12;
+    if (whtr >= 0.6) score -= 10;
+    if (absiZ > 0.798) score -= 15;
+    else if (absiZ > 0.229) score -= 5;
+    score = Math.max(0, Math.min(100, score));
+    const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D';
+
+    // === 결과 표시 ===
+    document.getElementById('bt-bodycomp-stage').style.display = 'none';
+    const resultEl = document.getElementById('bt-bodycomp-result');
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `
+      <div class="bt-result-card">
+        <div class="bt-result-title">📏 신체 지수 결과</div>
+        <div class="bt-result-value">${score}<span class="bt-result-unit">/ 100</span></div>
+        <div class="bt-result-grade ${grade}">${grade} 등급</div>
+
+        <div class="bc-result-grid">
+          <div class="bc-metric">
+            <div class="bc-metric-label">BMI</div>
+            <div class="bc-metric-value">${bmi.toFixed(1)}</div>
+            <div class="bc-metric-unit">kg/m²</div>
+            <div class="bc-metric-status bc-status ${bmiCat.cls}">${bmiCat.label}</div>
+          </div>
+          <div class="bc-metric">
+            <div class="bc-metric-label">허리/키 비율</div>
+            <div class="bc-metric-value">${whtr.toFixed(2)}</div>
+            <div class="bc-metric-unit">WHtR</div>
+            <div class="bc-metric-status bc-status ${whtrCat.cls}">${whtrCat.label}</div>
+          </div>
+          <div class="bc-metric" style="grid-column: 1 / -1">
+            <div class="bc-metric-label">ABSI 체형 위험도</div>
+            <div class="bc-metric-value">${absi.toFixed(4)}</div>
+            <div class="bc-metric-unit">z-score: ${absiZ.toFixed(2)}</div>
+            <div class="bc-metric-status bc-status ${absiCat.cls}">${absiCat.label}</div>
+          </div>
+        </div>
+
+        <div class="bt-result-cmt"><strong>BMI:</strong> ${bmiCat.desc}</div>
+        <div class="bt-result-cmt"><strong>WHtR:</strong> ${whtrCat.desc}</div>
+        <div class="bt-result-cmt"><strong>ABSI:</strong> ${absiCat.desc}</div>
+      </div>
+      <button class="bt-redo" type="button" onclick="App.openBodyComposition()">🔄 다시 측정</button>
+    `;
+
+    // ★ Wellness 저장
+    this._wellnessSave('bodycomp', {
+      score, bmi, whtr, absi, age, gender,
+    });
+
+    console.log('[BodyComp] BMI:', bmi.toFixed(1), 'WHtR:', whtr.toFixed(2), 'ABSI:', absi.toFixed(4), 'z=', absiZ.toFixed(2), 'score:', score);
   },
 };
 

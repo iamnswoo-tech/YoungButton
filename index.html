@@ -100,6 +100,103 @@ body::before {
 
 /* MEASUREMENT CARDS */
 .measure-cards { display: grid; gap: 12px; padding: 0 16px; }
+
+/* ★ v13: WELLNESS SCORE CARD */
+.wellness-card {
+  margin: 16px;
+  padding: 20px 18px;
+  background: var(--card);
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+}
+.wellness-card::before {
+  content: ''; position: absolute; top: -50px; right: -50px;
+  width: 140px; height: 140px; border-radius: 50%;
+  background: linear-gradient(135deg, rgba(124,58,237,.08), rgba(167,139,250,.04));
+  pointer-events: none;
+}
+.ws-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+  position: relative; z-index: 1;
+}
+.ws-title {
+  font-size: 14px; font-weight: 800; color: var(--text);
+  letter-spacing: -.01em;
+}
+.ws-completeness {
+  font-size: 11px; font-weight: 700; color: var(--primary);
+  background: var(--primary-light); padding: 4px 10px;
+  border-radius: 10px;
+}
+.ws-score-main {
+  display: flex; align-items: baseline; justify-content: center;
+  gap: 12px; margin: 14px 0 8px;
+  position: relative; z-index: 1;
+}
+.ws-score-num {
+  font-size: 56px; font-weight: 900; line-height: 1;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+}
+.ws-score-meta {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.ws-score-grade {
+  font-size: 22px; font-weight: 800; line-height: 1;
+}
+.ws-score-unit {
+  font-size: 12px; color: var(--muted); font-weight: 600;
+}
+.ws-progress {
+  height: 8px; background: var(--bg);
+  border-radius: 6px; overflow: hidden;
+  margin: 14px 0 18px;
+}
+.ws-progress-fill {
+  height: 100%; border-radius: 6px;
+  transition: width .6s cubic-bezier(.4, 0, .2, 1);
+}
+.ws-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.ws-item {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 4px; padding: 10px 6px;
+  background: var(--bg); border-radius: 12px;
+  text-align: center;
+}
+.ws-item.miss {
+  background: var(--card);
+  border: 1.5px dashed var(--border2);
+  cursor: pointer;
+  opacity: .7;
+  transition: opacity .15s;
+}
+.ws-item.miss:active { opacity: 1; transform: scale(.97); }
+.ws-icon { font-size: 20px; }
+.ws-name { font-size: 11px; font-weight: 700; color: var(--text); }
+.ws-item.ok .ws-score {
+  font-size: 14px; font-weight: 800; color: var(--primary);
+}
+.ws-item.miss .ws-score {
+  font-size: 10px; font-weight: 700; color: var(--muted);
+}
+.ws-hint {
+  text-align: center; font-size: 11px; color: var(--muted);
+  margin-top: 14px;
+}
+.ws-reset {
+  display: block; margin: 8px auto 0;
+  padding: 6px 14px; font-size: 11px; color: var(--muted);
+  background: none; border: none; cursor: pointer;
+  font-family: inherit;
+  text-decoration: underline;
+}
+.ws-reset:active { color: var(--text); }
+
 .measure-card {
   display: flex; align-items: center; gap: 14px;
   padding: 18px; border-radius: var(--radius);
@@ -480,6 +577,102 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 }
 .bt-stage .btn-main { margin-top: 4px; }
 
+/* ★ v13: BMI/ABSI 입력 폼 */
+.bc-form {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+.bc-input-row {
+  display: flex; align-items: center;
+  gap: 14px; padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.bc-input-row:last-child { border-bottom: none; }
+.bc-label {
+  flex: 0 0 90px;
+  font-size: 13px; font-weight: 700; color: var(--text);
+}
+.bc-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px; font-weight: 600;
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  transition: border-color .15s;
+}
+.bc-input:focus {
+  border-color: var(--primary);
+  background: var(--card);
+}
+.bc-gender {
+  flex: 1; display: flex; gap: 8px;
+}
+.bc-gender-btn {
+  flex: 1; padding: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg); color: var(--text2);
+  border-radius: 10px;
+  font-family: var(--sans); font-weight: 700; font-size: 13px;
+  cursor: pointer; transition: all .15s;
+}
+.bc-gender-btn.on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.bc-gender-btn:active { transform: scale(.97); }
+
+/* 결과 카드: 4개 지수 그리드 */
+.bc-result-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; margin: 12px 0;
+}
+.bc-metric {
+  background: linear-gradient(135deg, #faf9ff, #f5f3ff);
+  border-radius: 14px;
+  padding: 14px 12px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.bc-metric-label {
+  font-size: 10px; font-weight: 800;
+  color: var(--primary);
+  letter-spacing: .05em;
+  margin-bottom: 6px;
+}
+.bc-metric-value {
+  font-size: 24px; font-weight: 900;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.bc-metric-unit {
+  font-size: 11px; color: var(--muted);
+  font-weight: 600;
+}
+.bc-metric-status {
+  margin-top: 6px;
+  font-size: 11px; font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 10px;
+  display: inline-block;
+}
+.bc-status.normal  { background: #d1fae5; color: #047857; }
+.bc-status.warn    { background: #fef3c7; color: #b45309; }
+.bc-status.bad     { background: #fee2e2; color: #b91c1c; }
+.bc-status.under   { background: #dbeafe; color: #1e40af; }
+
+
 .bt-phase { font-size: 16px; color: var(--body2); font-weight: 700; margin-bottom: 12px; }
 .bt-timer-big {
   font-size: 88px; font-weight: 900; color: var(--primary);
@@ -567,7 +760,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v12.4 · ME-rPPG</span>
+  <span class="hd-ver">v13.0 · 종합점수</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -577,6 +770,9 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <div class="hero-title">얼굴과 신체로<br>건강을 측정하세요</div>
     <div class="hero-sub">의료기기 없이 카메라와 센서만으로<br>활력 징후, 균형, 보행 패턴을 분석합니다.</div>
   </div>
+
+  <!-- ★ v13: 종합 Wellness Score 카드 (측정 후 자동 표시) -->
+  <div id="wellness-card" class="wellness-card" style="display:none"></div>
 
   <div class="section-title">측정 시작</div>
   <div class="measure-cards">
@@ -736,7 +932,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
             <path id="fr-st-arc" d="M10,100 A90,90 0 0,1 190,100" fill="none" stroke="url(#g-st)" stroke-width="14" stroke-linecap="round" stroke-dasharray="283" stroke-dashoffset="283" style="transition:stroke-dashoffset 1s ease"/>
             <defs><linearGradient id="g-st"><stop offset="0%" stop-color="#10b981"/><stop offset="50%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#ef4444"/></linearGradient></defs>
             <text id="fr-st-val" x="100" y="92" text-anchor="middle" font-size="34" font-weight="900" fill="#1f2937">--</text>
-            <text x="100" y="106" text-anchor="middle" font-size="10" fill="#9ca3af">/100</text>
+            <text x="100" y="106" text-anchor="middle" font-size="10" fill="#9ca3af">/ 5</text>
           </svg>
           <div class="rg-range"><span style="color:#10b981">이완</span><span style="color:#f59e0b">보통</span><span style="color:#ef4444">스트레스</span></div>
           <span class="rg-badge wait" id="fr-st-badge">대기</span>
@@ -815,6 +1011,15 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="mc-content">
         <div class="mc-title">자세 평가</div>
         <div class="mc-desc">정면 사진 · 어깨/머리 균형 분석</div>
+      </div>
+      <div class="mc-arrow">›</div>
+    </button>
+    <!-- ★ v13.1: BMI / ABSI -->
+    <button type="button" class="measure-card body" onclick="App.openBodyComposition()">
+      <div class="mc-icon body">📏</div>
+      <div class="mc-content">
+        <div class="mc-title">신체 지수 <span class="mc-badge new">신규</span></div>
+        <div class="mc-desc">키·체중·허리둘레 · BMI / ABSI 계산</div>
       </div>
       <div class="mc-arrow">›</div>
     </button>
@@ -1016,6 +1221,64 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <button class="btn-main stop" type="button" onclick="App.bodyStop()">측정 중지</button>
   </div>
   <div class="bt-result" id="bt-posture-result" style="display:none"></div>
+</div>
+
+<!-- ═══════════ BMI / ABSI 신체 지수 (v13) ═══════════ -->
+<div class="page" id="page-test-bodycomp">
+  <div class="back-bar">
+    <button class="back-btn" type="button" onclick="App.goPage('body')">←</button>
+    <div>
+      <div class="page-title">📏 신체 지수</div>
+      <div class="page-subtitle">BMI · 허리/키 비율 · ABSI</div>
+    </div>
+  </div>
+
+  <div class="bt-stage" id="bt-bodycomp-stage">
+    <div class="bt-icon">📏</div>
+    <div class="bt-title">신체 지수 계산</div>
+    <div class="bt-desc">
+      <strong>BMI (체질량지수)</strong>: 체중과 키의 비율로 비만도 평가<br>
+      <strong>WHtR (허리/키 비율)</strong>: 복부 비만 판정 지표<br>
+      <strong>ABSI (체형 지수)</strong>: BMI보다 정확한 사망 위험 예측 지표<br>
+      <br>아래 정보를 입력해주세요. (1회 입력 후 저장됩니다)
+    </div>
+
+    <div class="bc-form">
+      <div class="bc-input-row">
+        <label class="bc-label">키 (cm)</label>
+        <input type="number" id="bc-height" class="bc-input" inputmode="decimal" step="0.1" min="100" max="220" placeholder="170">
+      </div>
+      <div class="bc-input-row">
+        <label class="bc-label">체중 (kg)</label>
+        <input type="number" id="bc-weight" class="bc-input" inputmode="decimal" step="0.1" min="30" max="200" placeholder="65">
+      </div>
+      <div class="bc-input-row">
+        <label class="bc-label">허리둘레 (cm)</label>
+        <input type="number" id="bc-waist" class="bc-input" inputmode="decimal" step="0.1" min="40" max="200" placeholder="80">
+      </div>
+      <div class="bc-input-row">
+        <label class="bc-label">성별</label>
+        <div class="bc-gender">
+          <button type="button" class="bc-gender-btn" data-gender="male" onclick="App.bcSelectGender('male')">남성</button>
+          <button type="button" class="bc-gender-btn" data-gender="female" onclick="App.bcSelectGender('female')">여성</button>
+        </div>
+      </div>
+      <div class="bc-input-row">
+        <label class="bc-label">나이</label>
+        <input type="number" id="bc-age" class="bc-input" inputmode="numeric" min="10" max="120" placeholder="35">
+      </div>
+    </div>
+
+    <div class="bt-tip">
+      💡 허리둘레는 배꼽 위치에서 줄자로 가볍게 둘러 측정해주세요.
+    </div>
+
+    <button class="btn-main body" type="button" onclick="App.calcBodyComposition()">
+      계산하기
+    </button>
+  </div>
+
+  <div class="bt-result" id="bt-bodycomp-result" style="display:none"></div>
 </div>
 
 <!-- ═══════════ LEGACY PAGE (손가락) ═══════════ -->

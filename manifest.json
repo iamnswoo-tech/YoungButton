@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v12.4 ME-rPPG",
-  "short_name": "건강측정 v12.4",
-  "description": "v12.4 ME-rPPG — Timestamp 기반 정확한 RR 산출",
+  "name": "건강 측정 v13.0",
+  "short_name": "건강측정 v13.0",
+  "description": "v13.0 — 종합 Wellness Score + BMI/ABSI + 스트레스 1-5단계",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
