@@ -415,13 +415,26 @@ const App = {
 
   // === 안내 시스템 v11s8 — 음성 + 시각 + 진동 통합 ===
   // 환경에 맞춰 가능한 모든 방식으로 안내
-  _speak(text) {
+  // v13.1: onComplete 콜백 추가 — 음성 끝난 후 측정 시작
+  _speak(text, onComplete) {
     // 1. 시각적 안내 (항상 작동) — 화면 상단에 큰 메시지
     this._showSpeechBanner(text);
     // 2. 진동 (지원 시)
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    // 3. 음성 (지원 시)
-    this._tryTTS(text);
+    // 3. 음성 (지원 시) — 끝나면 콜백 호출
+    const handleDone = () => {
+      if (typeof onComplete === 'function') {
+        // 음성 끝난 후 800ms 추가 대기 (사용자가 안내 인지할 시간)
+        setTimeout(onComplete, 800);
+      }
+    };
+    this._tryTTS(text, handleDone);
+    // TTS 미지원 환경 안전망: 텍스트 길이 기반 추정 시간 후 콜백 실행
+    if (typeof onComplete === 'function' && !('speechSynthesis' in window)) {
+      // 한글 1글자 약 150ms 추정 + 800ms 여유
+      const estimatedMs = Math.max(2000, text.length * 150) + 800;
+      setTimeout(onComplete, estimatedMs);
+    }
   },
 
   _showSpeechBanner(text) {
@@ -446,9 +459,10 @@ const App = {
     }, duration);
   },
 
-  _tryTTS(text) {
+  _tryTTS(text, onEnd) {
     if (!('speechSynthesis' in window)) {
       console.log('[Speech] TTS 미지원 — 시각 안내만');
+      // TTS 없을 때도 onEnd는 _speak의 안전망에서 처리됨
       return;
     }
     try {
@@ -458,6 +472,20 @@ const App = {
       utter.rate = 1.05;
       utter.pitch = 1.0;
       utter.volume = 1.0;
+
+      // ★ v13.1: 음성 종료 콜백
+      let endCalled = false;
+      const safeEnd = () => {
+        if (endCalled) return;
+        endCalled = true;
+        if (typeof onEnd === 'function') onEnd();
+      };
+      utter.onend = safeEnd;
+      utter.onerror = safeEnd;
+      // 안전망: 텍스트 길이 + 1초 후에도 onend 안 오면 강제 종료 (일부 환경 대응)
+      const fallbackMs = Math.max(2500, text.length * 180) + 1000;
+      setTimeout(safeEnd, fallbackMs);
+
       // voiceschanged 이벤트 후 voice 적용 (Chrome Android 호환)
       const trySpeak = () => {
         const voices = window.speechSynthesis.getVoices();
@@ -487,6 +515,8 @@ const App = {
       }
     } catch (err) {
       console.warn('[Speech] 실패:', err);
+      // 실패 시에도 onEnd 호출 (측정 시작 막지 않도록)
+      if (typeof onEnd === 'function') setTimeout(onEnd, 500);
     }
   },
 
@@ -2372,38 +2402,85 @@ const App = {
     let remain = 15;
     document.getElementById('bt-balance-timer').textContent = remain;
 
-    // ★ 음성 안내
-    this._speak('균형 검사를 시작합니다. 눈을 뜨고 정면을 보세요. 15초 동안 가만히 서있으세요.');
+    // ★ v13.1: 음성 안내 → 끝난 후 측정 시작 (1초 추가 대기)
+    this._speak('균형 검사를 시작합니다. 눈을 뜨고 정면을 보세요. 15초 동안 가만히 서있으세요.', () => {
+      if (!this.state.body.running) return; // 사용자 중단 시
+      console.log('[Balance] 음성 종료 → 가속도 측정 시작');
 
-    this._startMotionListener(s => {
-      this.state.body.balance.samples.push(s);
-    });
+      this._startMotionListener(s => {
+        this.state.body.balance.samples.push(s);
+        this._drawAccelWave('bt-balance-wave', this.state.body.balance.samples);
+      });
 
-    this.state.body.timerInterval = setInterval(() => {
-      remain--;
-      document.getElementById('bt-balance-timer').textContent = remain;
-      // 카운트다운 음성 (마지막 3초)
-      if (remain === 5) {
-        this._speak('5초 남았습니다');
-      }
-      if (remain === 0) {
-        if (b.phase === 'eyes_open') {
-          b.openSamples = [...b.samples];
-          b.samples = [];
-          b.phase = 'eyes_closed';
-          document.getElementById('bt-balance-phase').textContent = '👁‍🗨 눈을 감고 가만히 서세요';
-          remain = 15;
-          document.getElementById('bt-balance-timer').textContent = remain;
-          if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-          // ★ 음성 안내 (다음 단계)
-          this._speak('이제 눈을 감으세요. 그대로 15초간 가만히 서있으세요.');
-        } else {
-          b.closedSamples = [...b.samples];
-          this._speak('측정이 완료되었습니다.');
-          this._finalizeBalance();
+      this.state.body.timerInterval = setInterval(() => {
+        remain--;
+        document.getElementById('bt-balance-timer').textContent = remain;
+        if (remain === 5) this._speak('5초 남았습니다');
+        if (remain === 0) {
+          if (b.phase === 'eyes_open') {
+            b.openSamples = [...b.samples];
+            b.samples = [];
+            b.phase = 'eyes_closed';
+            document.getElementById('bt-balance-phase').textContent = '👁‍🗨 눈을 감고 가만히 서세요';
+            remain = 15;
+            document.getElementById('bt-balance-timer').textContent = remain;
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+            this._speak('이제 눈을 감으세요. 그대로 15초간 가만히 서있으세요.');
+          } else {
+            b.closedSamples = [...b.samples];
+            this._speak('측정이 완료되었습니다.');
+            this._finalizeBalance();
+          }
         }
-      }
-    }, 1000);
+      }, 1000);
+    });
+  },
+
+  // ★ v13.1: 가속도 그래프 실시간 그리기 (균형/보행/손떨림 공통)
+  _drawAccelWave(canvasId, samples) {
+    const cv = document.getElementById(canvasId);
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    ctx.fillStyle = '#1f2937';
+    ctx.fillRect(0, 0, W, H);
+
+    if (samples.length < 2) return;
+    // 최근 ~3초만 표시 (보통 60Hz × 3s ≈ 180샘플)
+    const winLen = Math.min(180, samples.length);
+    const slice = samples.slice(-winLen);
+    // 가속도 크기 (중력 미제거) → 평균에서의 편차로 표현
+    const meanX = slice.reduce((s,v) => s + v.x, 0) / slice.length;
+    const meanY = slice.reduce((s,v) => s + v.y, 0) / slice.length;
+    const meanZ = slice.reduce((s,v) => s + v.z, 0) / slice.length;
+    const mags = slice.map(s => Math.sqrt(
+      (s.x - meanX) ** 2 + (s.y - meanY) ** 2 + (s.z - meanZ) ** 2
+    ));
+    let minV = Infinity, maxV = -Infinity;
+    for (const v of mags) { if (v < minV) minV = v; if (v > maxV) maxV = v; }
+    const range = Math.max(maxV - minV, 0.05); // 너무 작은 변화도 표시
+
+    // 그리드
+    ctx.strokeStyle = 'rgba(167,139,250,.12)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+      const y = H * i / 4;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+
+    // 가속도 변동 그래프
+    ctx.strokeStyle = '#a78bfa';
+    ctx.lineWidth = 1.8;
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = '#a78bfa';
+    ctx.beginPath();
+    mags.forEach((v, i) => {
+      const x = i / (mags.length - 1) * W;
+      const y = H - ((v - minV) / range) * (H - 12) - 6;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.shadowBlur = 0;
   },
 
   _finalizeBalance() {
@@ -2501,28 +2578,32 @@ const App = {
     document.getElementById('bt-gait-timer').textContent = remain;
     document.getElementById('bt-gait-steps').textContent = 0;
 
-    this._speak('보행 측정을 시작합니다. 평소 속도로 30초간 걸어주세요.');
+    // ★ v13.1: 음성 끝난 후 측정 시작
+    this._speak('보행 측정을 시작합니다. 평소 속도로 30초간 걸어주세요.', () => {
+      if (!this.state.body.running) return;
+      console.log('[Gait] 음성 종료 → 측정 시작');
 
-    this._startMotionListener(s => {
-      this.state.body.gait.samples.push(s);
+      this._startMotionListener(s => {
+        this.state.body.gait.samples.push(s);
+        this._drawAccelWave('bt-gait-wave', this.state.body.gait.samples);
+      });
+
+      this.state.body.timerInterval = setInterval(() => {
+        remain--;
+        document.getElementById('bt-gait-timer').textContent = remain;
+        const samples = this.state.body.gait.samples;
+        if (samples.length > 30) {
+          const steps = this._countSteps(samples);
+          this.state.body.gait.steps = steps;
+          document.getElementById('bt-gait-steps').textContent = steps;
+        }
+        if (remain === 5) this._speak('5초 남았습니다');
+        if (remain === 0) {
+          this._speak('보행 측정이 완료되었습니다.');
+          this._finalizeGait();
+        }
+      }, 1000);
     });
-
-    this.state.body.timerInterval = setInterval(() => {
-      remain--;
-      document.getElementById('bt-gait-timer').textContent = remain;
-      // 실시간 스텝 카운트 (간단)
-      const samples = this.state.body.gait.samples;
-      if (samples.length > 30) {
-        const steps = this._countSteps(samples);
-        this.state.body.gait.steps = steps;
-        document.getElementById('bt-gait-steps').textContent = steps;
-      }
-      if (remain === 5) this._speak('5초 남았습니다');
-      if (remain === 0) {
-        this._speak('보행 측정이 완료되었습니다.');
-        this._finalizeGait();
-      }
-    }, 1000);
   },
 
   _countSteps(samples) {
@@ -2608,21 +2689,26 @@ const App = {
     let remain = 15;
     document.getElementById('bt-tremor-timer').textContent = remain;
 
-    this._speak('손떨림 측정을 시작합니다. 팔을 앞으로 뻗고 가만히 유지해주세요. 15초간 측정합니다.');
+    // ★ v13.1: 음성 끝난 후 측정 시작
+    this._speak('손떨림 측정을 시작합니다. 팔을 앞으로 뻗고 가만히 유지해주세요. 15초간 측정합니다.', () => {
+      if (!this.state.body.running) return;
+      console.log('[Tremor] 음성 종료 → 측정 시작');
 
-    this._startMotionListener(s => {
-      this.state.body.tremor.samples.push(s);
+      this._startMotionListener(s => {
+        this.state.body.tremor.samples.push(s);
+        this._drawAccelWave('bt-tremor-wave', this.state.body.tremor.samples);
+      });
+
+      this.state.body.timerInterval = setInterval(() => {
+        remain--;
+        document.getElementById('bt-tremor-timer').textContent = remain;
+        if (remain === 5) this._speak('5초 남았습니다');
+        if (remain === 0) {
+          this._speak('손떨림 측정이 완료되었습니다.');
+          this._finalizeTremor();
+        }
+      }, 1000);
     });
-
-    this.state.body.timerInterval = setInterval(() => {
-      remain--;
-      document.getElementById('bt-tremor-timer').textContent = remain;
-      if (remain === 5) this._speak('5초 남았습니다');
-      if (remain === 0) {
-        this._speak('손떨림 측정이 완료되었습니다.');
-        this._finalizeTremor();
-      }
-    }, 1000);
   },
 
   _finalizeTremor() {
@@ -2709,33 +2795,40 @@ const App = {
     r.count = 0;
     r.times = [];
     r.state = 'wait';
+    r.signalAt = 0;
+    if (r.waitTimer) { clearTimeout(r.waitTimer); r.waitTimer = null; }
     document.getElementById('bt-reaction-count').textContent = 0;
+    document.getElementById('bt-reaction-text').textContent = '대기 중...';
+    document.getElementById('bt-reaction-sub').textContent = '음성 안내가 끝나면 시작됩니다';
 
-    // ★ 터치 민감도 개선: pointerdown 이벤트 직접 바인딩 (300ms 지연 없음)
+    // ★ v13.1: 핸들러 항상 새로 바인딩 (이전 세션 핸들러 청소)
     const area = document.getElementById('bt-reaction-area');
-    // 기존 핸들러 제거
     if (this._reactionHandler) {
       area.removeEventListener('pointerdown', this._reactionHandler);
+      area.removeEventListener('click', this._reactionHandler);
+      area.removeEventListener('touchstart', this._reactionHandler);
     }
+    // 영역의 기존 onclick="App.reactionTap()" 제거 (HTML 인라인) → JS 핸들러 우선
+    area.onclick = null;
+    // 단일 통합 핸들러 (모든 입력 이벤트 → reactionTap)
     this._reactionHandler = (e) => {
       e.preventDefault();
       e.stopPropagation();
       this.reactionTap();
     };
+    // pointerdown 우선, fallback으로 touchstart/click
     area.addEventListener('pointerdown', this._reactionHandler, { passive: false });
-    // 클릭도 추가 (마우스 호환)
-    if (this._reactionClickHandler) {
-      area.removeEventListener('click', this._reactionClickHandler);
-    }
-    this._reactionClickHandler = (e) => {
-      e.preventDefault();
-      this.reactionTap();
-    };
-    area.addEventListener('click', this._reactionClickHandler);
+    area.addEventListener('touchstart', this._reactionHandler, { passive: false });
+    area.addEventListener('click', this._reactionHandler);
+    area.classList.remove('ready', 'success', 'early');
 
-    // 음성 안내
-    this._speak('반응속도 측정을 시작합니다. 녹색 신호가 나타나면 화면을 빠르게 누르세요.');
-    setTimeout(() => this._reactionNextRound(), 1500);
+    // ★ 음성 안내 → 끝난 후 첫 라운드 시작
+    this._speak('반응속도 측정을 시작합니다. 화면이 녹색으로 바뀌면 빠르게 터치하세요.', () => {
+      if (!this.state.body.running) return;
+      console.log('[Reaction] 음성 종료 → 첫 라운드 시작');
+      document.getElementById('bt-reaction-sub').textContent = '곧 신호가 나타납니다';
+      this._reactionNextRound();
+    });
   },
 
   _reactionNextRound() {

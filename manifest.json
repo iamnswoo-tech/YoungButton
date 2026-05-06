@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v13.0",
-  "short_name": "건강측정 v13.0",
-  "description": "v13.0 — 종합 Wellness Score + BMI/ABSI + 스트레스 1-5단계",
+  "name": "건강 측정 v13.1",
+  "short_name": "건강측정 v13.1",
+  "description": "v13.1 — 음성 동기화 + 가속도 그래프 + 반응속도 안정화",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

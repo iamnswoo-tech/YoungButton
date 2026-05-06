@@ -760,7 +760,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v13.0 · 종합점수</span>
+  <span class="hd-ver">v13.1 · 종합점수</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -1097,6 +1097,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <div class="bt-timer-big" id="bt-gait-timer">30</div>
     <div class="bt-instruction">평소 속도로 자연스럽게 걸으세요</div>
     <div class="bt-stat">스텝 카운트: <span id="bt-gait-steps">0</span></div>
+    <canvas id="bt-gait-wave" class="wave-canvas" width="640" height="120" style="margin: 16px"></canvas>
     <button class="btn-main stop" type="button" onclick="App.bodyStop()">측정 중지</button>
   </div>
   <div class="bt-result" id="bt-gait-result" style="display:none"></div>
@@ -1125,7 +1126,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     </button>
   </div>
   <div class="bt-running" id="bt-reaction-running" style="display:none">
-    <div class="bt-reaction-area" id="bt-reaction-area" onclick="App.reactionTap()">
+    <div class="bt-reaction-area" id="bt-reaction-area">
       <div class="bt-reaction-text" id="bt-reaction-text">대기 중...</div>
       <div class="bt-reaction-sub" id="bt-reaction-sub">곧 신호가 나타납니다</div>
       <div class="bt-reaction-counter">
