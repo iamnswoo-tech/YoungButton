@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v13.1",
-  "short_name": "건강측정 v13.1",
-  "description": "v13.1 — 음성 동기화 + 가속도 그래프 + 반응속도 안정화",
+  "name": "건강 측정 v13.2",
+  "short_name": "건강측정 v13.2",
+  "description": "v13.2 — 코치 톤 결과 + 신체나이/피부나이 + 반응속도 안정화",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

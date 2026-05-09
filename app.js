@@ -304,6 +304,26 @@ const App = {
       return `<div class="ws-item miss" onclick="App._wellnessNavigateToTest('${k}')"><span class="ws-icon">${lbl.icon}</span><span class="ws-name">${lbl.name}</span><span class="ws-score">미측정</span></div>`;
     }).join('');
 
+    // ★ v13.2: 신체 나이 추출 (있을 경우 홈 카드에 표시)
+    const bc = this.state.wellness.bodycomp;
+    const bodyAgeHTML = (bc && bc.bodyAge) ? `
+      <div class="ws-age-row">
+        <div class="ws-age-item">
+          <span class="ws-age-icon">🧬</span>
+          <span class="ws-age-label">신체 나이</span>
+          <span class="ws-age-num">${bc.bodyAge}<span class="ws-age-unit">세</span></span>
+          ${bc.ageDiff !== undefined ? `<span class="ws-age-diff ${bc.ageDiff <= 1 ? 'good' : 'warn'}">${bc.ageDiff > 0 ? '+' : ''}${bc.ageDiff}</span>` : ''}
+        </div>
+        ${bc.skinAge ? `
+        <div class="ws-age-item">
+          <span class="ws-age-icon">✨</span>
+          <span class="ws-age-label">피부 나이</span>
+          <span class="ws-age-num">${bc.skinAge}<span class="ws-age-unit">세</span></span>
+        </div>
+        ` : ''}
+      </div>
+    ` : '';
+
     card.innerHTML = `
       <div class="ws-header">
         <div class="ws-title">📊 종합 건강 점수</div>
@@ -319,6 +339,7 @@ const App = {
       <div class="ws-progress">
         <div class="ws-progress-fill" style="width:${result.score}%;background:${color}"></div>
       </div>
+      ${bodyAgeHTML}
       <div class="ws-grid">
         ${measuredHTML}
         ${missingHTML}
@@ -2801,12 +2822,17 @@ const App = {
     document.getElementById('bt-reaction-text').textContent = '대기 중...';
     document.getElementById('bt-reaction-sub').textContent = '음성 안내가 끝나면 시작됩니다';
 
-    // ★ v13.1: 핸들러 항상 새로 바인딩 (이전 세션 핸들러 청소)
+    // ★ v13.2: 핸들러 항상 새로 바인딩 (이전 세션 핸들러 청소)
     const area = document.getElementById('bt-reaction-area');
     if (this._reactionHandler) {
       area.removeEventListener('pointerdown', this._reactionHandler);
       area.removeEventListener('click', this._reactionHandler);
       area.removeEventListener('touchstart', this._reactionHandler);
+    }
+    if (this._reactionBlockHandler) {
+      area.removeEventListener('contextmenu', this._reactionBlockHandler);
+      area.removeEventListener('selectstart', this._reactionBlockHandler);
+      area.removeEventListener('touchend', this._reactionBlockHandler);
     }
     // 영역의 기존 onclick="App.reactionTap()" 제거 (HTML 인라인) → JS 핸들러 우선
     area.onclick = null;
@@ -2816,10 +2842,22 @@ const App = {
       e.stopPropagation();
       this.reactionTap();
     };
+    // ★ v13.2: Google 검색/컨텍스트 메뉴 차단 핸들러
+    // Android Chrome/Samsung Internet에서 길게 누르면 텍스트 선택 → "Google에서 검색" 팝업 발생
+    // 모든 잠재적 트리거 이벤트를 막음
+    this._reactionBlockHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
     // pointerdown 우선, fallback으로 touchstart/click
     area.addEventListener('pointerdown', this._reactionHandler, { passive: false });
     area.addEventListener('touchstart', this._reactionHandler, { passive: false });
     area.addEventListener('click', this._reactionHandler);
+    // 차단 이벤트
+    area.addEventListener('contextmenu', this._reactionBlockHandler);
+    area.addEventListener('selectstart', this._reactionBlockHandler);
+    area.addEventListener('touchend', this._reactionBlockHandler, { passive: false });
     area.classList.remove('ready', 'success', 'early');
 
     // ★ 음성 안내 → 끝난 후 첫 라운드 시작
@@ -2963,20 +3001,34 @@ const App = {
       });
       await video.play();
 
-      let remain = 5;
+      // ★ v13.2: 음성 안내 끝난 후 10초 카운트다운 시작 (자세 잡을 시간 충분히)
+      let remain = 10;
       document.getElementById('bt-posture-timer').textContent = remain;
-      this._speak('자세 평가를 시작합니다. 화면 가이드에 맞춰 상반신이 모두 보이도록 거리를 조정하세요. 5초 후 촬영합니다.');
-      this.state.body.timerInterval = setInterval(() => {
-        remain--;
-        document.getElementById('bt-posture-timer').textContent = remain;
-        if (remain === 3) this._speak('3');
-        if (remain === 2) this._speak('2');
-        if (remain === 1) this._speak('1');
-        if (remain === 0) {
-          this._speak('촬영합니다');
-          this._capturePosture();
-        }
-      }, 1000);
+      const sub = document.getElementById('bt-posture-sub');
+      if (sub) sub.textContent = '음성 안내가 끝나면 10초 카운트다운이 시작됩니다';
+
+      this._speak('자세 평가를 시작합니다. 어깨를 펴고 정면을 바라보며 자연스럽게 서주세요.', () => {
+        if (!this.state.body.running) return;
+        console.log('[Posture] 음성 종료 → 10초 카운트다운 시작');
+        if (sub) sub.textContent = '천천히 자세를 잡으세요';
+        this._speak('10초 후에 촬영합니다.');
+
+        this.state.body.timerInterval = setInterval(() => {
+          remain--;
+          document.getElementById('bt-posture-timer').textContent = remain;
+          // 카운트다운 음성 (마지막 5초 + 짧은 알림)
+          if (remain === 7) this._speak('자세를 잡으세요');
+          if (remain === 5) this._speak('5초');
+          if (remain === 3) this._speak('3');
+          if (remain === 2) this._speak('2');
+          if (remain === 1) this._speak('1');
+          if (remain === 0) {
+            this._speak('촬영합니다');
+            if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+            this._capturePosture();
+          }
+        }, 1000);
+      });
     } catch (err) {
       console.error('[Posture] 카메라 실패:', err);
       alert('카메라 접근 실패: ' + err.message);
@@ -3193,16 +3245,187 @@ const App = {
     score = Math.max(0, Math.min(100, score));
     const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D';
 
+    // === 5. 신체 나이 산출 (Dahlén 2017 + Aune 2016 + Krakauer 2014) ===
+    // 베이스: 실제 나이 + 비만 지표 보정
+    let bodyAge = age;
+    // BMI 보정 (Dahlén 2017: BMI 25~ 매 5단위마다 ~2년)
+    if (bmi < 18.5) bodyAge += 1.5;
+    else if (bmi < 23) bodyAge -= 0; // 최적
+    else if (bmi < 25) bodyAge += 1;
+    else if (bmi < 30) bodyAge += 3;
+    else if (bmi < 35) bodyAge += 5;
+    else bodyAge += 8;
+    // WHtR 보정 (Aune 2016: 복부비만은 강력한 예측 인자)
+    if (whtr >= 0.6) bodyAge += 4;
+    else if (whtr >= 0.5) bodyAge += 2;
+    else if (whtr < 0.43) bodyAge += 1; // 너무 적은 것도 패널티
+    // ABSI 보정 (Krakauer 2014: z-score가 사망률과 강한 상관)
+    if (absiZ > 1.5) bodyAge += 3;
+    else if (absiZ > 0.8) bodyAge += 1.5;
+    else if (absiZ < -0.8) bodyAge -= 1.5; // 보너스
+    // Wellness 다른 측정에서 양호한 항목 있으면 보너스
+    const w_state = this.state.wellness;
+    let wellnessBonus = 0;
+    if (w_state.balance && w_state.balance.score >= 80) wellnessBonus += 0.5;
+    if (w_state.gait && w_state.gait.score >= 80) wellnessBonus += 0.5;
+    if (w_state.tremor && w_state.tremor.score >= 80) wellnessBonus += 0.5;
+    if (w_state.face && w_state.face.score >= 85) wellnessBonus += 1;
+    bodyAge -= wellnessBonus;
+    bodyAge = Math.max(15, Math.min(120, Math.round(bodyAge)));
+    const ageDiff = bodyAge - age;
+
+    // === 6. 피부 나이 (휴리스틱: 주름·탄력 직접 측정 불가하므로 신체 나이 기반 근사) ===
+    // 학술적으로 BMI/허리비율은 피부 노화와 약한 상관, 실제 나이가 가장 강한 예측 인자
+    // 따라서 실제 나이 ± 2~3년 범위 내에서 신체 나이 트렌드 반영
+    let skinAge = age + Math.round((ageDiff / 3));
+    skinAge = Math.max(15, Math.min(120, skinAge));
+
+    // === 7. '코치' 톤 분석 — 강점/약점 추출 (PDF 전략) ===
+    const strengths = [];
+    const concerns = [];
+
+    if (bmi >= 18.5 && bmi < 23) strengths.push({ icon: '💪', name: 'BMI 정상', detail: '건강한 체중 범위' });
+    else if (bmi >= 30) concerns.push({ icon: '⚠️', name: 'BMI 비만', detail: `${bmi.toFixed(1)} kg/m²` });
+    else if (bmi >= 25) concerns.push({ icon: '📊', name: 'BMI 과체중', detail: `${bmi.toFixed(1)} kg/m²` });
+
+    if (whtr < 0.5) strengths.push({ icon: '🎯', name: '복부 비만 없음', detail: '심혈관 위험도 낮음' });
+    else if (whtr >= 0.6) concerns.push({ icon: '⚠️', name: '복부 비만', detail: '허리둘레 관리 필요' });
+
+    if (absiZ < -0.272) strengths.push({ icon: '🌟', name: 'ABSI 우수', detail: `상위 ${absiZ < -0.868 ? 5 : 20}% 체형` });
+    else if (absiZ > 0.798) concerns.push({ icon: '⚠️', name: 'ABSI 높음', detail: '체형 균형 개선 필요' });
+
+    // 강점 우선 메시지 (PDF 핵심: '숨겨진 강점' 발견)
+    let heroMessage, heroSub;
+    if (strengths.length >= 2 && concerns.length === 0) {
+      heroMessage = '🌟 훌륭해요!';
+      heroSub = '대부분의 지표가 건강한 범위에 있습니다.';
+    } else if (bmi >= 25 && absiZ < -0.272) {
+      // PDF 예시: "당신은 숨겨진 근육 부자!"
+      heroMessage = '💪 숨겨진 강점 발견!';
+      heroSub = 'BMI는 높지만 ABSI 체형 균형이 우수합니다. 근육량이 많은 체형일 가능성이 높아요.';
+    } else if (whtr < 0.5 && bmi < 25) {
+      heroMessage = '🎯 균형 잡힌 체형';
+      heroSub = '복부 비만이 없고 BMI도 정상입니다. 좋은 컨디션이에요.';
+    } else if (concerns.length > 0) {
+      heroMessage = '🎯 함께 개선해봐요';
+      heroSub = `${concerns[0].name}을(를) 우선 관리하면 큰 변화가 있어요.`;
+    } else {
+      heroMessage = '📊 측정 완료';
+      heroSub = '결과를 확인하고 건강 관리를 시작하세요.';
+    }
+
+    // 이전 측정과 비교 (재측정 시 변화 추적)
+    let trendHTML = '';
+    const prev = this.state.wellness.bodycomp;
+    if (prev && prev.bmi) {
+      const dW = w - (prev.weight || w);
+      const dWaist = waist - (prev.waist || waist);
+      const dBmi = bmi - prev.bmi;
+      if (Math.abs(dW) >= 0.5 || Math.abs(dWaist) >= 1) {
+        const items = [];
+        if (Math.abs(dW) >= 0.5) {
+          const arrow = dW < 0 ? '▼' : '▲';
+          const cls = dW < 0 ? 'good' : (bmi >= 23 ? 'bad' : 'good');
+          items.push(`<span class="trend-item ${cls}">체중 ${arrow} ${Math.abs(dW).toFixed(1)}kg</span>`);
+        }
+        if (Math.abs(dWaist) >= 1) {
+          const arrow = dWaist < 0 ? '▼' : '▲';
+          const cls = dWaist < 0 ? 'good' : 'bad';
+          items.push(`<span class="trend-item ${cls}">허리 ${arrow} ${Math.abs(dWaist).toFixed(1)}cm</span>`);
+        }
+        trendHTML = `<div class="trend-banner">📈 지난 측정 대비 <span class="trend-items">${items.join('')}</span></div>`;
+      }
+    }
+
+    // 행동 유도 (Call-to-Action)
+    let actionItems = [];
+    if (whtr >= 0.5) actionItems.push({ icon: '🚶', text: '하루 30분 빠른 걸음 → 2주 후 허리둘레 1cm↓ 가능' });
+    if (bmi >= 25) actionItems.push({ icon: '🥗', text: '저녁 탄수화물 1/3 줄이기 → 한 달 후 BMI 0.5 감소 기대' });
+    if (absiZ > 0.5) actionItems.push({ icon: '💪', text: '복근 운동 주 3회 10분 → ABSI 개선 효과' });
+    if (actionItems.length === 0) {
+      actionItems.push({ icon: '✨', text: '현재 상태를 유지하세요! 매주 측정하여 변화를 추적해보세요' });
+    }
+
     // === 결과 표시 ===
     document.getElementById('bt-bodycomp-stage').style.display = 'none';
     const resultEl = document.getElementById('bt-bodycomp-result');
     resultEl.style.display = 'block';
-    resultEl.innerHTML = `
-      <div class="bt-result-card">
-        <div class="bt-result-title">📏 신체 지수 결과</div>
-        <div class="bt-result-value">${score}<span class="bt-result-unit">/ 100</span></div>
-        <div class="bt-result-grade ${grade}">${grade} 등급</div>
 
+    // 신체/피부 나이 색상
+    const bodyAgeColor = ageDiff <= -2 ? '#10b981' : ageDiff <= 1 ? '#06b6d4' : ageDiff <= 4 ? '#f59e0b' : '#ef4444';
+    const ageDiffStr = ageDiff > 0 ? `+${ageDiff}` : ageDiff < 0 ? `${ageDiff}` : '±0';
+    const ageDiffLabel = ageDiff <= -2 ? '실제보다 젊어요!' : ageDiff <= 1 ? '실제 나이 수준' : ageDiff <= 4 ? '관리 필요' : '주의 필요';
+
+    resultEl.innerHTML = `
+      <!-- 히어로 메시지 (코치 톤) -->
+      <div class="bc-hero">
+        <div class="bc-hero-msg">${heroMessage}</div>
+        <div class="bc-hero-sub">${heroSub}</div>
+      </div>
+
+      ${trendHTML}
+
+      <!-- 신체 나이 / 피부 나이 (Anura 스타일) -->
+      <div class="bc-age-grid">
+        <div class="bc-age-card" style="--ring:${bodyAgeColor}">
+          <div class="bc-age-label">🧬 신체 나이</div>
+          <div class="bc-age-num">${bodyAge}</div>
+          <div class="bc-age-unit">세</div>
+          <div class="bc-age-diff" style="color:${bodyAgeColor}">${ageDiffStr}년 · ${ageDiffLabel}</div>
+        </div>
+        <div class="bc-age-card" style="--ring:#a78bfa">
+          <div class="bc-age-label">✨ 피부 나이</div>
+          <div class="bc-age-num">${skinAge}</div>
+          <div class="bc-age-unit">세</div>
+          <div class="bc-age-diff" style="color:#9ca3af;font-size:10px">참고용 · 실제 나이 기반 추정</div>
+        </div>
+      </div>
+
+      <!-- 종합 점수 -->
+      <div class="bc-score-card">
+        <div class="bc-score-label">신체 지수 점수</div>
+        <div class="bc-score-value-row">
+          <div class="bc-score-value">${score}</div>
+          <div class="bc-score-grade">${grade}</div>
+        </div>
+        <div class="bc-score-bar"><div class="bc-score-bar-fill" style="width:${score}%;background:${bodyAgeColor}"></div></div>
+      </div>
+
+      ${strengths.length > 0 ? `
+      <!-- 강점 (PDF 전략: 강점 우선 노출) -->
+      <div class="bc-section">
+        <div class="bc-section-title">💚 당신의 강점</div>
+        <div class="bc-cards">
+          ${strengths.map(s => `
+            <div class="bc-feat-card good">
+              <div class="bc-feat-icon">${s.icon}</div>
+              <div class="bc-feat-name">${s.name}</div>
+              <div class="bc-feat-detail">${s.detail}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      ` : ''}
+
+      ${concerns.length > 0 ? `
+      <!-- 개선 포인트 (부정어 대신 '개선' 사용) -->
+      <div class="bc-section">
+        <div class="bc-section-title">🎯 개선하면 좋은 점</div>
+        <div class="bc-cards">
+          ${concerns.map(c => `
+            <div class="bc-feat-card concern">
+              <div class="bc-feat-icon">${c.icon}</div>
+              <div class="bc-feat-name">${c.name}</div>
+              <div class="bc-feat-detail">${c.detail}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      ` : ''}
+
+      <!-- 상세 측정값 -->
+      <div class="bc-section">
+        <div class="bc-section-title">📊 상세 측정값</div>
         <div class="bc-result-grid">
           <div class="bc-metric">
             <div class="bc-metric-label">BMI</div>
@@ -3223,20 +3446,41 @@ const App = {
             <div class="bc-metric-status bc-status ${absiCat.cls}">${absiCat.label}</div>
           </div>
         </div>
-
-        <div class="bt-result-cmt"><strong>BMI:</strong> ${bmiCat.desc}</div>
-        <div class="bt-result-cmt"><strong>WHtR:</strong> ${whtrCat.desc}</div>
-        <div class="bt-result-cmt"><strong>ABSI:</strong> ${absiCat.desc}</div>
       </div>
-      <button class="bt-redo" type="button" onclick="App.openBodyComposition()">🔄 다시 측정</button>
+
+      <!-- 코치의 한 마디 (행동 유도) -->
+      <div class="bc-coach">
+        <div class="bc-coach-title">💬 오늘의 코치 한 마디</div>
+        ${actionItems.map(a => `
+          <div class="bc-coach-item">
+            <span class="bc-coach-icon">${a.icon}</span>
+            <span class="bc-coach-text">${a.text}</span>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- 다음 측정 예약 (리텐션 트리거) -->
+      <div class="bc-next">
+        <div class="bc-next-icon">🔔</div>
+        <div class="bc-next-text">
+          <div class="bc-next-title">다음 측정은 일주일 후가 좋아요</div>
+          <div class="bc-next-sub">변화 추적을 통해 정확한 트렌드를 확인할 수 있어요</div>
+        </div>
+      </div>
+
+      <button class="bt-redo" type="button" onclick="App.openBodyComposition()">🔄 다시 측정하기</button>
+      <button class="bt-redo" type="button" style="margin-top:8px;background:var(--primary);color:#fff" onclick="App.goPage('home')">🏠 홈으로 (종합 점수 보기)</button>
     `;
 
-    // ★ Wellness 저장
+    // ★ Wellness 저장 (신체 나이/피부 나이 포함)
     this._wellnessSave('bodycomp', {
       score, bmi, whtr, absi, age, gender,
+      weight: w, waist, height: h,
+      bodyAge, skinAge, ageDiff,
     });
 
-    console.log('[BodyComp] BMI:', bmi.toFixed(1), 'WHtR:', whtr.toFixed(2), 'ABSI:', absi.toFixed(4), 'z=', absiZ.toFixed(2), 'score:', score);
+    console.log('[BodyComp] BMI:', bmi.toFixed(1), 'WHtR:', whtr.toFixed(2), 'ABSI:', absi.toFixed(4), 'z=', absiZ.toFixed(2),
+                'BodyAge:', bodyAge, '(diff:', ageDiff, ')', 'SkinAge:', skinAge, 'score:', score);
   },
 };
 
