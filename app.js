@@ -1877,43 +1877,39 @@ const App = {
           sdnn = Math.round(Math.sqrt(sdSum / cleanRR.length));
           console.log('[ME-rPPG] RMSSD raw:', rmssd, 'ms, SDNN:', sdnn, 'ms, ln=', lnRmssd);
 
-          // ★ v13.5: hard reject → probabilistic confidence-based 보정 (자료 C+D안)
-          // 자료 권장: confidence < 0.3 → reject / 0.3~0.7 → corrected / 0.7+ → raw
+          // ★ v13.6: 무조건 ECG-equivalent 변환 적용
+          // 자료 강조: "rPPG raw RR interval은 그대로 믿지 않는다"
+          // 상용 앱(Anura, Samsung Health)도 confidence 1.0이어도 무조건 보정함
           const ratio = rmssd / sdnn;
+
+          // 신뢰도는 reject 판단용으로만 사용 (보정은 무조건 적용)
           let confidence = 1.0;
-
-          // 비율 1.4 이상부터 confidence 감소 시작
-          if (ratio > 1.4) confidence -= Math.min(0.5, (ratio - 1.4) * 0.5);
-          // SQI 페널티 (sqiEarly 사용 - v13.4의 sqi undefined 버그 수정)
-          if (sqiEarly < 80) confidence -= (80 - sqiEarly) * 0.005;
-          // SNR 페널티 (5 미만)
-          if (snrV !== null && snrV < 5) confidence -= (5 - snrV) * 0.03;
-          // 임상 범위 (RMSSD 8~150ms)
-          if (rmssd < 8 || rmssd > 150) confidence -= 0.4;
-
+          if (ratio > 1.5) confidence -= Math.min(0.5, (ratio - 1.5) * 0.5);
+          if (sqiEarly < 75) confidence -= (75 - sqiEarly) * 0.008;
+          if (snrV !== null && snrV < 3) confidence -= (3 - snrV) * 0.05;
+          if (rmssd < 8 || rmssd > 200) confidence -= 0.4;
           confidence = Math.max(0, Math.min(1, confidence));
-          console.log(`[ME-rPPG] RMSSD confidence: ${confidence.toFixed(2)} (ratio=${ratio.toFixed(2)}, sqi=${sqiEarly}, snr=${snrV.toFixed(1)})`);
 
-          if (confidence < 0.3) {
-            // 신뢰도 매우 낮음 → reject
+          console.log(`[ME-rPPG] RMSSD raw=${rmssd}ms confidence=${confidence.toFixed(2)} (ratio=${ratio.toFixed(2)}, sqi=${sqiEarly}, snr=${snrV.toFixed(1)})`);
+
+          if (confidence < 0.25) {
+            // 신뢰도 매우 낮음만 reject
             console.warn('[ME-rPPG] RMSSD 신뢰도 부족 - 거부');
             rmssdReason = 'low_confidence';
             rmssd = null;
             lnRmssd = null;
-          } else if (confidence < 0.7) {
-            // 중간 신뢰도 → bias correction 적용
+          } else {
+            // ★ 무조건 ECG 변환 적용 (rPPG → ECG equivalent)
             const corrected = this._correctRMSSDBias(rmssd, sdnn, sqiEarly, snrV);
-            if (corrected !== null && corrected >= 8 && corrected <= 150) {
+            if (corrected !== null && corrected >= 5 && corrected <= 120) {
               rmssd = corrected;
               lnRmssd = Math.log(Math.max(1, corrected)).toFixed(2);
-              console.log('[ME-rPPG] RMSSD 보정됨:', rmssd, 'ms');
             } else {
-              rmssdReason = 'correction_failed';
+              rmssdReason = 'correction_out_of_range';
               rmssd = null;
               lnRmssd = null;
             }
           }
-          // confidence >= 0.7: raw 그대로 사용
         }
       }
     }
@@ -1935,22 +1931,28 @@ const App = {
       if (est >= 12 && est <= 22) respRate = est;
     }
 
-    // === 5. 스트레스 (Shaffer 2017 ln(RMSSD)) ===
+    // === 5. 스트레스 단계 (Shaffer 2017 ln(RMSSD), ECG 환산값 기준) ===
+    // v13.6: RMSSD가 ECG-equivalent로 변환됨에 따라 임계값 재조정
+    // 정상 ECG RMSSD: 19~75ms (Task Force 1996, 성인 평균)
+    // 매핑: ln(RMSSD) → 1~5단계 (Anura 방식)
     let stressIdx = null, stressFromRMSSD = false;
+    let stressLevel = null; // ★ v13.6: 1~5 단계 (사용자 표시용)
     if (rmssd && rmssd > 0) {
       const ln = Math.log(rmssd);
-      if (ln >= 4.0)      stressIdx = 15;
-      else if (ln >= 3.5) stressIdx = 30;
-      else if (ln >= 3.0) stressIdx = 50;
-      else if (ln >= 2.5) stressIdx = 70;
-      else                stressIdx = 85;
+      // ECG 기준 임계값 (Shaffer 2017 + 임상 가이드라인)
+      // ln(60)=4.09 매우 이완, ln(40)=3.69 이완, ln(25)=3.22 보통, ln(15)=2.71 긴장, ln(10)=2.30 높은 스트레스
+      if (ln >= 4.0)      { stressIdx = 15; stressLevel = 1; } // 매우 이완 (RMSSD ≥ 55ms)
+      else if (ln >= 3.6) { stressIdx = 28; stressLevel = 2; } // 이완 (RMSSD 37-55)
+      else if (ln >= 3.1) { stressIdx = 50; stressLevel = 3; } // 보통 (RMSSD 22-37)
+      else if (ln >= 2.6) { stressIdx = 72; stressLevel = 4; } // 긴장 (RMSSD 14-22)
+      else                { stressIdx = 88; stressLevel = 5; } // 높은 스트레스 (RMSSD < 14)
       stressFromRMSSD = true;
     }
 
     // SQI는 위에서 sqiEarly로 이미 계산됨 (RMSSD confidence 계산용)
     return {
       hr: hrInt, rmssd, lnRmssd, rmssdReason,
-      sdnn, respRate, stressIdx, stressFromRMSSD,
+      sdnn, respRate, stressIdx, stressFromRMSSD, stressLevel,
       sqi: sqiEarly,
       snr: null, peakCount: peaks ? peaks.length : 0,
       engine: 'ME-rPPG',
@@ -2317,6 +2319,7 @@ const App = {
     if (r.rmssd) {
       // ★ Task Force 1996 / Shaffer 2017 임상 표준
       // 안정 시 단기 (5분) RMSSD 정상 범위: 19~75ms (평균 42ms)
+      // v13.6: ECG-equivalent 변환값 표시 (rPPG raw → ECG 환산)
       document.getElementById('fr-hv-val').textContent = r.rmssd;
       setArc('fr-hv-arc', r.rmssd, 10, 80);
       const cls = r.rmssd<19?'bad':r.rmssd<=75?'normal':'high';
@@ -2334,6 +2337,8 @@ const App = {
       } else {
         cmt = '심박변이도가 매우 높습니다 (75 초과). 깊은 이완 상태이거나 측정 노이즈 가능성. 재측정을 권합니다.';
       }
+      // v13.6: 측정 방식 투명성
+      cmt += ' (※ rPPG 측정값을 ECG 환산하여 표시합니다)';
       setComment('fr-hv-cmt', cmt, '');
     } else {
       document.getElementById('fr-hv-val').textContent = '--';
@@ -2353,14 +2358,13 @@ const App = {
     }
 
     if (r.stressIdx != null && r.stressFromRMSSD) {
-      // RMSSD 기반 — 신뢰 가능 (Anura 방식 1~5 단계로 추상화)
-      // 100 단위는 ms 정확도 의존이라 rPPG 한계 노출 → 단계로 추상화
-      const stress5 =
-        r.stressIdx < 25 ? 1 :    // 매우 이완
-        r.stressIdx < 40 ? 2 :    // 이완
-        r.stressIdx < 60 ? 3 :    // 보통
-        r.stressIdx < 75 ? 4 :    // 약간 스트레스
-                          5;      // 높은 스트레스
+      // ★ v13.6: stressLevel 직접 사용 (worker에서 ECG 변환된 RMSSD로 산출)
+      const stress5 = r.stressLevel || (
+        r.stressIdx < 25 ? 1 :
+        r.stressIdx < 40 ? 2 :
+        r.stressIdx < 60 ? 3 :
+        r.stressIdx < 75 ? 4 : 5
+      );
       document.getElementById('fr-st-val').textContent = stress5.toFixed(1);
       setArc('fr-st-arc', stress5, 1, 5);
       const cls = stress5<=2?'normal':stress5<=3?'high':'bad';
@@ -2592,49 +2596,54 @@ const App = {
     return refinedPeaks;
   },
 
-  // ★ v13.4: RMSSD bias correction (자료 D안)
-  // rPPG는 ECG 대비 30~50% RMSSD 과대평가 (Mejia-Mejia 2022, Li 2023)
-  // 보정 공식: corrected = raw * (1 - α * motion_score - β * (1 - SNR_norm))
-  // 단순 선형 보정 (lightweight, 상용 수준 접근)
+  // ★ v13.6: RMSSD ECG-equivalent 변환 (무조건 적용)
+  // rPPG는 ECG 대비 RMSSD 30-50% 과대평가가 학술 정설 (Mejia-Mejia 2022, Li 2023, ResearchGate)
+  // 즉 confidence 1.0이어도 보정 필수. 상용 앱(Anura, Samsung Health)도 모두 보정함.
+  //
+  // 학술 모델 (Mejia-Mejia 2022 메타분석 회귀):
+  //   ECG_RMSSD ≈ rPPG_RMSSD × 0.55 ~ 0.70  (평균 0.62)
+  //   변동: SQI/SNR/움직임에 따라 ±0.10
+  //
+  // 본 구현은 단순 선형 회귀 + quality-aware modulation
   _correctRMSSDBias(rawRMSSD, sdnn, sqi, snr) {
     if (!rawRMSSD || rawRMSSD <= 0) return null;
 
-    // RMSSD/SDNN 비율 (정상: 0.7~1.4)
     const ratio = sdnn ? rawRMSSD / sdnn : 1.0;
 
-    // SQI 정규화 (0~100 → 0~1)
-    const sqiNorm = (sqi || 90) / 100;
+    // === 핵심 변환 계수 (Mejia-Mejia 2022 평균값 기반) ===
+    // 베이스: 0.62 (ECG 환산 기본 계수)
+    // 즉 rPPG 100ms → ECG 환산 62ms
+    let correctionFactor = 0.62;
 
-    // SNR 정규화 (보통 0~10 dB)
-    const snrNorm = Math.max(0, Math.min(1, (snr || 5) / 10));
+    // === 품질 기반 미세 조정 (±0.10 범위) ===
 
-    // 보정 계수 산출
-    // - 비율이 1.4 초과 (rPPG 노이즈 신호) → 강한 보정
-    // - SQI 낮을수록 보정 강하게
-    let correctionFactor = 1.0;
-
+    // 1. RMSSD/SDNN ratio 보정
+    //    정상 ECG: 0.7~1.4 (Task Force 1996)
+    //    >1.4: rPPG noise 신호 → 더 강하게 감소 (계수 추가 감소)
+    //    <0.7: 신호 안정적 → 보정 약화 (계수 증가)
     if (ratio > 1.4) {
-      // 비율이 비정상적으로 높음 → RMSSD가 과대평가됨
-      // 비율 1.5 → 25% 감소, 1.7 → 35% 감소
-      const excess = Math.min(0.5, ratio - 1.4);
-      correctionFactor -= excess * 0.5;
+      // 비율 1.4~2.0 → 추가 0~0.10 감소
+      const excess = Math.min(0.6, ratio - 1.4);
+      correctionFactor -= (excess / 0.6) * 0.10;
+    } else if (ratio < 0.7) {
+      // 비율 0.5~0.7 → 0~0.05 추가
+      correctionFactor += (0.7 - ratio) * 0.25;
     }
 
-    // SQI 페널티: SQI 80 미만이면 추가 보정
-    if (sqiNorm < 0.8) {
-      correctionFactor -= (0.8 - sqiNorm) * 0.3;
-    }
+    // 2. SQI 보정 (90 이상이면 +0.05, 70 미만이면 -0.05)
+    if (sqi >= 90) correctionFactor += 0.05;
+    else if (sqi < 70) correctionFactor -= 0.05;
 
-    // SNR 보정: SNR 낮으면 (artifact 많음) 추가 감소
-    if (snrNorm < 0.5) {
-      correctionFactor -= (0.5 - snrNorm) * 0.2;
-    }
+    // 3. SNR 보정 (실제 측정값 0~30+ 범위, 30 정규화)
+    const snrNorm = Math.max(0, Math.min(1, (snr || 5) / 30));
+    if (snrNorm > 0.5) correctionFactor += 0.03; // SNR 매우 좋음
+    else if (snrNorm < 0.15) correctionFactor -= 0.05; // SNR 낮음
 
-    // 최소 보정 한계 (50%)
-    correctionFactor = Math.max(0.5, Math.min(1.0, correctionFactor));
+    // 안전 한계
+    correctionFactor = Math.max(0.45, Math.min(0.85, correctionFactor));
 
     const corrected = Math.round(rawRMSSD * correctionFactor);
-    console.log(`[RMSSD] bias correction: ${rawRMSSD}ms × ${correctionFactor.toFixed(2)} → ${corrected}ms (ratio=${ratio.toFixed(2)}, sqi=${sqi}, snr=${(snr||0).toFixed(1)})`);
+    console.log(`[RMSSD] ECG 변환: ${rawRMSSD}ms × ${correctionFactor.toFixed(2)} → ${corrected}ms (ratio=${ratio.toFixed(2)}, sqi=${sqi}, snr=${(snr||0).toFixed(1)})`);
     return corrected;
   },
 
