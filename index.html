@@ -1348,7 +1348,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v13.3 · 코치</span>
+  <span class="hd-ver">v13.4 · 정밀</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -1786,24 +1786,37 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <svg class="posture-guide" viewBox="0 0 100 133" preserveAspectRatio="none">
         <defs>
           <linearGradient id="guide-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#10b981" stop-opacity=".9"/>
-            <stop offset="100%" stop-color="#10b981" stop-opacity=".3"/>
+            <stop offset="0%" stop-color="#22c55e" stop-opacity=".95"/>
+            <stop offset="100%" stop-color="#22c55e" stop-opacity=".5"/>
           </linearGradient>
+          <filter id="guide-glow">
+            <feGaussianBlur stdDeviation="0.6" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
         </defs>
-        <!-- 머리 가이드 (위 1/4) -->
-        <ellipse cx="50" cy="22" rx="13" ry="16" fill="none" stroke="url(#guide-grad)" stroke-width="0.5" stroke-dasharray="2,1.5"/>
-        <!-- 어깨 가이드 라인 (가로선) -->
-        <line x1="20" y1="50" x2="80" y2="50" stroke="url(#guide-grad)" stroke-width="0.4" stroke-dasharray="3,2"/>
+        <!-- ★ v13.4: 더 직관적 가이드 (얼굴은 원, 어깨는 굵은 선, 몸통은 사다리꼴) -->
+        <!-- 머리 가이드 (위 1/3) -->
+        <ellipse cx="50" cy="28" rx="14" ry="17" fill="none" stroke="url(#guide-grad)" stroke-width="0.7" stroke-dasharray="2.5,1.5" filter="url(#guide-glow)"/>
+        <text x="50" y="14" text-anchor="middle" font-size="2.8" fill="#22c55e" font-weight="700">머리</text>
+
+        <!-- 어깨 가이드 라인 (양 끝 점 강조) -->
+        <line x1="22" y1="58" x2="78" y2="58" stroke="url(#guide-grad)" stroke-width="0.6" stroke-dasharray="3,2"/>
+        <circle cx="22" cy="58" r="1.2" fill="#22c55e"/>
+        <circle cx="78" cy="58" r="1.2" fill="#22c55e"/>
+        <text x="50" y="55" text-anchor="middle" font-size="2.5" fill="#22c55e" font-weight="700">어깨 선</text>
+
         <!-- 몸통 가이드 (사다리꼴) -->
-        <path d="M30,50 L70,50 L75,100 L25,100 Z" fill="none" stroke="url(#guide-grad)" stroke-width="0.4" stroke-dasharray="2,1.5"/>
-        <!-- 중앙선 -->
-        <line x1="50" y1="10" x2="50" y2="100" stroke="rgba(16,185,129,.3)" stroke-width="0.2" stroke-dasharray="1,2"/>
+        <path d="M28,58 L72,58 L78,108 L22,108 Z" fill="none" stroke="url(#guide-grad)" stroke-width="0.6" stroke-dasharray="2.5,1.5" filter="url(#guide-glow)"/>
+
+        <!-- 중앙선 (자세 정렬용) -->
+        <line x1="50" y1="12" x2="50" y2="108" stroke="rgba(34,197,94,.35)" stroke-width="0.25" stroke-dasharray="1,2.5"/>
+
         <!-- 안내 텍스트 -->
-        <text x="50" y="115" text-anchor="middle" font-size="3" fill="#10b981" font-weight="700">상반신 가이드</text>
+        <text x="50" y="120" text-anchor="middle" font-size="3.3" fill="#22c55e" font-weight="800">상반신 가이드</text>
       </svg>
       <div class="cam-status">
-        <div class="cam-msg" id="posture-msg">상반신을 가이드에 맞춰주세요</div>
-        <div class="cam-sub" id="posture-sub">머리·어깨·몸통이 모두 보이게</div>
+        <div class="cam-msg" id="posture-msg">📏 한 발 뒤로 물러서서 상반신이 모두 보이게</div>
+        <div class="cam-sub" id="posture-sub">머리는 원 안 · 어깨는 가로선에 · 몸통은 사다리꼴 안</div>
       </div>
     </div>
     <div class="bt-timer-big" id="bt-posture-timer">10</div>

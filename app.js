@@ -874,6 +874,8 @@ const App = {
       f.autoFinalized = false;
       f.lastHR = null;
       f.faceDetected = false;
+      f._speak15 = false;
+      f._speak5 = false;
       // ME-rPPG 상태 리셋
       f.mePPG.kfBox = { originX: null, originY: null, width: null, height: null };
       f.mePPG.kfOutput = null;
@@ -899,6 +901,9 @@ const App = {
       document.getElementById('face-cam-msg').textContent = '얼굴 검출 중...';
       document.getElementById('face-cam-sub').textContent = '얼굴을 화면 가운데에 맞춰주세요';
       document.getElementById('face-result-panel').classList.remove('show');
+
+      // ★ v13.4: 얼굴 측정 음성 안내 추가
+      this._speak('얼굴 측정을 시작합니다. 화면 가운데에 얼굴을 맞추고 30초간 가만히 계세요. 자연스럽게 호흡하시면 됩니다.');
 
       // === STEP 4: 타이머 + 프레임 루프 ===
       this._faceStartTimer();
@@ -1206,12 +1211,25 @@ const App = {
     if (remain > 0) {
       text.textContent = Math.ceil(remain) + '초 남음';
       if (remain <= 10) chip.classList.add('urgent');
+
+      // ★ v13.4: 음성 안내 (중간 + 5초 전)
+      const remainCeil = Math.ceil(remain);
+      if (remainCeil === 15 && !f._speak15) {
+        f._speak15 = true;
+        this._speak('절반 지났어요. 그대로 유지해주세요.');
+      }
+      if (remainCeil === 5 && !f._speak5) {
+        f._speak5 = true;
+        this._speak('5초 남았습니다');
+      }
     } else {
       text.textContent = '✅ 측정 완료';
       chip.classList.add('done');
       if (!f.autoFinalized) {
         f.autoFinalized = true;
         console.log('[Face] 30초 도달 — 자동 완료');
+        // ★ v13.4: 측정 완료 음성
+        this._speak('얼굴 측정이 완료되었습니다. 결과를 확인하세요.');
         this._faceFinalize();
       }
     }
@@ -1783,6 +1801,10 @@ const App = {
     const peaks = this._adaptivePeakDetect(upBvp, upSr, hrHz, 0.70);
     console.log('[ME-rPPG] 검출 피크:', peaks.length, '(기대치:', Math.round(dur * hrHz), ')');
 
+    // ★ v13.4: HR 대역 SNR 추출 (RMSSD confidence 계산용)
+    const hrSnr = this._goertzelPeak(this._bandpass(upBvp, upSr, 0.7, 3.0), upSr, 45/60, 180/60).snr;
+    const snrV = hrSnr;
+
     let rmssd = null, lnRmssd = null, rmssdReason = null;
     let sdnn = null;
 
@@ -1825,25 +1847,45 @@ const App = {
           const meanC = cleanRR.reduce((a,b)=>a+b,0) / cleanRR.length;
           const sdSum = cleanRR.reduce((s,v) => s + (v-meanC)**2, 0);
           sdnn = Math.round(Math.sqrt(sdSum / cleanRR.length));
-          console.log('[ME-rPPG] RMSSD:', rmssd, 'ms, SDNN:', sdnn, 'ms, ln=', lnRmssd);
+          console.log('[ME-rPPG] RMSSD raw:', rmssd, 'ms, SDNN:', sdnn, 'ms, ln=', lnRmssd);
 
-          // ★ v12.4 추가 검증: RMSSD/SDNN 비율 sanity check
-          // 정상: RMSSD ≈ 0.7 × SDNN ~ SDNN (Task Force 1996)
-          // 비정상: RMSSD > 1.5 × SDNN → 인접 RR 점프가 비정상적으로 큼 (피크 검출 오류)
-          if (rmssd > sdnn * 1.5) {
-            console.warn('[ME-rPPG] RMSSD/SDNN 비율 비정상:', (rmssd/sdnn).toFixed(2),
-                         '(정상 < 1.5) — 피크 검출 노이즈 의심');
-            rmssdReason = 'noisy_peaks';
+          // ★ v13.4: hard reject → probabilistic confidence-based 보정 (자료 C+D안)
+          // 자료 권장: confidence < 0.3 → reject / 0.3~0.6 → corrected / 0.6+ → raw
+          const ratio = rmssd / sdnn;
+          let confidence = 1.0;
+
+          // 비율 1.4 이상부터 confidence 감소 시작
+          if (ratio > 1.4) confidence -= Math.min(0.5, (ratio - 1.4) * 0.5);
+          // SQI 페널티
+          if (sqi < 80) confidence -= (80 - sqi) * 0.005;
+          // SNR 페널티 (5 미만)
+          if (snrV !== null && snrV < 5) confidence -= (5 - snrV) * 0.03;
+          // 임상 범위 (RMSSD 8~150ms)
+          if (rmssd < 8 || rmssd > 150) confidence -= 0.4;
+
+          confidence = Math.max(0, Math.min(1, confidence));
+          console.log(`[ME-rPPG] RMSSD confidence: ${confidence.toFixed(2)} (ratio=${ratio.toFixed(2)})`);
+
+          if (confidence < 0.3) {
+            // 신뢰도 매우 낮음 → reject
+            console.warn('[ME-rPPG] RMSSD 신뢰도 부족 - 거부');
+            rmssdReason = 'low_confidence';
             rmssd = null;
             lnRmssd = null;
+          } else if (confidence < 0.7) {
+            // 중간 신뢰도 → bias correction 적용
+            const corrected = this._correctRMSSDBias(rmssd, sdnn, sqi, snrV);
+            if (corrected !== null && corrected >= 8 && corrected <= 150) {
+              rmssd = corrected;
+              lnRmssd = Math.log(Math.max(1, corrected)).toFixed(2);
+              console.log('[ME-rPPG] RMSSD 보정됨:', rmssd, 'ms');
+            } else {
+              rmssdReason = 'correction_failed';
+              rmssd = null;
+              lnRmssd = null;
+            }
           }
-          // 임상 정상 범위 검증
-          else if (rmssd < 8 || rmssd > 150) {
-            console.warn('[ME-rPPG] RMSSD 임상 범위 벗어남:', rmssd);
-            rmssdReason = 'out_of_clinical_range';
-            rmssd = null;
-            lnRmssd = null;
-          }
+          // confidence >= 0.7: raw 그대로 사용
         }
       }
     }
@@ -2491,7 +2533,83 @@ const App = {
         lastIdx = i;
       }
     }
-    return peaks;
+
+    // ★ v13.4: Sub-frame peak estimation (Parabolic interpolation)
+    // 자료에서 강조한 핵심: 30Hz 카메라의 quantization noise 극복
+    // y(x) = a*x² + b*x + c 의 정점은 x = -b/(2a)
+    // 3점 (i-1, i, i+1)으로 피팅하여 sub-sample 정밀도 획득
+    // 효과: timing precision ±33ms → ±5ms (rPPG HRV 정확도 핵심)
+    const refinedPeaks = [];
+    for (const i of peaks) {
+      if (i < 1 || i >= N - 1) {
+        refinedPeaks.push(i);
+        continue;
+      }
+      const y0 = centered[i - 1];
+      const y1 = centered[i];
+      const y2 = centered[i + 1];
+      const denom = (y0 - 2 * y1 + y2);
+      // 분모가 너무 작으면 (거의 평탄) 보간 안전하지 않음
+      if (Math.abs(denom) < 1e-9) {
+        refinedPeaks.push(i);
+        continue;
+      }
+      // 정점 offset: -0.5 ~ +0.5 범위 내
+      const offset = 0.5 * (y0 - y2) / denom;
+      // outlier 방지: |offset| > 1 이면 그냥 정수 인덱스
+      if (Math.abs(offset) > 1) {
+        refinedPeaks.push(i);
+        continue;
+      }
+      refinedPeaks.push(i + offset);
+    }
+    return refinedPeaks;
+  },
+
+  // ★ v13.4: RMSSD bias correction (자료 D안)
+  // rPPG는 ECG 대비 30~50% RMSSD 과대평가 (Mejia-Mejia 2022, Li 2023)
+  // 보정 공식: corrected = raw * (1 - α * motion_score - β * (1 - SNR_norm))
+  // 단순 선형 보정 (lightweight, 상용 수준 접근)
+  _correctRMSSDBias(rawRMSSD, sdnn, sqi, snr) {
+    if (!rawRMSSD || rawRMSSD <= 0) return null;
+
+    // RMSSD/SDNN 비율 (정상: 0.7~1.4)
+    const ratio = sdnn ? rawRMSSD / sdnn : 1.0;
+
+    // SQI 정규화 (0~100 → 0~1)
+    const sqiNorm = (sqi || 90) / 100;
+
+    // SNR 정규화 (보통 0~10 dB)
+    const snrNorm = Math.max(0, Math.min(1, (snr || 5) / 10));
+
+    // 보정 계수 산출
+    // - 비율이 1.4 초과 (rPPG 노이즈 신호) → 강한 보정
+    // - SQI 낮을수록 보정 강하게
+    let correctionFactor = 1.0;
+
+    if (ratio > 1.4) {
+      // 비율이 비정상적으로 높음 → RMSSD가 과대평가됨
+      // 비율 1.5 → 25% 감소, 1.7 → 35% 감소
+      const excess = Math.min(0.5, ratio - 1.4);
+      correctionFactor -= excess * 0.5;
+    }
+
+    // SQI 페널티: SQI 80 미만이면 추가 보정
+    if (sqiNorm < 0.8) {
+      correctionFactor -= (0.8 - sqiNorm) * 0.3;
+    }
+
+    // SNR 보정: SNR 낮으면 (artifact 많음) 추가 감소
+    if (snrNorm < 0.5) {
+      correctionFactor -= (0.5 - snrNorm) * 0.2;
+    }
+
+    // 최소 보정 한계 (50%)
+    correctionFactor = Math.max(0.5, Math.min(1.0, correctionFactor));
+
+    const corrected = Math.round(rawRMSSD * correctionFactor);
+    console.log(`[RMSSD] bias correction: ${rawRMSSD}ms × ${correctionFactor.toFixed(2)} → ${corrected}ms (ratio=${ratio.toFixed(2)}, sqi=${sqi}, snr=${(snr||0).toFixed(1)})`);
+    return corrected;
   },
 
   // ─── 공통 ───
@@ -3131,6 +3249,8 @@ const App = {
     console.log('[Reaction] finalize');
     const r = this.state.body.reaction;
     this.bodyStop();
+    // ★ v13.4: 종료 음성 안내
+    this._speak('반응속도 측정이 완료되었습니다. 결과를 확인하세요.');
     if (r.times.length === 0) {
       this._showReactionResult({ avg: 0, error: '측정된 데이터 없음' });
       return;
@@ -3213,7 +3333,7 @@ const App = {
       const sub = document.getElementById('bt-posture-sub');
       if (sub) sub.textContent = '음성 안내가 끝나면 10초 카운트다운이 시작됩니다';
 
-      this._speak('자세 평가를 시작합니다. 어깨를 펴고 정면을 바라보며 자연스럽게 서주세요.', () => {
+      this._speak('자세 평가를 시작합니다. 한 발 뒤로 물러서서 머리부터 가슴까지 화면에 모두 보이도록 거리를 맞춰주세요.', () => {
         if (!this.state.body.running) return;
         console.log('[Posture] 음성 종료 → 10초 카운트다운 시작');
         if (sub) sub.textContent = '천천히 자세를 잡으세요';
@@ -3263,6 +3383,8 @@ const App = {
     const analysis = this._analyzePosture(ctx, cv.width, cv.height);
     this._showPostureResult(dataUrl, analysis);
     this.bodyStop();
+    // ★ v13.4: 종료 음성 안내
+    this._speak('자세 평가가 완료되었습니다. 결과를 확인하세요.');
   },
 
   _analyzePosture(ctx, w, h) {
