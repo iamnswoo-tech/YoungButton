@@ -14,38 +14,76 @@
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <style>
 :root {
-  /* 라이트 테마 (필라이즈 스타일) */
-  --bg: #f5f3ff; --bg2: #faf9ff; --card: #ffffff;
-  --border: rgba(124, 58, 237, .08); --border2: rgba(124, 58, 237, .18);
-  --shadow: 0 4px 16px rgba(124, 58, 237, .08);
-  --shadow-lg: 0 8px 32px rgba(124, 58, 237, .12);
-  --primary: #7c3aed; --primary2: #a78bfa; --primary-light: rgba(124, 58, 237, .08);
-  --accent: #6366f1; --accent2: #818cf8;
-  --face: #7c3aed; --face2: #a78bfa;
-  --body: #06b6d4; --body2: #22d3ee;
-  --legacy: #f59e0b; --legacy2: #fbbf24;
-  --green: #10b981; --green2: #34d399;
-  --warn: #f59e0b; --danger: #ef4444;
-  --text: #1f2937; --text2: #4b5563; --muted: #9ca3af;
+  /* ★ v13.3: PDF UI/UX 전략 기반 디자인 시스템 */
+  /* PDF 컬러 시스템: 그린(#22c55e=안전/건강), 블루(#3b82f6=신뢰/분석), 엠버(#f59e0b=주의) */
+
+  /* 베이스 (라이트 + 클린, 필라이즈 스타일) */
+  --bg: #f8fafc;             /* 더 깔끔한 슬레이트 톤 */
+  --bg2: #ffffff;
+  --card: #ffffff;
+  --card-elev: #ffffff;
+  --border: rgba(15, 23, 42, .06);
+  --border2: rgba(15, 23, 42, .12);
+  --shadow: 0 2px 8px rgba(15, 23, 42, .04), 0 1px 2px rgba(15, 23, 42, .06);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, .08), 0 4px 12px rgba(15, 23, 42, .06);
+  --shadow-glow: 0 8px 32px rgba(34, 197, 94, .25);
+
+  /* 시그니처 컬러 (PDF 권장) */
+  --primary: #22c55e;        /* ★ 그린 (안전/건강/성공) - PDF 핵심 컬러 */
+  --primary2: #4ade80;
+  --primary-dark: #16a34a;
+  --primary-light: rgba(34, 197, 94, .08);
+  --primary-glow: rgba(34, 197, 94, .3);
+
+  /* 보조 컬러 */
+  --accent: #3b82f6;          /* 블루 (신뢰/분석) - PDF */
+  --accent2: #60a5fa;
+  --accent-light: rgba(59, 130, 246, .08);
+
+  /* 카테고리 컬러 (구분용) */
+  --face: #7c3aed;            /* 보라 (얼굴 측정 - 기존 브랜드 유지) */
+  --face2: #a78bfa;
+  --body: #3b82f6;            /* 블루로 변경 (신체 측정) */
+  --body2: #60a5fa;
+  --legacy: #f59e0b;          /* 엠버 (레거시) */
+  --legacy2: #fbbf24;
+
+  /* 시맨틱 */
+  --green: #22c55e;
+  --green2: #4ade80;
+  --warn: #f59e0b;            /* 엠버 (주의/변화 필요) */
+  --warn2: #fbbf24;
+  --danger: #ef4444;
+  --danger2: #f87171;
+
+  /* 텍스트 위계 */
+  --text: #0f172a;            /* 진한 슬레이트 */
+  --text2: #475569;
+  --text3: #64748b;
+  --muted: #94a3b8;
+
+  /* 기타 */
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --radius: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100dvh; overflow-x: hidden; font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 body::before {
   content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background: radial-gradient(1200px 600px at 0% -10%, rgba(167,139,250,.18), transparent 50%),
-              radial-gradient(900px 500px at 100% 110%, rgba(34,211,238,.10), transparent 50%);
+  background: radial-gradient(1200px 600px at 0% -10%, rgba(34, 197, 94, .08), transparent 50%),
+              radial-gradient(900px 500px at 100% 110%, rgba(59, 130, 246, .06), transparent 50%);
 }
 
 /* HEADER */
 .hd {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top));
-  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 50%, #4ade80 100%);
   position: sticky; top: 0; z-index: 50;
   color: #fff;
-  box-shadow: 0 4px 20px rgba(124,58,237,.25);
+  box-shadow: 0 4px 20px rgba(34,197,94,.25);
 }
 .hd-logo { display: flex; align-items: center; gap: 12px; }
 .hd-icon {
@@ -207,6 +245,211 @@ body::before {
 }
 .ws-age-diff.good { background: #d1fae5; color: #047857; }
 .ws-age-diff.warn { background: #fee2e2; color: #b91c1c; }
+
+/* ★ v13.3: 스트릭 + 배지 (PDF 게이미피케이션 7페이지) */
+.ws-streak-row {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.ws-streak {
+  flex: 1;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(251, 146, 60, 0.2);
+}
+.ws-streak-flame {
+  font-size: 28px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.ws-streak-text {
+  flex: 1;
+  min-width: 0;
+}
+.ws-streak-num {
+  font-size: 15px;
+  font-weight: 900;
+  color: #c2410c;
+  line-height: 1.2;
+}
+.ws-streak-sub {
+  font-size: 10px;
+  color: #9a3412;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.ws-badges-summary {
+  background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: transform .12s;
+  border: 1px solid rgba(234, 179, 8, 0.2);
+  min-width: 80px;
+}
+.ws-badges-summary:active { transform: scale(0.96); }
+.ws-badges-icons {
+  display: flex;
+  gap: 2px;
+}
+.ws-badge-mini {
+  font-size: 18px;
+  line-height: 1;
+}
+.ws-badges-count {
+  font-size: 10px;
+  font-weight: 800;
+  color: #854d0e;
+}
+
+/* 배지 획득 토스트 */
+.badge-toast {
+  position: fixed;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+  color: #fff;
+  padding: 14px 20px;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(34, 197, 94, .4);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 240px;
+  max-width: 90vw;
+  transition: top .4s cubic-bezier(.34, 1.56, .64, 1);
+}
+.badge-toast.show {
+  top: max(20px, env(safe-area-inset-top));
+}
+.badge-toast-icon {
+  font-size: 36px;
+  line-height: 1;
+}
+.badge-toast-text { flex: 1; }
+.badge-toast-title {
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0.9;
+  letter-spacing: .04em;
+}
+.badge-toast-name {
+  font-size: 16px;
+  font-weight: 900;
+  margin-top: 2px;
+}
+
+/* 배지 컬렉션 모달 */
+.badge-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  transition: opacity .25s;
+}
+.badge-modal.show {
+  opacity: 1;
+}
+.badge-modal-card {
+  background: var(--card);
+  border-radius: var(--radius-xl);
+  padding: 22px;
+  max-width: 420px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+.badge-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.badge-modal-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+}
+.badge-modal-count {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--primary-dark);
+  background: var(--primary-light);
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+.badge-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.badge-item {
+  background: var(--bg);
+  border-radius: 14px;
+  padding: 14px 10px;
+  text-align: center;
+  border: 1.5px solid var(--border);
+  transition: transform .12s;
+}
+.badge-item.earned {
+  background: linear-gradient(135deg, var(--primary-light) 0%, rgba(74, 222, 128, .12) 100%);
+  border-color: var(--primary);
+}
+.badge-item.locked {
+  opacity: 0.5;
+}
+.badge-item-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.badge-item-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.badge-item-desc {
+  font-size: 10px;
+  color: var(--text3);
+  line-height: 1.3;
+}
+.badge-modal-close {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform .12s;
+}
+.badge-modal-close:active { transform: scale(0.97); }
 
 .ws-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
@@ -972,35 +1215,80 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
 /* 반응속도 영역 */
 .bt-reaction-area {
-  margin: 20px 16px;
-  height: 360px;
-  border-radius: 24px;
-  background: var(--card); border: 3px solid var(--border);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  cursor: pointer; transition: background .1s, border-color .15s;
-  /* ★ v13.2: 텍스트 선택/롱터치 메뉴/Google 검색 팝업 차단 */
+  margin: 16px 12px;
+  height: 70vh;          /* ★ v13.3: 화면의 70%로 크게 */
+  min-height: 420px;
+  border-radius: 28px;
+  background: var(--card);
+  border: 4px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, transform .08s;
+  /* 텍스트 선택/롱터치 메뉴 차단 */
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: rgba(34, 197, 94, 0.15);  /* 탭 피드백 보임 */
   touch-action: manipulation;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   position: relative;
+  overflow: hidden;
 }
-.bt-reaction-area * {
+.bt-reaction-area:active {
+  transform: scale(0.98);  /* 탭 시 시각 피드백 */
+}
+/* ★ v13.3: pointer-events: none 제거 - 부모 영역 전체가 정상 작동하면서 자식 텍스트만 선택 차단 */
+.bt-reaction-area > * {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  pointer-events: none; /* 자식 요소 이벤트 부모로 전달 */
+  pointer-events: none;  /* 자식들은 이벤트를 부모로 전달 (탭이 자식에 잡혀도 부모로 버블링) */
 }
-.bt-reaction-area.ready { background: linear-gradient(135deg, #10b981, #34d399); border-color: #10b981; }
-.bt-reaction-area.early { background: #fee2e2; border-color: var(--danger); }
-.bt-reaction-area.success { background: #d1fae5; border-color: #10b981; }
-.bt-reaction-text { font-size: 32px; font-weight: 900; color: var(--text); margin-bottom: 10px; }
-.bt-reaction-area.ready .bt-reaction-text { color: #fff; }
-.bt-reaction-sub { font-size: 14px; color: var(--text2); }
-.bt-reaction-area.ready .bt-reaction-sub { color: rgba(255,255,255,.85); }
-.bt-reaction-counter { position: absolute; top: 24px; right: 24px; font-size: 16px; font-weight: 700; color: var(--muted); }
+.bt-reaction-area.ready {
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  border-color: #059669;
+  box-shadow: 0 8px 32px rgba(16, 185, 129, 0.4);
+}
+.bt-reaction-area.early {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border-color: var(--danger);
+}
+.bt-reaction-area.success {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-color: #10b981;
+}
+.bt-reaction-text {
+  font-size: 48px;            /* ★ 더 크게 */
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 14px;
+  letter-spacing: -.02em;
+}
+.bt-reaction-area.ready .bt-reaction-text { color: #fff; font-size: 64px; }
+.bt-reaction-sub {
+  font-size: 18px;
+  color: var(--text2);
+  font-weight: 700;
+}
+.bt-reaction-area.ready .bt-reaction-sub { color: rgba(255,255,255,.95); font-size: 22px; }
+.bt-reaction-counter {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--muted);
+  background: rgba(0,0,0,0.05);
+  padding: 6px 14px;
+  border-radius: 16px;
+}
+.bt-reaction-area.ready .bt-reaction-counter {
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+}
 
 /* 결과 영역 */
 .bt-result { padding: 16px; }
@@ -1060,7 +1348,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v13.2 · 종합점수</span>
+  <span class="hd-ver">v13.3 · 코치</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->

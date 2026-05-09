@@ -198,12 +198,154 @@ const App = {
     data.t = Date.now();
     this.state.wellness[category] = data;
     this.state.wellness.lastUpdated = data.t;
+
+    // ★ v13.3: 게이미피케이션 - 스트릭 추적 (PDF 7페이지)
+    this._streakUpdate();
+    // 배지 자동 부여
+    this._badgesCheck(category, data);
+
     try {
       localStorage.setItem('wellness_data', JSON.stringify(this.state.wellness));
     } catch (e) {
       console.warn('[Wellness] 저장 실패:', e);
     }
     this._wellnessRender();
+  },
+
+  // ★ v13.3: 스트릭(연속 측정) 시스템
+  _streakUpdate() {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStamp = today.getTime();
+
+      let streak = JSON.parse(localStorage.getItem('streak_data') || '{}');
+      if (!streak.lastDate) {
+        streak = { count: 1, lastDate: todayStamp, longest: 1 };
+      } else {
+        const lastDate = streak.lastDate;
+        const dayDiff = Math.floor((todayStamp - lastDate) / (24 * 60 * 60 * 1000));
+        if (dayDiff === 0) {
+          // 같은 날 - 그대로
+        } else if (dayDiff === 1) {
+          // 연속 - 카운트 증가
+          streak.count++;
+          streak.lastDate = todayStamp;
+          if (streak.count > (streak.longest || 0)) streak.longest = streak.count;
+        } else {
+          // 끊김 - 리셋
+          streak.count = 1;
+          streak.lastDate = todayStamp;
+        }
+      }
+      localStorage.setItem('streak_data', JSON.stringify(streak));
+      this._streak = streak;
+    } catch (e) {
+      console.warn('[Streak] 실패:', e);
+    }
+  },
+
+  _streakGet() {
+    if (this._streak) return this._streak;
+    try {
+      this._streak = JSON.parse(localStorage.getItem('streak_data') || '{"count":0,"longest":0}');
+    } catch (e) {
+      this._streak = { count: 0, longest: 0 };
+    }
+    return this._streak;
+  },
+
+  // ★ v13.3: 배지 시스템
+  _badgesCheck(category, data) {
+    try {
+      let badges = JSON.parse(localStorage.getItem('badges_earned') || '[]');
+      const has = (id) => badges.some(b => b.id === id);
+      const award = (id, name, icon, desc) => {
+        if (!has(id)) {
+          badges.push({ id, name, icon, desc, earnedAt: Date.now() });
+          this._badgeNotify(name, icon);
+        }
+      };
+
+      // 카테고리별 배지
+      if (category === 'face' && data.score >= 90) {
+        award('face_master', '심혈관 마스터', '💗', '얼굴 측정 90점 달성');
+      }
+      if (category === 'balance' && data.score >= 85) {
+        award('balance_pro', '균형 감각', '⚖️', '균형 검사 85점 달성');
+      }
+      if (category === 'bodycomp' && data.bodyAge !== undefined && data.bodyAge < data.age) {
+        award('young_body', '실제보다 젊은', '✨', `신체 나이가 실제보다 ${data.age - data.bodyAge}살 어려요`);
+      }
+      if (category === 'bodycomp' && data.whtr < 0.5) {
+        award('waist_king', '복부 관리 왕', '🎯', '허리/키 비율 0.5 미만 달성');
+      }
+      if (category === 'bodycomp' && data.absi !== undefined) {
+        // ABSI z-score가 매우 낮으면 (상위 10%)
+        const w_state = this.state.wellness;
+        if (w_state.bodycomp && w_state.bodycomp.absi) {
+          // 단순 임계: 남성 0.078, 여성 0.077 미만
+          if (data.absi < (data.gender === 'male' ? 0.078 : 0.077)) {
+            award('hidden_strength', '숨겨진 강점', '💪', 'ABSI 체형 균형 우수 (상위 10%)');
+          }
+        }
+      }
+
+      // 첫 측정 배지
+      if (badges.length === 0) {
+        award('first_step', '첫 걸음', '🌱', '첫 측정을 완료했어요');
+      }
+
+      // 종합 점수 배지
+      const totalScore = this._wellnessComputeScore();
+      if (totalScore.score >= 90) {
+        award('wellness_pro', '건강 프로', '🏆', '종합 점수 90점 달성');
+      }
+      if (totalScore.completeness >= 100) {
+        award('all_complete', '올라운더', '🎉', '모든 측정 완료');
+      }
+
+      // 스트릭 배지
+      const s = this._streakGet();
+      if (s.count >= 3) award('streak_3', '3일 연속', '🔥', '3일 연속 측정');
+      if (s.count >= 7) award('streak_7', '일주일 챔피언', '🌟', '7일 연속 측정');
+      if (s.count >= 30) award('streak_30', '한 달 마스터', '👑', '30일 연속 측정');
+
+      localStorage.setItem('badges_earned', JSON.stringify(badges));
+      this._badges = badges;
+    } catch (e) {
+      console.warn('[Badge] 실패:', e);
+    }
+  },
+
+  _badgesGet() {
+    if (this._badges) return this._badges;
+    try {
+      this._badges = JSON.parse(localStorage.getItem('badges_earned') || '[]');
+    } catch (e) {
+      this._badges = [];
+    }
+    return this._badges;
+  },
+
+  _badgeNotify(name, icon) {
+    // 배지 획득 토스트
+    const toast = document.createElement('div');
+    toast.className = 'badge-toast';
+    toast.innerHTML = `
+      <div class="badge-toast-icon">${icon}</div>
+      <div class="badge-toast-text">
+        <div class="badge-toast-title">🎉 배지 획득!</div>
+        <div class="badge-toast-name">${name}</div>
+      </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 400);
+    }, 3500);
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
   },
 
   _wellnessClear() {
@@ -324,6 +466,27 @@ const App = {
       </div>
     ` : '';
 
+    // ★ v13.3: 스트릭 + 배지 표시 (PDF 게이미피케이션)
+    const streak = this._streakGet();
+    const badges = this._badgesGet();
+    const streakHTML = (streak.count > 0) ? `
+      <div class="ws-streak-row">
+        <div class="ws-streak">
+          <div class="ws-streak-flame">${streak.count >= 7 ? '🔥' : streak.count >= 3 ? '✨' : '🌱'}</div>
+          <div class="ws-streak-text">
+            <div class="ws-streak-num">${streak.count}일 연속</div>
+            <div class="ws-streak-sub">${streak.count >= 7 ? '대단해요! 건강 습관이 자리잡았어요' : streak.count >= 3 ? '잘하고 있어요!' : '시작이 반이에요'}</div>
+          </div>
+        </div>
+        ${badges.length > 0 ? `
+        <div class="ws-badges-summary" onclick="App._showBadgeCollection()">
+          <div class="ws-badges-icons">${badges.slice(-3).map(b => `<span class="ws-badge-mini">${b.icon}</span>`).join('')}</div>
+          <div class="ws-badges-count">${badges.length}개 배지</div>
+        </div>
+        ` : ''}
+      </div>
+    ` : '';
+
     card.innerHTML = `
       <div class="ws-header">
         <div class="ws-title">📊 종합 건강 점수</div>
@@ -339,6 +502,7 @@ const App = {
       <div class="ws-progress">
         <div class="ws-progress-fill" style="width:${result.score}%;background:${color}"></div>
       </div>
+      ${streakHTML}
       ${bodyAgeHTML}
       <div class="ws-grid">
         ${measuredHTML}
@@ -346,9 +510,52 @@ const App = {
       </div>
       ${result.completeness < 100 ?
         `<div class="ws-hint">미측정 항목을 완료하면 점수가 더 정확해져요</div>` :
-        `<div class="ws-hint" style="color:#10b981">✓ 모든 측정 완료</div>`}
+        `<div class="ws-hint" style="color:var(--primary-dark)">✓ 모든 측정 완료</div>`}
       <button class="ws-reset" type="button" onclick="App._wellnessConfirmReset()">전체 초기화</button>
     `;
+  },
+
+  // ★ v13.3: 배지 컬렉션 모달 표시
+  _showBadgeCollection() {
+    const badges = this._badgesGet();
+    // 모든 가능한 배지 목록 (미획득 표시용)
+    const allBadges = [
+      { id: 'first_step', name: '첫 걸음', icon: '🌱', desc: '첫 측정 완료' },
+      { id: 'face_master', name: '심혈관 마스터', icon: '💗', desc: '얼굴 측정 90점 달성' },
+      { id: 'balance_pro', name: '균형 감각', icon: '⚖️', desc: '균형 검사 85점 달성' },
+      { id: 'young_body', name: '실제보다 젊은', icon: '✨', desc: '신체 나이가 실제보다 어려요' },
+      { id: 'waist_king', name: '복부 관리 왕', icon: '🎯', desc: '허리/키 비율 0.5 미만' },
+      { id: 'hidden_strength', name: '숨겨진 강점', icon: '💪', desc: 'ABSI 체형 균형 우수' },
+      { id: 'wellness_pro', name: '건강 프로', icon: '🏆', desc: '종합 점수 90점 달성' },
+      { id: 'all_complete', name: '올라운더', icon: '🎉', desc: '모든 측정 완료' },
+      { id: 'streak_3', name: '3일 연속', icon: '🔥', desc: '3일 연속 측정' },
+      { id: 'streak_7', name: '일주일 챔피언', icon: '🌟', desc: '7일 연속 측정' },
+      { id: 'streak_30', name: '한 달 마스터', icon: '👑', desc: '30일 연속 측정' },
+    ];
+
+    const earnedSet = new Set(badges.map(b => b.id));
+    const modal = document.createElement('div');
+    modal.className = 'badge-modal';
+    modal.innerHTML = `
+      <div class="badge-modal-card">
+        <div class="badge-modal-header">
+          <div class="badge-modal-title">🏆 배지 컬렉션</div>
+          <div class="badge-modal-count">${badges.length} / ${allBadges.length}</div>
+        </div>
+        <div class="badge-modal-grid">
+          ${allBadges.map(b => `
+            <div class="badge-item ${earnedSet.has(b.id) ? 'earned' : 'locked'}">
+              <div class="badge-item-icon">${earnedSet.has(b.id) ? b.icon : '🔒'}</div>
+              <div class="badge-item-name">${b.name}</div>
+              <div class="badge-item-desc">${b.desc}</div>
+            </div>
+          `).join('')}
+        </div>
+        <button class="badge-modal-close" onclick="this.closest('.badge-modal').remove()">닫기</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    setTimeout(() => modal.classList.add('show'), 10);
   },
 
   _wellnessNavigateToTest(category) {
@@ -2822,11 +3029,15 @@ const App = {
     document.getElementById('bt-reaction-text').textContent = '대기 중...';
     document.getElementById('bt-reaction-sub').textContent = '음성 안내가 끝나면 시작됩니다';
 
-    // ★ v13.2: 핸들러 항상 새로 바인딩 (이전 세션 핸들러 청소)
+    // ★ v13.3: 완전 단순화 - 단일 click 이벤트, 차단 이벤트 제거
+    // 이전 시도 (pointerdown + touchstart + touchend 차단)는 오히려 탭을 막음
+    // 가장 표준적인 방식으로 회귀
     const area = document.getElementById('bt-reaction-area');
+
+    // 기존 모든 핸들러 제거
     if (this._reactionHandler) {
-      area.removeEventListener('pointerdown', this._reactionHandler);
       area.removeEventListener('click', this._reactionHandler);
+      area.removeEventListener('pointerdown', this._reactionHandler);
       area.removeEventListener('touchstart', this._reactionHandler);
     }
     if (this._reactionBlockHandler) {
@@ -2834,30 +3045,25 @@ const App = {
       area.removeEventListener('selectstart', this._reactionBlockHandler);
       area.removeEventListener('touchend', this._reactionBlockHandler);
     }
-    // 영역의 기존 onclick="App.reactionTap()" 제거 (HTML 인라인) → JS 핸들러 우선
-    area.onclick = null;
-    // 단일 통합 핸들러 (모든 입력 이벤트 → reactionTap)
+
+    // 단일 핸들러 - touchstart만 (가장 빠른 응답)
     this._reactionHandler = (e) => {
+      console.log('[Reaction] tap detected:', e.type);
       e.preventDefault();
-      e.stopPropagation();
       this.reactionTap();
     };
-    // ★ v13.2: Google 검색/컨텍스트 메뉴 차단 핸들러
-    // Android Chrome/Samsung Internet에서 길게 누르면 텍스트 선택 → "Google에서 검색" 팝업 발생
-    // 모든 잠재적 트리거 이벤트를 막음
+    // 컨텍스트 메뉴(길게 누름 검색)만 차단, 다른 건 건드리지 않음
     this._reactionBlockHandler = (e) => {
       e.preventDefault();
-      e.stopPropagation();
       return false;
     };
-    // pointerdown 우선, fallback으로 touchstart/click
-    area.addEventListener('pointerdown', this._reactionHandler, { passive: false });
+
+    // touchstart (모바일 우선) + click (PC fallback)
     area.addEventListener('touchstart', this._reactionHandler, { passive: false });
     area.addEventListener('click', this._reactionHandler);
-    // 차단 이벤트
+    // 길게 누름 검색 팝업만 차단
     area.addEventListener('contextmenu', this._reactionBlockHandler);
-    area.addEventListener('selectstart', this._reactionBlockHandler);
-    area.addEventListener('touchend', this._reactionBlockHandler, { passive: false });
+
     area.classList.remove('ready', 'success', 'early');
 
     // ★ 음성 안내 → 끝난 후 첫 라운드 시작
