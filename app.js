@@ -1697,27 +1697,41 @@ const App = {
   // ─── 측정 완료 (ME-rPPG 결과 통합) ───
   _faceFinalize() {
     console.log('[Face] _faceFinalize() - ME-rPPG');
-    const result = this._faceComputeMetrics();
-    console.log('[Face] 최종 결과:', result);
+    let result;
+    try {
+      result = this._faceComputeMetrics();
+      console.log('[Face] 최종 결과:', result);
+    } catch (err) {
+      // ★ v13.5: 안전망 - 어떤 계산 에러가 나도 사용자에게 결과 또는 실패 알림 보장
+      console.error('[Face] _faceComputeMetrics 에러:', err);
+      result = { hr: null, reason: 'compute_error', error: err.message };
+    }
 
     if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 
-    if (result.hr) {
-      this._faceDisplayResults(result);
-      document.getElementById('face-cam-msg').textContent = '✅ 측정 완료';
-      document.getElementById('face-cam-sub').textContent = '결과 패널을 확인하세요';
-    } else {
-      const reasons = {
-        'not_converged': 'ME-rPPG 모델이 충분히 수렴하지 못했습니다.\n조명을 밝게 하고 가만히 있는 상태로 다시 측정해주세요.',
-        'no_face': '얼굴이 충분히 검출되지 않았습니다.\n조명을 밝게 하고 얼굴을 카메라에 가깝게 해주세요.',
-        'insufficient_data': '데이터가 부족합니다. 측정 시간이 짧았을 수 있습니다.',
-      };
-      const msg = reasons[result.reason] || '측정에 실패했습니다.';
-      document.getElementById('face-cam-msg').textContent = '⚠️ 측정 실패';
-      document.getElementById('face-cam-sub').textContent = '아래 안내 확인';
-      setTimeout(() => alert('측정 실패\n\n' + msg), 800);
+    try {
+      if (result.hr) {
+        this._faceDisplayResults(result);
+        document.getElementById('face-cam-msg').textContent = '✅ 측정 완료';
+        document.getElementById('face-cam-sub').textContent = '결과 패널을 확인하세요';
+      } else {
+        const reasons = {
+          'not_converged': 'ME-rPPG 모델이 충분히 수렴하지 못했습니다.\n조명을 밝게 하고 가만히 있는 상태로 다시 측정해주세요.',
+          'no_face': '얼굴이 충분히 검출되지 않았습니다.\n조명을 밝게 하고 얼굴을 카메라에 가깝게 해주세요.',
+          'insufficient_data': '데이터가 부족합니다. 측정 시간이 짧았을 수 있습니다.',
+          'compute_error': '결과 계산 중 오류가 발생했습니다. 다시 시도해주세요.',
+        };
+        const msg = reasons[result.reason] || '측정에 실패했습니다.';
+        document.getElementById('face-cam-msg').textContent = '⚠️ 측정 실패';
+        document.getElementById('face-cam-sub').textContent = '아래 안내 확인';
+        setTimeout(() => alert('측정 실패\n\n' + msg), 800);
+      }
+    } catch (err) {
+      console.error('[Face] 결과 표시 에러:', err);
+      alert('결과 표시 실패: ' + err.message);
     }
 
+    // ★ v13.5: 무조건 측정 종료 (이전엔 에러 시 setTimeout이 호출 안 되어 측정 계속됨)
     setTimeout(() => this.faceStop(), 2000);
   },
 
@@ -1801,9 +1815,23 @@ const App = {
     const peaks = this._adaptivePeakDetect(upBvp, upSr, hrHz, 0.70);
     console.log('[ME-rPPG] 검출 피크:', peaks.length, '(기대치:', Math.round(dur * hrHz), ')');
 
-    // ★ v13.4: HR 대역 SNR 추출 (RMSSD confidence 계산용)
-    const hrSnr = this._goertzelPeak(this._bandpass(upBvp, upSr, 0.7, 3.0), upSr, 45/60, 180/60).snr;
-    const snrV = hrSnr;
+    // ★ v13.5: SQI 미리 계산 (RMSSD confidence 계산에 필요)
+    // 이전 v13.4 버그: sqi가 line 1923에서 정의되어 RMSSD 계산 시점에 ReferenceError 발생
+    const sqiEarly = Math.min(99, Math.max(50, Math.round((1 - m.meanHRErr) * 100)));
+
+    // ★ v13.5: HR 대역 SNR 추출 (RMSSD confidence 계산용) - 안전한 try/catch
+    let snrV = 5; // 기본값 (중립)
+    try {
+      const filtered = this._bandpass(upBvp, upSr, 0.7, 3.0);
+      if (filtered && filtered.length > 0) {
+        const peakResult = this._goertzelPeak(filtered, upSr, 45/60, 180/60);
+        if (peakResult && typeof peakResult.snr === 'number' && !isNaN(peakResult.snr)) {
+          snrV = peakResult.snr;
+        }
+      }
+    } catch (e) {
+      console.warn('[ME-rPPG] SNR 추출 실패, 기본값 사용:', e.message);
+    }
 
     let rmssd = null, lnRmssd = null, rmssdReason = null;
     let sdnn = null;
@@ -1849,22 +1877,22 @@ const App = {
           sdnn = Math.round(Math.sqrt(sdSum / cleanRR.length));
           console.log('[ME-rPPG] RMSSD raw:', rmssd, 'ms, SDNN:', sdnn, 'ms, ln=', lnRmssd);
 
-          // ★ v13.4: hard reject → probabilistic confidence-based 보정 (자료 C+D안)
-          // 자료 권장: confidence < 0.3 → reject / 0.3~0.6 → corrected / 0.6+ → raw
+          // ★ v13.5: hard reject → probabilistic confidence-based 보정 (자료 C+D안)
+          // 자료 권장: confidence < 0.3 → reject / 0.3~0.7 → corrected / 0.7+ → raw
           const ratio = rmssd / sdnn;
           let confidence = 1.0;
 
           // 비율 1.4 이상부터 confidence 감소 시작
           if (ratio > 1.4) confidence -= Math.min(0.5, (ratio - 1.4) * 0.5);
-          // SQI 페널티
-          if (sqi < 80) confidence -= (80 - sqi) * 0.005;
+          // SQI 페널티 (sqiEarly 사용 - v13.4의 sqi undefined 버그 수정)
+          if (sqiEarly < 80) confidence -= (80 - sqiEarly) * 0.005;
           // SNR 페널티 (5 미만)
           if (snrV !== null && snrV < 5) confidence -= (5 - snrV) * 0.03;
           // 임상 범위 (RMSSD 8~150ms)
           if (rmssd < 8 || rmssd > 150) confidence -= 0.4;
 
           confidence = Math.max(0, Math.min(1, confidence));
-          console.log(`[ME-rPPG] RMSSD confidence: ${confidence.toFixed(2)} (ratio=${ratio.toFixed(2)})`);
+          console.log(`[ME-rPPG] RMSSD confidence: ${confidence.toFixed(2)} (ratio=${ratio.toFixed(2)}, sqi=${sqiEarly}, snr=${snrV.toFixed(1)})`);
 
           if (confidence < 0.3) {
             // 신뢰도 매우 낮음 → reject
@@ -1874,7 +1902,7 @@ const App = {
             lnRmssd = null;
           } else if (confidence < 0.7) {
             // 중간 신뢰도 → bias correction 적용
-            const corrected = this._correctRMSSDBias(rmssd, sdnn, sqi, snrV);
+            const corrected = this._correctRMSSDBias(rmssd, sdnn, sqiEarly, snrV);
             if (corrected !== null && corrected >= 8 && corrected <= 150) {
               rmssd = corrected;
               lnRmssd = Math.log(Math.max(1, corrected)).toFixed(2);
@@ -1919,13 +1947,11 @@ const App = {
       stressFromRMSSD = true;
     }
 
-    // SQI: ME-rPPG 신뢰도 기반
-    const sqi = Math.round((1 - m.meanHRErr) * 100);
-
+    // SQI는 위에서 sqiEarly로 이미 계산됨 (RMSSD confidence 계산용)
     return {
       hr: hrInt, rmssd, lnRmssd, rmssdReason,
       sdnn, respRate, stressIdx, stressFromRMSSD,
-      sqi: Math.min(99, Math.max(50, sqi)),
+      sqi: sqiEarly,
       snr: null, peakCount: peaks ? peaks.length : 0,
       engine: 'ME-rPPG',
     };

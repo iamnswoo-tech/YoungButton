@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v13.4",
-  "short_name": "건강측정 v13.4",
-  "description": "v13.4 — RMSSD sub-frame + bias 보정 + 얼굴 음성 + 자세 가이드",
+  "name": "건강 측정 v13.5",
+  "short_name": "건강측정 v13.5",
+  "description": "v13.5 핫픽스 — sqi 변수 충돌 + finalize try/catch 안전망",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
