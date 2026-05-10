@@ -893,10 +893,284 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   border-bottom: 1px solid var(--border);
 }
 .bc-input-row:last-child { border-bottom: none; }
+.bc-input-row.wheel {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
 .bc-label {
   flex: 0 0 90px;
   font-size: 13px; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  width: 100%;
 }
+.bc-input-row.wheel .bc-label {
+  flex: none;
+  width: 100%;
+}
+
+/* ★ v13.7: 휠 피커 */
+.bc-wheel-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f9fafb 0%, #ffffff 50%, #f9fafb 100%);
+  border-radius: 14px;
+  border: 1.5px solid var(--border);
+  height: 144px;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.bc-wheel {
+  flex: 1;
+  height: 100%;
+  position: relative;
+  cursor: grab;
+}
+.bc-wheel:active { cursor: grabbing; }
+.bc-wheel-list {
+  padding: 54px 0;
+  will-change: transform;
+}
+.bc-wheel-item {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #cbd5e1;
+  transition: color .15s, transform .15s, font-size .15s;
+}
+.bc-wheel-item.far {
+  color: #d1d5db;
+  font-size: 13px;
+}
+.bc-wheel-item.near {
+  color: #6b7280;
+  font-size: 16px;
+}
+.bc-wheel-item.selected {
+  color: var(--primary);
+  font-size: 24px;
+  font-weight: 900;
+}
+.bc-wheel-mask {
+  position: absolute;
+  left: 0; right: 0;
+  height: 54px;
+  z-index: 2;
+  pointer-events: none;
+}
+.bc-wheel-mask.top {
+  top: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(255,255,255,0));
+}
+.bc-wheel-mask.bottom {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(255,255,255,.95), rgba(255,255,255,0));
+}
+.bc-wheel-selector {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 8px; right: 56px;
+  height: 40px;
+  border-top: 1.5px solid var(--primary);
+  border-bottom: 1.5px solid var(--primary);
+  background: var(--primary-light);
+  z-index: 1;
+  pointer-events: none;
+}
+.bc-wheel-unit {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--primary);
+  z-index: 3;
+}
+
+/* 단위 토글 */
+.bc-unit-toggle {
+  display: flex;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+.bc-unit-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  background: transparent;
+  border: none;
+  color: var(--text2);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+}
+.bc-unit-btn.on {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ★ v13.7: 신뢰도 표시 */
+.bc-age-confidence {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.bc-conf-bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.bc-conf-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width .6s ease;
+}
+.bc-conf-text {
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+/* ★ v13.7: 필라이즈 스타일 그래프 카드 */
+.bc-graph-card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.bc-graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+.bc-graph-status {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+.bc-graph-status strong {
+  font-weight: 900;
+}
+.bc-graph-status.good strong { color: var(--primary); }
+.bc-graph-status.warn strong { color: var(--warn); }
+.bc-graph-status.bad strong { color: var(--danger); }
+.bc-graph-value {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+.bc-graph-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* 막대 그래프 (WHtR/ABSI) */
+.bc-bar-graph {
+  position: relative;
+  margin: 18px 0 8px;
+  padding-bottom: 8px;
+}
+.bc-bar-track {
+  display: flex;
+  height: 24px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.08);
+}
+.bc-bar-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: rgba(255,255,255,.95);
+  letter-spacing: .02em;
+  text-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
+.bc-bar-zone.good { background: linear-gradient(135deg, #22c55e, #4ade80); }
+.bc-bar-zone.warn { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.bc-bar-zone.bad { background: linear-gradient(135deg, #ef4444, #f87171); }
+
+.bc-bar-marker {
+  position: absolute;
+  top: -8px;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+.bc-bar-marker-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--text);
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  margin-top: 8px;
+}
+.bc-bar-marker-label {
+  position: absolute;
+  top: -22px;
+  background: var(--text);
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.bc-bar-marker-label::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid var(--text);
+}
+.bc-bar-legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .bc-input {
   flex: 1;
   padding: 10px 12px;
@@ -1348,7 +1622,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v13.6 · ECG환산</span>
+  <span class="hd-ver">v13.7 · 그래프</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -1847,18 +2121,37 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     </div>
 
     <div class="bc-form">
-      <div class="bc-input-row">
-        <label class="bc-label">키 (cm)</label>
-        <input type="number" id="bc-height" class="bc-input" inputmode="decimal" step="0.1" min="100" max="220" placeholder="170">
+      <!-- ★ v13.7: 휠 피커 + 단위 전환 -->
+      <div class="bc-input-row wheel">
+        <label class="bc-label">키</label>
+        <div class="bc-wheel-wrap">
+          <div class="bc-wheel" id="bc-height-wheel" data-min="120" data-max="220" data-step="1" data-default="170"></div>
+          <div class="bc-wheel-unit">cm</div>
+        </div>
       </div>
-      <div class="bc-input-row">
-        <label class="bc-label">체중 (kg)</label>
-        <input type="number" id="bc-weight" class="bc-input" inputmode="decimal" step="0.1" min="30" max="200" placeholder="65">
+
+      <div class="bc-input-row wheel">
+        <label class="bc-label">체중</label>
+        <div class="bc-wheel-wrap">
+          <div class="bc-wheel" id="bc-weight-wheel" data-min="30" data-max="180" data-step="1" data-default="65"></div>
+          <div class="bc-wheel-unit">kg</div>
+        </div>
       </div>
-      <div class="bc-input-row">
-        <label class="bc-label">허리둘레 (cm)</label>
-        <input type="number" id="bc-waist" class="bc-input" inputmode="decimal" step="0.1" min="40" max="200" placeholder="80">
+
+      <div class="bc-input-row wheel">
+        <label class="bc-label">
+          허리둘레
+          <div class="bc-unit-toggle">
+            <button type="button" class="bc-unit-btn on" data-unit="cm" onclick="App.bcSwitchWaistUnit('cm')">cm</button>
+            <button type="button" class="bc-unit-btn" data-unit="inch" onclick="App.bcSwitchWaistUnit('inch')">inch</button>
+          </div>
+        </label>
+        <div class="bc-wheel-wrap">
+          <div class="bc-wheel" id="bc-waist-wheel" data-min="50" data-max="150" data-step="1" data-default="80"></div>
+          <div class="bc-wheel-unit" id="bc-waist-unit">cm</div>
+        </div>
       </div>
+
       <div class="bc-input-row">
         <label class="bc-label">성별</label>
         <div class="bc-gender">
@@ -1866,10 +2159,20 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
           <button type="button" class="bc-gender-btn" data-gender="female" onclick="App.bcSelectGender('female')">여성</button>
         </div>
       </div>
-      <div class="bc-input-row">
+
+      <div class="bc-input-row wheel">
         <label class="bc-label">나이</label>
-        <input type="number" id="bc-age" class="bc-input" inputmode="numeric" min="10" max="120" placeholder="35">
+        <div class="bc-wheel-wrap">
+          <div class="bc-wheel" id="bc-age-wheel" data-min="10" data-max="100" data-step="1" data-default="35"></div>
+          <div class="bc-wheel-unit">세</div>
+        </div>
       </div>
+
+      <!-- 숨김 input (호환성용) -->
+      <input type="hidden" id="bc-height" value="170">
+      <input type="hidden" id="bc-weight" value="65">
+      <input type="hidden" id="bc-waist" value="80">
+      <input type="hidden" id="bc-age" value="35">
     </div>
 
     <div class="bt-tip">

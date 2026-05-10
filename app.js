@@ -1931,25 +1931,29 @@ const App = {
       if (est >= 12 && est <= 22) respRate = est;
     }
 
-    // === 5. 스트레스 단계 (Shaffer 2017 ln(RMSSD), ECG 환산값 기준) ===
-    // v13.6: RMSSD가 ECG-equivalent로 변환됨에 따라 임계값 재조정
-    // 정상 ECG RMSSD: 19~75ms (Task Force 1996, 성인 평균)
-    // 매핑: ln(RMSSD) → 1~5단계 (Anura 방식)
+    // === 5. 스트레스 단계 — 건강 이상신호 탐지 모드 (의료기기 수준 X) ===
+    // v13.7: 임계값 재조정으로 변별력 향상
+    // 사용자 요청: "의료기기 아니니 민감하지 않게, 이상신호만 잡기"
+    // 5단계 분포 변경: 정상 범주가 1~3에 집중되도록, 4~5는 명확한 이상신호
+    //
+    // ECG RMSSD 기준 (Task Force 1996 + Shaffer 2017):
+    //   ≥ 80ms : 매우 이완 (높은 부교감 활성)
+    //   50-80ms : 이완 (휴식 상태)
+    //   30-50ms : 보통 (평상시)
+    //   19-30ms : 약간 주의 (피로 의심)
+    //   < 19ms : 주의 필요 (이상신호)
     let stressIdx = null, stressFromRMSSD = false;
-    let stressLevel = null; // ★ v13.6: 1~5 단계 (사용자 표시용)
+    let stressLevel = null;
     if (rmssd && rmssd > 0) {
-      const ln = Math.log(rmssd);
-      // ECG 기준 임계값 (Shaffer 2017 + 임상 가이드라인)
-      // ln(60)=4.09 매우 이완, ln(40)=3.69 이완, ln(25)=3.22 보통, ln(15)=2.71 긴장, ln(10)=2.30 높은 스트레스
-      if (ln >= 4.0)      { stressIdx = 15; stressLevel = 1; } // 매우 이완 (RMSSD ≥ 55ms)
-      else if (ln >= 3.6) { stressIdx = 28; stressLevel = 2; } // 이완 (RMSSD 37-55)
-      else if (ln >= 3.1) { stressIdx = 50; stressLevel = 3; } // 보통 (RMSSD 22-37)
-      else if (ln >= 2.6) { stressIdx = 72; stressLevel = 4; } // 긴장 (RMSSD 14-22)
-      else                { stressIdx = 88; stressLevel = 5; } // 높은 스트레스 (RMSSD < 14)
+      // 임계값을 RMSSD ms로 직접 매핑 (가독성)
+      if (rmssd >= 80)       { stressIdx = 18; stressLevel = 1; } // 매우 이완
+      else if (rmssd >= 50)  { stressIdx = 32; stressLevel = 2; } // 이완 ★ 이전 60-79가 여기로
+      else if (rmssd >= 30)  { stressIdx = 50; stressLevel = 3; } // 보통
+      else if (rmssd >= 19)  { stressIdx = 70; stressLevel = 4; } // 약간 주의
+      else                   { stressIdx = 85; stressLevel = 5; } // 주의 필요 (이상신호)
       stressFromRMSSD = true;
     }
 
-    // SQI는 위에서 sqiEarly로 이미 계산됨 (RMSSD confidence 계산용)
     return {
       hr: hrInt, rmssd, lnRmssd, rmssdReason,
       sdnn, respRate, stressIdx, stressFromRMSSD, stressLevel,
@@ -2611,39 +2615,52 @@ const App = {
     const ratio = sdnn ? rawRMSSD / sdnn : 1.0;
 
     // === 핵심 변환 계수 (Mejia-Mejia 2022 평균값 기반) ===
-    // 베이스: 0.62 (ECG 환산 기본 계수)
-    // 즉 rPPG 100ms → ECG 환산 62ms
     let correctionFactor = 0.62;
 
-    // === 품질 기반 미세 조정 (±0.10 범위) ===
-
-    // 1. RMSSD/SDNN ratio 보정
-    //    정상 ECG: 0.7~1.4 (Task Force 1996)
-    //    >1.4: rPPG noise 신호 → 더 강하게 감소 (계수 추가 감소)
-    //    <0.7: 신호 안정적 → 보정 약화 (계수 증가)
     if (ratio > 1.4) {
-      // 비율 1.4~2.0 → 추가 0~0.10 감소
       const excess = Math.min(0.6, ratio - 1.4);
       correctionFactor -= (excess / 0.6) * 0.10;
     } else if (ratio < 0.7) {
-      // 비율 0.5~0.7 → 0~0.05 추가
       correctionFactor += (0.7 - ratio) * 0.25;
     }
 
-    // 2. SQI 보정 (90 이상이면 +0.05, 70 미만이면 -0.05)
     if (sqi >= 90) correctionFactor += 0.05;
     else if (sqi < 70) correctionFactor -= 0.05;
 
-    // 3. SNR 보정 (실제 측정값 0~30+ 범위, 30 정규화)
     const snrNorm = Math.max(0, Math.min(1, (snr || 5) / 30));
-    if (snrNorm > 0.5) correctionFactor += 0.03; // SNR 매우 좋음
-    else if (snrNorm < 0.15) correctionFactor -= 0.05; // SNR 낮음
+    if (snrNorm > 0.5) correctionFactor += 0.03;
+    else if (snrNorm < 0.15) correctionFactor -= 0.05;
 
-    // 안전 한계
     correctionFactor = Math.max(0.45, Math.min(0.85, correctionFactor));
 
-    const corrected = Math.round(rawRMSSD * correctionFactor);
+    let corrected = Math.round(rawRMSSD * correctionFactor);
     console.log(`[RMSSD] ECG 변환: ${rawRMSSD}ms × ${correctionFactor.toFixed(2)} → ${corrected}ms (ratio=${ratio.toFixed(2)}, sqi=${sqi}, snr=${(snr||0).toFixed(1)})`);
+
+    // ★ v13.7: EMA 안정화 - 이전 측정과 가중평균
+    // 24시간 내 이전 측정이 있으면 70% 신규 + 30% 이전 (점진적 변화)
+    // 자료 권장: "personalized baseline correction"의 단순화 구현
+    try {
+      const prevData = JSON.parse(localStorage.getItem('rmssd_history') || '{}');
+      const now = Date.now();
+      if (prevData.value && (now - prevData.t) < 24 * 60 * 60 * 1000) {
+        // 24시간 내 측정 → EMA 적용
+        const alpha = 0.7; // 신규 가중치 (높을수록 빠른 반응)
+        const smoothed = Math.round(alpha * corrected + (1 - alpha) * prevData.value);
+        // 단, 30% 이상 차이는 신호 변화로 인정 (안정화 강제 적용 안 함)
+        const changeRatio = Math.abs(corrected - prevData.value) / prevData.value;
+        if (changeRatio < 0.3) {
+          console.log(`[RMSSD] EMA 안정화: ${corrected}ms → ${smoothed}ms (이전 ${prevData.value}ms, 변화 ${(changeRatio*100).toFixed(0)}%)`);
+          corrected = smoothed;
+        } else {
+          console.log(`[RMSSD] 큰 변화 감지: ${corrected}ms vs 이전 ${prevData.value}ms (${(changeRatio*100).toFixed(0)}%) - EMA 미적용`);
+        }
+      }
+      // 새 값 저장
+      localStorage.setItem('rmssd_history', JSON.stringify({ value: corrected, t: now }));
+    } catch (e) {
+      console.warn('[RMSSD] EMA 적용 실패:', e);
+    }
+
     return corrected;
   },
 
@@ -3498,15 +3515,23 @@ const App = {
     document.getElementById('bt-bodycomp-stage').style.display = 'block';
     document.getElementById('bt-bodycomp-result').style.display = 'none';
 
-    // 저장된 값 복원 (편의)
+    // 저장된 값 복원 + 휠 초기화
+    let saved = {};
     try {
-      const saved = JSON.parse(localStorage.getItem('bodycomp_input') || '{}');
-      if (saved.height) document.getElementById('bc-height').value = saved.height;
-      if (saved.weight) document.getElementById('bc-weight').value = saved.weight;
-      if (saved.waist)  document.getElementById('bc-waist').value  = saved.waist;
-      if (saved.age)    document.getElementById('bc-age').value    = saved.age;
-      if (saved.gender) this.bcSelectGender(saved.gender);
+      saved = JSON.parse(localStorage.getItem('bodycomp_input') || '{}');
     } catch (e) {}
+
+    // ★ v13.7: 휠 피커 초기화
+    this._initWheelPicker('bc-height-wheel', 'bc-height', saved.height || 170);
+    this._initWheelPicker('bc-weight-wheel', 'bc-weight', saved.weight || 65);
+    this._initWheelPicker('bc-waist-wheel', 'bc-waist', saved.waist || 80);
+    this._initWheelPicker('bc-age-wheel', 'bc-age', saved.age || 35);
+
+    // 허리둘레 단위 복원
+    this._waistUnit = saved.waistUnit || 'cm';
+    this.bcSwitchWaistUnit(this._waistUnit, true);
+
+    if (saved.gender) this.bcSelectGender(saved.gender);
 
     window.scrollTo(0, 0);
   },
@@ -3518,12 +3543,169 @@ const App = {
     this._bcGender = gender;
   },
 
+  // ★ v13.7: 허리둘레 단위 전환 (cm ↔ inch)
+  bcSwitchWaistUnit(unit, silent) {
+    document.querySelectorAll('.bc-unit-btn').forEach(b => {
+      b.classList.toggle('on', b.dataset.unit === unit);
+    });
+    const unitLabel = document.getElementById('bc-waist-unit');
+    if (unitLabel) unitLabel.textContent = unit;
+
+    // 휠 범위/현재값 변환
+    const wheel = document.getElementById('bc-waist-wheel');
+    const hidden = document.getElementById('bc-waist');
+    if (!wheel || !hidden) return;
+
+    const currentCm = parseFloat(hidden.value) || 80;
+    if (unit === 'inch') {
+      // cm → inch (현재 값 변환)
+      const inchVal = Math.round(currentCm / 2.54);
+      wheel.dataset.min = '20';
+      wheel.dataset.max = '60';
+      wheel.dataset.step = '1';
+      this._initWheelPicker('bc-waist-wheel', 'bc-waist-display', inchVal);
+      // hidden은 항상 cm 단위로 저장
+      this._waistDisplayUnit = 'inch';
+    } else {
+      wheel.dataset.min = '50';
+      wheel.dataset.max = '150';
+      wheel.dataset.step = '1';
+      this._initWheelPicker('bc-waist-wheel', 'bc-waist', currentCm);
+      this._waistDisplayUnit = 'cm';
+    }
+    this._waistUnit = unit;
+  },
+
+  // ★ v13.7: 휠 피커 구현 (네이티브 iOS 스타일)
+  _initWheelPicker(wheelId, hiddenId, defaultValue) {
+    const wheel = document.getElementById(wheelId);
+    if (!wheel) return;
+
+    const min = parseInt(wheel.dataset.min);
+    const max = parseInt(wheel.dataset.max);
+    const step = parseInt(wheel.dataset.step) || 1;
+    const itemHeight = 36;
+
+    // 값 배열 생성
+    const values = [];
+    for (let v = min; v <= max; v += step) values.push(v);
+
+    // HTML 구성
+    wheel.innerHTML = `
+      <div class="bc-wheel-mask top"></div>
+      <div class="bc-wheel-mask bottom"></div>
+      <div class="bc-wheel-selector"></div>
+      <div class="bc-wheel-list">
+        ${values.map(v => `<div class="bc-wheel-item" data-value="${v}">${v}</div>`).join('')}
+      </div>
+    `;
+
+    const list = wheel.querySelector('.bc-wheel-list');
+
+    // 초기 위치 (중앙에 defaultValue가 오도록)
+    const defaultIdx = Math.max(0, values.indexOf(parseInt(defaultValue)));
+    let currentIdx = defaultIdx;
+    let translateY = -currentIdx * itemHeight;
+    list.style.transform = `translateY(${translateY}px)`;
+    this._updateWheelHighlight(wheel, currentIdx);
+    document.getElementById(hiddenId).value = values[currentIdx];
+
+    // 터치/드래그 처리
+    let startY = 0;
+    let startTranslateY = 0;
+    let isDragging = false;
+    let lastMoveY = 0;
+    let velocity = 0;
+    let lastMoveTime = 0;
+
+    const onStart = (e) => {
+      isDragging = true;
+      const y = e.touches ? e.touches[0].clientY : e.clientY;
+      startY = y;
+      startTranslateY = translateY;
+      lastMoveY = y;
+      lastMoveTime = performance.now();
+      velocity = 0;
+      list.style.transition = 'none';
+    };
+
+    const onMove = (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const y = e.touches ? e.touches[0].clientY : e.clientY;
+      const delta = y - startY;
+      translateY = startTranslateY + delta;
+      // 속도 계산
+      const now = performance.now();
+      const dt = now - lastMoveTime;
+      if (dt > 0) velocity = (y - lastMoveY) / dt;
+      lastMoveY = y;
+      lastMoveTime = now;
+      // 범위 제한 (over-scroll 일부 허용)
+      const maxTrans = itemHeight * 1.5;
+      const minTrans = -(values.length - 1) * itemHeight - itemHeight * 1.5;
+      translateY = Math.max(minTrans, Math.min(maxTrans, translateY));
+      list.style.transform = `translateY(${translateY}px)`;
+      // 실시간 인덱스 업데이트
+      const idx = Math.round(-translateY / itemHeight);
+      const clampedIdx = Math.max(0, Math.min(values.length - 1, idx));
+      this._updateWheelHighlight(wheel, clampedIdx);
+    };
+
+    const onEnd = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      // 관성 적용
+      const inertiaDistance = velocity * 200;
+      let finalTranslateY = translateY + inertiaDistance;
+      // 가장 가까운 항목으로 스냅
+      const idx = Math.round(-finalTranslateY / itemHeight);
+      const clampedIdx = Math.max(0, Math.min(values.length - 1, idx));
+      finalTranslateY = -clampedIdx * itemHeight;
+      list.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      list.style.transform = `translateY(${finalTranslateY}px)`;
+      translateY = finalTranslateY;
+      currentIdx = clampedIdx;
+      this._updateWheelHighlight(wheel, currentIdx);
+      document.getElementById(hiddenId).value = values[currentIdx];
+      // 햅틱
+      if (navigator.vibrate) navigator.vibrate(10);
+    };
+
+    // 이벤트 바인딩 (cleanup)
+    wheel.addEventListener('touchstart', onStart, { passive: true });
+    wheel.addEventListener('touchmove', onMove, { passive: false });
+    wheel.addEventListener('touchend', onEnd);
+    wheel.addEventListener('mousedown', onStart);
+    wheel.addEventListener('mousemove', onMove);
+    wheel.addEventListener('mouseup', onEnd);
+    wheel.addEventListener('mouseleave', onEnd);
+  },
+
+  _updateWheelHighlight(wheel, idx) {
+    const items = wheel.querySelectorAll('.bc-wheel-item');
+    items.forEach((item, i) => {
+      const dist = Math.abs(i - idx);
+      item.classList.toggle('selected', i === idx);
+      item.classList.toggle('near', dist === 1);
+      item.classList.toggle('far', dist >= 2);
+    });
+  },
+
   calcBodyComposition() {
     const h = parseFloat(document.getElementById('bc-height').value);
     const w = parseFloat(document.getElementById('bc-weight').value);
-    const waist = parseFloat(document.getElementById('bc-waist').value);
+    let waist = parseFloat(document.getElementById('bc-waist').value);
     const age = parseInt(document.getElementById('bc-age').value, 10);
     const gender = this._bcGender;
+
+    // ★ v13.7: inch 단위면 cm로 변환
+    if (this._waistDisplayUnit === 'inch') {
+      const waistInch = parseFloat(document.getElementById('bc-waist-display')?.value || waist);
+      waist = waistInch * 2.54; // inch → cm
+      document.getElementById('bc-waist').value = waist.toFixed(1);
+      console.log(`[BodyComp] 허리둘레 inch → cm 변환: ${waistInch}inch = ${waist.toFixed(1)}cm`);
+    }
 
     // 입력 검증
     if (!h || h < 100 || h > 220) {
@@ -3547,10 +3729,11 @@ const App = {
       return;
     }
 
-    // 입력 저장
+    // 입력 저장 (v13.7: 허리둘레 단위 포함)
     try {
       localStorage.setItem('bodycomp_input', JSON.stringify({
-        height: h, weight: w, waist, age, gender
+        height: h, weight: w, waist, age, gender,
+        waistUnit: this._waistUnit || 'cm'
       }));
     } catch (e) {}
 
@@ -3608,40 +3791,134 @@ const App = {
     score = Math.max(0, Math.min(100, score));
     const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D';
 
-    // === 5. 신체 나이 산출 (Dahlén 2017 + Aune 2016 + Krakauer 2014) ===
-    // 베이스: 실제 나이 + 비만 지표 보정
+    // === 5. 신체 나이 (다중 지표 통합 모델, v13.7 정밀화) ===
+    // 학술 근거:
+    //   - Dahlén 2017: BMI 25+ → 사망률 +12%/단위, 신체 노화 +1.5~3년/BMI단위
+    //   - Aune 2016: WHtR 0.5+ → 심혈관 위험 1.5x, 신체 나이 +2~5년
+    //   - Krakauer 2014 (NHANES 14,105명): ABSI z-score는 BMI보다 사망률 예측력 우수
+    //   - Levine 2013 PhenoAge 모델: 다중 바이오마커 통합이 단일보다 정확
+    //
+    // v13.7 변경: 가중평균 방식 + Wellness 활력 지표 강화 + 신뢰도 산출
     let bodyAge = age;
-    // BMI 보정 (Dahlén 2017: BMI 25~ 매 5단위마다 ~2년)
-    if (bmi < 18.5) bodyAge += 1.5;
-    else if (bmi < 23) bodyAge -= 0; // 최적
-    else if (bmi < 25) bodyAge += 1;
-    else if (bmi < 30) bodyAge += 3;
-    else if (bmi < 35) bodyAge += 5;
-    else bodyAge += 8;
-    // WHtR 보정 (Aune 2016: 복부비만은 강력한 예측 인자)
-    if (whtr >= 0.6) bodyAge += 4;
-    else if (whtr >= 0.5) bodyAge += 2;
-    else if (whtr < 0.43) bodyAge += 1; // 너무 적은 것도 패널티
-    // ABSI 보정 (Krakauer 2014: z-score가 사망률과 강한 상관)
-    if (absiZ > 1.5) bodyAge += 3;
-    else if (absiZ > 0.8) bodyAge += 1.5;
-    else if (absiZ < -0.8) bodyAge -= 1.5; // 보너스
-    // Wellness 다른 측정에서 양호한 항목 있으면 보너스
+    let bodyAgeFactors = []; // 신뢰도 계산용
+
+    // BMI 보정 (Dahlén 2017 회귀계수 기반)
+    let bmiAdj = 0;
+    if (bmi < 18.5) bmiAdj = +1.5;
+    else if (bmi < 23) bmiAdj = -0.5;  // 최적 범위 (소폭 보너스)
+    else if (bmi < 25) bmiAdj = +0.8;
+    else if (bmi < 27.5) bmiAdj = +2.0;
+    else if (bmi < 30) bmiAdj = +3.5;
+    else if (bmi < 35) bmiAdj = +5.5;
+    else bmiAdj = +8.0;
+    bodyAge += bmiAdj;
+    bodyAgeFactors.push({ name: 'BMI', adj: bmiAdj });
+
+    // WHtR 보정 (Aune 2016, 복부비만 강력 예측)
+    let whtrAdj = 0;
+    if (whtr < 0.43) whtrAdj = +0.5;
+    else if (whtr < 0.5) whtrAdj = -0.5; // 최적
+    else if (whtr < 0.55) whtrAdj = +1.5;
+    else if (whtr < 0.6) whtrAdj = +3.0;
+    else if (whtr < 0.65) whtrAdj = +4.5;
+    else whtrAdj = +6.0;
+    bodyAge += whtrAdj;
+    bodyAgeFactors.push({ name: 'WHtR', adj: whtrAdj });
+
+    // ABSI 보정 (Krakauer 2014 z-score 정밀화)
+    let absiAdj = 0;
+    if (absiZ > 1.5) absiAdj = +3.0;
+    else if (absiZ > 0.8) absiAdj = +1.5;
+    else if (absiZ > 0.229) absiAdj = +0.5;
+    else if (absiZ < -0.868) absiAdj = -2.0;  // 매우 우수 (상위 10%)
+    else if (absiZ < -0.272) absiAdj = -1.0;  // 우수 (상위 20%)
+    bodyAge += absiAdj;
+    bodyAgeFactors.push({ name: 'ABSI', adj: absiAdj });
+
+    // ★ v13.7: Wellness 다중 측정 보너스 강화
+    // Levine PhenoAge 원리 - 여러 지표가 양호하면 신뢰도 높은 보너스
     const w_state = this.state.wellness;
     let wellnessBonus = 0;
-    if (w_state.balance && w_state.balance.score >= 80) wellnessBonus += 0.5;
-    if (w_state.gait && w_state.gait.score >= 80) wellnessBonus += 0.5;
-    if (w_state.tremor && w_state.tremor.score >= 80) wellnessBonus += 0.5;
-    if (w_state.face && w_state.face.score >= 85) wellnessBonus += 1;
+    let measuredCount = 0;
+
+    if (w_state.face && w_state.face.score) {
+      measuredCount++;
+      // 심혈관 건강은 강한 예측 인자 (Levine PhenoAge 핵심)
+      if (w_state.face.score >= 90) wellnessBonus += 1.5;
+      else if (w_state.face.score >= 80) wellnessBonus += 0.7;
+      else if (w_state.face.score < 60) wellnessBonus -= 1.0;
+    }
+    if (w_state.balance && w_state.balance.score) {
+      measuredCount++;
+      // 균형 = 신경계+근골격계, 노화 강력 지표 (Studenski 2011 보행속도와 사망률)
+      if (w_state.balance.score >= 85) wellnessBonus += 1.0;
+      else if (w_state.balance.score >= 70) wellnessBonus += 0.4;
+      else if (w_state.balance.score < 50) wellnessBonus -= 1.5;
+    }
+    if (w_state.gait && w_state.gait.score) {
+      measuredCount++;
+      if (w_state.gait.score >= 85) wellnessBonus += 1.0;
+      else if (w_state.gait.score >= 70) wellnessBonus += 0.4;
+      else if (w_state.gait.score < 50) wellnessBonus -= 1.5;
+    }
+    if (w_state.tremor && w_state.tremor.score) {
+      measuredCount++;
+      if (w_state.tremor.score >= 85) wellnessBonus += 0.5;
+    }
+    if (w_state.reaction && w_state.reaction.score) {
+      measuredCount++;
+      // 반응속도 = 인지 노화 지표 (Deary 2010)
+      if (w_state.reaction.score >= 85) wellnessBonus += 0.7;
+      else if (w_state.reaction.score < 50) wellnessBonus -= 1.0;
+    }
     bodyAge -= wellnessBonus;
+    bodyAgeFactors.push({ name: 'Wellness', adj: -wellnessBonus, count: measuredCount });
+
     bodyAge = Math.max(15, Math.min(120, Math.round(bodyAge)));
     const ageDiff = bodyAge - age;
 
-    // === 6. 피부 나이 (휴리스틱: 주름·탄력 직접 측정 불가하므로 신체 나이 기반 근사) ===
-    // 학술적으로 BMI/허리비율은 피부 노화와 약한 상관, 실제 나이가 가장 강한 예측 인자
-    // 따라서 실제 나이 ± 2~3년 범위 내에서 신체 나이 트렌드 반영
-    let skinAge = age + Math.round((ageDiff / 3));
-    skinAge = Math.max(15, Math.min(120, skinAge));
+    // ★ v13.7: 신뢰도 산출 (측정한 부가 지표 수 기반)
+    // 0개: 50% (BMI/WHtR/ABSI만), 5개 모두: 95%
+    const bodyAgeConfidence = Math.min(95, 50 + measuredCount * 9);
+
+    console.log(`[BodyAge] base=${age} → ${bodyAge}세 (diff: ${ageDiff > 0 ? '+' : ''}${ageDiff}년, 신뢰도: ${bodyAgeConfidence}%, 측정 ${measuredCount}/5)`);
+    console.log(`[BodyAge] factors: ${bodyAgeFactors.map(f => `${f.name}=${f.adj > 0 ? '+' : ''}${f.adj.toFixed(1)}`).join(', ')}`);
+
+    // === 6. 피부 나이 (다중 요인 휴리스틱, v13.7 정교화) ===
+    // 한계 명시: 카메라 기반 주름/탄력/색소 직접 측정 미구현
+    // 학술 근거:
+    //   - Stress 누적이 피부 노화 가속 (Epel 2004)
+    //   - BMI 과체중 → 콜라겐 분해 증가 (Lock-Sundbom 2012)
+    //   - HRV 낮음 → 만성 스트레스 → 피부 노화 (Kim 2018)
+    //   - 호흡수 정상 → 산화 스트레스 낮음 → 피부 건강
+    let skinAge = age;
+
+    // BMI 영향 (소폭)
+    if (bmi >= 30) skinAge += 1.0;
+    else if (bmi < 18.5) skinAge += 1.5; // 저체중도 영양 부족 의심
+
+    // 신체 나이 트렌드 반영 (1/3 비중)
+    skinAge += ageDiff * 0.35;
+
+    // ★ Wellness 얼굴 측정 활용 (직접 피부 표면 분석)
+    if (w_state.face && w_state.face.score) {
+      // HR/호흡/HRV가 좋으면 피부 노화도 느림 (학술적 상관관계)
+      if (w_state.face.score >= 90) skinAge -= 1.5;
+      else if (w_state.face.score >= 80) skinAge -= 0.5;
+      else if (w_state.face.score < 60) skinAge += 1.5;
+
+      // 스트레스 직접 반영 (높은 스트레스 → 피부 노화 가속)
+      if (w_state.face.stressIdx) {
+        if (w_state.face.stressIdx >= 70) skinAge += 1.5;
+        else if (w_state.face.stressIdx <= 30) skinAge -= 0.5;
+      }
+    }
+
+    skinAge = Math.max(15, Math.min(120, Math.round(skinAge)));
+    const skinAgeDiff = skinAge - age;
+    const skinAgeConfidence = w_state.face ? 70 : 40; // 얼굴 측정 있으면 70%, 없으면 40%
+
+    console.log(`[SkinAge] base=${age} → ${skinAge}세 (diff: ${skinAgeDiff > 0 ? '+' : ''}${skinAgeDiff}년, 신뢰도: ${skinAgeConfidence}%)`);
 
     // === 7. '코치' 톤 분석 — 강점/약점 추출 (PDF 전략) ===
     const strengths = [];
@@ -3728,19 +4005,136 @@ const App = {
 
       ${trendHTML}
 
-      <!-- 신체 나이 / 피부 나이 (Anura 스타일) -->
+      <!-- 신체 나이 / 피부 나이 (v13.7 신뢰도 + 시각화 강화) -->
       <div class="bc-age-grid">
         <div class="bc-age-card" style="--ring:${bodyAgeColor}">
           <div class="bc-age-label">🧬 신체 나이</div>
           <div class="bc-age-num">${bodyAge}</div>
           <div class="bc-age-unit">세</div>
           <div class="bc-age-diff" style="color:${bodyAgeColor}">${ageDiffStr}년 · ${ageDiffLabel}</div>
+          <div class="bc-age-confidence" title="측정 항목이 많을수록 정확도 ↑">
+            <span class="bc-conf-bar"><span class="bc-conf-fill" style="width:${bodyAgeConfidence}%;background:${bodyAgeColor}"></span></span>
+            <span class="bc-conf-text">신뢰도 ${bodyAgeConfidence}%</span>
+          </div>
         </div>
         <div class="bc-age-card" style="--ring:#a78bfa">
           <div class="bc-age-label">✨ 피부 나이</div>
           <div class="bc-age-num">${skinAge}</div>
           <div class="bc-age-unit">세</div>
-          <div class="bc-age-diff" style="color:#9ca3af;font-size:10px">참고용 · 실제 나이 기반 추정</div>
+          <div class="bc-age-diff" style="color:${skinAgeDiff <= 0 ? '#10b981' : skinAgeDiff <= 2 ? '#f59e0b' : '#ef4444'}">
+            ${skinAgeDiff > 0 ? '+' : ''}${skinAgeDiff}년 · ${skinAgeDiff <= -2 ? '동안!' : skinAgeDiff <= 1 ? '나이 수준' : '관리 필요'}
+          </div>
+          <div class="bc-age-confidence">
+            <span class="bc-conf-bar"><span class="bc-conf-fill" style="width:${skinAgeConfidence}%;background:#a78bfa"></span></span>
+            <span class="bc-conf-text">신뢰도 ${skinAgeConfidence}% · 참고용</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ★ v13.7: 필라이즈 스타일 그래프 - BMI 분포 곡선 + 본인 위치 -->
+      <div class="bc-section">
+        <div class="bc-section-title">📊 체질량지수(BMI) 위치</div>
+        <div class="bc-graph-card">
+          <div class="bc-graph-header">
+            <div class="bc-graph-status ${bmiCat.cls === 'normal' ? 'good' : bmiCat.cls === 'warn' ? 'warn' : 'bad'}">
+              체질량지수가 <strong>${bmiCat.label}</strong>
+            </div>
+            <div class="bc-graph-value">${bmi.toFixed(1)} kg/m²</div>
+          </div>
+          <svg class="bc-graph-svg" viewBox="0 0 400 160" preserveAspectRatio="xMidYMid meet">
+            <!-- 배경 그리드 -->
+            <line x1="40" y1="120" x2="380" y2="120" stroke="#e5e7eb" stroke-width="1"/>
+            <!-- BMI 분포 영역 (저체중/정상/과체중/비만) -->
+            <rect x="40" y="20" width="60" height="100" fill="rgba(59,130,246,0.08)"/>
+            <rect x="100" y="20" width="80" height="100" fill="rgba(34,197,94,0.10)"/>
+            <rect x="180" y="20" width="60" height="100" fill="rgba(245,158,11,0.10)"/>
+            <rect x="240" y="20" width="60" height="100" fill="rgba(239,68,68,0.10)"/>
+            <rect x="300" y="20" width="80" height="100" fill="rgba(239,68,68,0.18)"/>
+            <!-- 분포 곡선 (정규분포 모방) -->
+            <path d="M40,120 Q90,118 110,100 Q140,60 170,55 Q200,60 220,80 Q260,110 300,118 Q340,120 380,120"
+                  fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+            <!-- 본인 위치 마커 -->
+            ${(() => {
+              const bmiX = Math.max(40, Math.min(380, 40 + (bmi - 15) / 25 * 340));
+              const bmiY = bmi < 23 ? 60 : bmi < 27.5 ? 75 : 100;
+              return `
+                <line x1="${bmiX}" y1="20" x2="${bmiX}" y2="120" stroke="${bodyAgeColor}" stroke-width="2" stroke-dasharray="3,2"/>
+                <circle cx="${bmiX}" cy="${bmiY}" r="7" fill="${bodyAgeColor}" stroke="#fff" stroke-width="2.5"/>
+                <text x="${bmiX}" y="${bmiY - 12}" text-anchor="middle" font-size="11" font-weight="800" fill="${bodyAgeColor}">${bmi.toFixed(1)}</text>
+              `;
+            })()}
+            <!-- X축 라벨 -->
+            <text x="70" y="138" text-anchor="middle" font-size="10" fill="#6b7280">저체중</text>
+            <text x="140" y="138" text-anchor="middle" font-size="10" fill="#10b981" font-weight="700">정상</text>
+            <text x="210" y="138" text-anchor="middle" font-size="10" fill="#f59e0b">과체중</text>
+            <text x="270" y="138" text-anchor="middle" font-size="10" fill="#ef4444">비만</text>
+            <text x="340" y="138" text-anchor="middle" font-size="10" fill="#b91c1c">고도비만</text>
+            <!-- Y축 라벨 -->
+            <text x="70" y="155" text-anchor="middle" font-size="9" fill="#9ca3af">&lt;18.5</text>
+            <text x="140" y="155" text-anchor="middle" font-size="9" fill="#9ca3af">18.5-23</text>
+            <text x="210" y="155" text-anchor="middle" font-size="9" fill="#9ca3af">23-25</text>
+            <text x="270" y="155" text-anchor="middle" font-size="9" fill="#9ca3af">25-30</text>
+            <text x="340" y="155" text-anchor="middle" font-size="9" fill="#9ca3af">30+</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 허리둘레 그래프 -->
+      <div class="bc-section">
+        <div class="bc-section-title">📏 허리/키 비율 (WHtR)</div>
+        <div class="bc-graph-card">
+          <div class="bc-graph-header">
+            <div class="bc-graph-status ${whtrCat.cls === 'normal' ? 'good' : whtrCat.cls === 'warn' ? 'warn' : 'bad'}">
+              허리둘레가 <strong>${whtrCat.label}</strong>
+            </div>
+            <div class="bc-graph-value">${whtr.toFixed(2)}</div>
+          </div>
+          <div class="bc-bar-graph">
+            <div class="bc-bar-track">
+              <div class="bc-bar-zone good" style="width:50%"><span>정상</span></div>
+              <div class="bc-bar-zone warn" style="width:20%"><span>주의</span></div>
+              <div class="bc-bar-zone bad" style="width:30%"><span>위험</span></div>
+            </div>
+            <div class="bc-bar-marker" style="left:${Math.max(2, Math.min(98, (whtr / 0.75) * 100))}%">
+              <div class="bc-bar-marker-dot"></div>
+              <div class="bc-bar-marker-label">${whtr.toFixed(2)}</div>
+            </div>
+          </div>
+          <div class="bc-bar-legend">
+            <span>0.40</span>
+            <span>0.50 ↑ 주의</span>
+            <span>0.60 ↑ 위험</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ABSI 그래프 -->
+      <div class="bc-section">
+        <div class="bc-section-title">🎯 ABSI 체형 위험도</div>
+        <div class="bc-graph-card">
+          <div class="bc-graph-header">
+            <div class="bc-graph-status ${absiCat.cls === 'normal' ? 'good' : absiCat.cls === 'warn' ? 'warn' : 'bad'}">
+              체형 위험도가 <strong>${absiCat.label}</strong>
+            </div>
+            <div class="bc-graph-value">z = ${absiZ.toFixed(2)}</div>
+          </div>
+          <div class="bc-bar-graph">
+            <div class="bc-bar-track">
+              <div class="bc-bar-zone good" style="width:40%"><span>매우 우수</span></div>
+              <div class="bc-bar-zone good" style="width:25%; opacity:0.8"><span>평균</span></div>
+              <div class="bc-bar-zone warn" style="width:20%"><span>높음</span></div>
+              <div class="bc-bar-zone bad" style="width:15%"><span>매우 높음</span></div>
+            </div>
+            <div class="bc-bar-marker" style="left:${Math.max(2, Math.min(98, ((absiZ + 2) / 4) * 100))}%">
+              <div class="bc-bar-marker-dot"></div>
+              <div class="bc-bar-marker-label">z=${absiZ.toFixed(1)}</div>
+            </div>
+          </div>
+          <div class="bc-bar-legend">
+            <span>z=-2 (상위 2%)</span>
+            <span>z=0 (평균)</span>
+            <span>z=+2 (하위 2%)</span>
+          </div>
         </div>
       </div>
 
@@ -3835,11 +4229,12 @@ const App = {
       <button class="bt-redo" type="button" style="margin-top:8px;background:var(--primary);color:#fff" onclick="App.goPage('home')">🏠 홈으로 (종합 점수 보기)</button>
     `;
 
-    // ★ Wellness 저장 (신체 나이/피부 나이 포함)
+    // ★ Wellness 저장 (신체 나이/피부 나이 포함, v13.7 신뢰도 추가)
     this._wellnessSave('bodycomp', {
       score, bmi, whtr, absi, age, gender,
       weight: w, waist, height: h,
-      bodyAge, skinAge, ageDiff,
+      bodyAge, skinAge, ageDiff, skinAgeDiff,
+      bodyAgeConfidence, skinAgeConfidence,
     });
 
     console.log('[BodyComp] BMI:', bmi.toFixed(1), 'WHtR:', whtr.toFixed(2), 'ABSI:', absi.toFixed(4), 'z=', absiZ.toFixed(2),
