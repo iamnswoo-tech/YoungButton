@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v13.8",
-  "short_name": "건강측정 v13.8",
-  "description": "v13.8 — 인앱 브라우저 감지 + 외부 열기 + 시각 안내 강화",
+  "name": "건강 측정 v13.9",
+  "short_name": "건강측정 v13.9",
+  "description": "v13.9 — 음성 보존 + 손가락 측정 통합 디자인",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

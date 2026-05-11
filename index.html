@@ -415,6 +415,118 @@ body::before {
 }
 
 /* TTS 실패 토스트 */
+/* ★ v13.9: 손가락 측정 페이지 (메인 앱) - 통합 디자인 */
+.finger-hero {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.10) 0%, rgba(74, 222, 128, 0.06) 100%);
+  border: 1.5px solid rgba(34, 197, 94, 0.25);
+  border-radius: 20px;
+  padding: 28px 22px 24px;
+  margin: 12px 12px 16px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(34, 197, 94, .12);
+}
+.finger-hero-icon {
+  font-size: 64px;
+  line-height: 1;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 4px 12px rgba(34, 197, 94, .35));
+}
+.finger-hero-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 10px;
+  letter-spacing: -.02em;
+}
+.finger-hero-desc {
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.finger-features {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 12px 18px;
+}
+.finger-feat {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+.finger-feat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex: 0 0 auto;
+}
+.finger-feat-text { flex: 1; min-width: 0; }
+.finger-feat-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.finger-feat-sub {
+  font-size: 12px;
+  color: var(--text3);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.finger-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 12px 14px;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+  color: #fff;
+  border-radius: 16px;
+  text-decoration: none;
+  font-weight: 900;
+  font-size: 16px;
+  box-shadow: 0 8px 24px rgba(34, 197, 94, .35);
+  transition: transform .12s;
+  letter-spacing: -.01em;
+}
+.finger-cta:active { transform: scale(0.98); }
+.finger-cta-icon {
+  font-size: 14px;
+  background: rgba(255,255,255,.25);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.finger-note {
+  margin: 0 12px 80px;
+  padding: 12px 14px;
+  font-size: 11px;
+  color: var(--text3);
+  background: var(--bg);
+  border-radius: 12px;
+  line-height: 1.6;
+  font-weight: 500;
+  border: 1px dashed var(--border2);
+}
+
 .tts-fail-toast {
   position: fixed;
   top: -120px;
@@ -1779,7 +1891,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v13.8 · 호환성</span>
+  <span class="hd-ver">v13.9 · 통합</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -2349,29 +2461,53 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.goPage('home')">←</button>
     <div>
-      <div class="page-title">👆 손가락 측정 (레거시)</div>
-      <div class="page-subtitle">v10 STEP 5h 알고리즘 보존</div>
+      <div class="page-title">👆 손가락 측정</div>
+      <div class="page-subtitle">손가락+카메라 플래시 기반 PPG</div>
     </div>
   </div>
 
-  <div class="info-card">
-    <div class="info-row">
-      <span class="info-icon">ℹ️</span>
-      <span class="info-text"><strong>레거시 모드</strong><br>기존 손가락+플래시 PPG 측정 기능을 그대로 보존했습니다. 갤럭시 등 일부 기기는 플래시 자동 제어가 불가능합니다.</span>
-    </div>
-    <div class="info-row">
-      <span class="info-icon">🔦</span>
-      <span class="info-text">측정 시작 시 알림창에서 <strong>손전등을 직접 ON</strong> 해주세요.</span>
+  <!-- v13.9: 통합 디자인 - 단일 카드로 정리 -->
+  <div class="finger-hero">
+    <div class="finger-hero-icon">👆</div>
+    <div class="finger-hero-title">손가락으로 측정하기</div>
+    <div class="finger-hero-desc">
+      카메라 렌즈에 손가락을 가볍게 대고<br>
+      30초간 측정하면 심박수와 HRV가 자동 산출됩니다
     </div>
   </div>
 
-  <div class="info-card" style="text-align:center; padding: 20px">
-    <div style="font-size:13px; color:var(--text2); margin-bottom:14px">
-      이전에 만든 손가락 측정은 별도 페이지에서 사용 가능합니다.
+  <div class="finger-features">
+    <div class="finger-feat">
+      <div class="finger-feat-icon">💓</div>
+      <div class="finger-feat-text">
+        <div class="finger-feat-title">정확한 심박수</div>
+        <div class="finger-feat-sub">손가락 접촉식이라 얼굴보다 안정적</div>
+      </div>
     </div>
-    <a href="legacy/index.html" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,var(--legacy),var(--legacy2));color:#fff;border-radius:10px;text-decoration:none;font-weight:800;font-size:14px;">
-      손가락 측정 페이지로 이동 →
-    </a>
+    <div class="finger-feat">
+      <div class="finger-feat-icon">⏱️</div>
+      <div class="finger-feat-text">
+        <div class="finger-feat-title">30초 측정</div>
+        <div class="finger-feat-sub">간단하고 빠르게</div>
+      </div>
+    </div>
+    <div class="finger-feat">
+      <div class="finger-feat-icon">🔦</div>
+      <div class="finger-feat-text">
+        <div class="finger-feat-title">플래시 활용</div>
+        <div class="finger-feat-sub">측정 시작 시 손전등을 직접 켜주세요</div>
+      </div>
+    </div>
+  </div>
+
+  <a href="legacy/index.html" class="finger-cta">
+    <span class="finger-cta-icon">▶</span>
+    <span class="finger-cta-text">손가락 측정 시작하기</span>
+  </a>
+
+  <div class="finger-note">
+    💡 갤럭시 등 일부 기기는 플래시 자동 제어가 불가능하여 수동 ON이 필요합니다.<br>
+    측정 결과는 얼굴 측정과 별도로 저장됩니다.
   </div>
 </div>
 
@@ -2398,7 +2534,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
     rPPG 엔진: <a href="https://github.com/Health-HCI-Group/ME-rPPG-demo" target="_blank" style="color:var(--primary);text-decoration:none">ME-rPPG</a> (Apache 2.0)<br>
-💘Reset Button *Planning and Development:SeungWoo💘<br>
+    💘Reset Button *Planning and Development:SeungWoo💘<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>

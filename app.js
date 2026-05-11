@@ -945,6 +945,11 @@ const App = {
       utter.onerror = (e) => {
         console.warn('[Speech] onerror:', e.error);
         safeEnd();
+        // ★ v13.9: interrupted/canceled는 정상 중단 (TTS 실패 아님)
+        if (e.error === 'interrupted' || e.error === 'canceled') {
+          startedOk = true; // 시작은 했었으니 false positive 방지
+          return;
+        }
         // 인앱 브라우저에서 TTS 실패 시 알림
         if (e.error === 'not-allowed' || e.error === 'synthesis-failed' || e.error === 'audio-busy') {
           this._noticeTTSFailedOnce();
@@ -2975,9 +2980,10 @@ const App = {
     else if (test === 'posture') await this._startPosture();
   },
 
-  bodyStop() {
+  bodyStop(preserveSpeech) {
     console.log('[Body] bodyStop');
-    this._speakStop(); // 음성 중단
+    // ★ v13.9: 측정 완료 시 음성 끊지 않음
+    if (!preserveSpeech) this._speakStop();
     const b = this.state.body;
     b.running = false;
     if (b.timerInterval) { clearInterval(b.timerInterval); b.timerInterval = null; }
@@ -3074,7 +3080,8 @@ const App = {
           } else {
             b.closedSamples = [...b.samples];
             this._speak('측정이 완료되었습니다.');
-            this._finalizeBalance();
+            // ★ v13.9: 음성을 끊지 않도록 finalize 후 bodyStop은 음성 보존 모드
+            this._finalizeBalance(true);
           }
         }
       }, 1000);
@@ -3128,9 +3135,9 @@ const App = {
     ctx.shadowBlur = 0;
   },
 
-  _finalizeBalance() {
+  _finalizeBalance(preserveSpeech) {
     console.log('[Balance] finalize');
-    this.bodyStop();
+    this.bodyStop(preserveSpeech);
     const b = this.state.body.balance;
     const openMetrics = this._computeBalanceMetrics(b.openSamples);
     const closedMetrics = this._computeBalanceMetrics(b.closedSamples);
@@ -3245,7 +3252,7 @@ const App = {
         if (remain === 5) this._speak('5초 남았습니다');
         if (remain === 0) {
           this._speak('보행 측정이 완료되었습니다.');
-          this._finalizeGait();
+          this._finalizeGait(true);
         }
       }, 1000);
     });
@@ -3278,9 +3285,9 @@ const App = {
     return steps;
   },
 
-  _finalizeGait() {
+  _finalizeGait(preserveSpeech) {
     console.log('[Gait] finalize');
-    this.bodyStop();
+    this.bodyStop(preserveSpeech);
     const g = this.state.body.gait;
     const steps = this._countSteps(g.samples);
     const cadence = steps * 2; // 30초 → 분당
@@ -3350,15 +3357,15 @@ const App = {
         if (remain === 5) this._speak('5초 남았습니다');
         if (remain === 0) {
           this._speak('손떨림 측정이 완료되었습니다.');
-          this._finalizeTremor();
+          this._finalizeTremor(true);
         }
       }, 1000);
     });
   },
 
-  _finalizeTremor() {
+  _finalizeTremor(preserveSpeech) {
     console.log('[Tremor] finalize');
-    this.bodyStop();
+    this.bodyStop(preserveSpeech);
     const t = this.state.body.tremor;
     if (t.samples.length < 30) {
       this._showTremorResult({ amp: 0, freq: 0, score: 0, error: '데이터 부족' });
@@ -3547,9 +3554,9 @@ const App = {
   _finalizeReaction() {
     console.log('[Reaction] finalize');
     const r = this.state.body.reaction;
-    this.bodyStop();
-    // ★ v13.4: 종료 음성 안내
+    // ★ v13.9: 음성 먼저 시작 후 bodyStop은 음성 보존 모드
     this._speak('반응속도 측정이 완료되었습니다. 결과를 확인하세요.');
+    this.bodyStop(true);
     if (r.times.length === 0) {
       this._showReactionResult({ avg: 0, error: '측정된 데이터 없음' });
       return;
@@ -3681,9 +3688,9 @@ const App = {
     // 분석
     const analysis = this._analyzePosture(ctx, cv.width, cv.height);
     this._showPostureResult(dataUrl, analysis);
-    this.bodyStop();
-    // ★ v13.4: 종료 음성 안내
+    // ★ v13.9: 음성 먼저 시작 후 bodyStop은 음성 보존 모드
     this._speak('자세 평가가 완료되었습니다. 결과를 확인하세요.');
+    this.bodyStop(true);
   },
 
   _analyzePosture(ctx, w, h) {
