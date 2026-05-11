@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v13.7",
-  "short_name": "건강측정 v13.7",
-  "description": "v13.7 — RMSSD EMA 안정화 + 휠 피커 + 그래프 결과 + 신뢰도",
+  "name": "건강 측정 v13.8",
+  "short_name": "건강측정 v13.8",
+  "description": "v13.8 — 인앱 브라우저 감지 + 외부 열기 + 시각 안내 강화",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

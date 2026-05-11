@@ -146,12 +146,219 @@ const App = {
     this._wellnessRestore();
     this._wellnessRender();
 
+    // ★ v13.8: 인앱 브라우저 감지 + 안내
+    this._detectInAppBrowser();
+
     // ★ 첫 방문 시 권한 일괄 요청 안내
     setTimeout(() => this._maybeShowPermissionGuide(), 1000);
 
     // ★ 음성 합성 워밍업 (사용자 첫 인터랙션 후 한 번 깨우기)
     document.addEventListener('click', () => this._warmupSpeech(), { once: true, capture: true });
     document.addEventListener('touchstart', () => this._warmupSpeech(), { once: true, capture: true });
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // v13.8: 인앱 브라우저 감지 + 사용자 안내
+  // 카카오톡, 네이버, 페이스북, 라인 등 인앱 브라우저에서는
+  // TTS / 카메라 / 모션센서 일부가 제한되거나 작동 불가
+  // 사용자에게 외부 브라우저(Chrome/Samsung Internet)로 열도록 안내
+  // ════════════════════════════════════════════════════════════════
+  _detectInAppBrowser() {
+    const ua = navigator.userAgent || '';
+    const lower = ua.toLowerCase();
+
+    // 인앱 브라우저 시그니처 (UA 패턴)
+    const inAppPatterns = [
+      { name: '카카오톡', pattern: /kakaotalk/i, severity: 'high' },
+      { name: '네이버', pattern: /naver\(inapp/i, severity: 'high' },
+      { name: '네이버 (whale)', pattern: /naver\b/i, severity: 'medium' },
+      { name: '인스타그램', pattern: /instagram/i, severity: 'high' },
+      { name: '페이스북', pattern: /fb_iab|fbav|fban/i, severity: 'high' },
+      { name: '라인', pattern: /line\//i, severity: 'high' },
+      { name: '트위터', pattern: /twitter/i, severity: 'high' },
+      { name: 'KakaoStory', pattern: /kakaostory/i, severity: 'high' },
+      { name: '다음', pattern: /daumapps/i, severity: 'medium' },
+      { name: '밴드', pattern: /band\//i, severity: 'medium' },
+    ];
+
+    let detected = null;
+    for (const item of inAppPatterns) {
+      if (item.pattern.test(ua)) {
+        detected = item;
+        break;
+      }
+    }
+
+    if (!detected) {
+      console.log('[Browser] 일반 브라우저 - 모든 기능 사용 가능');
+      this._isInApp = false;
+      return;
+    }
+
+    this._isInApp = true;
+    this._inAppName = detected.name;
+    console.warn(`[Browser] 인앱 브라우저 감지: ${detected.name} (${detected.severity})`);
+
+    // 기능 가용성 사전 점검
+    const features = {
+      tts: 'speechSynthesis' in window,
+      camera: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+      motion: typeof DeviceMotionEvent !== 'undefined',
+      vibrate: !!navigator.vibrate,
+      storage: this._testLocalStorage(),
+    };
+    console.log('[Browser] 기능 가용성:', features);
+
+    // 사용자 안내 (high severity만 모달, medium은 토스트)
+    setTimeout(() => this._showInAppBrowserNotice(detected, features), 1500);
+  },
+
+  _testLocalStorage() {
+    try {
+      localStorage.setItem('__test__', '1');
+      localStorage.removeItem('__test__');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  _showInAppBrowserNotice(detected, features) {
+    // 이미 안내 본 경우 skip (24시간 내 1회만)
+    try {
+      const lastShown = parseInt(localStorage.getItem('inapp_notice_shown') || '0');
+      if (Date.now() - lastShown < 24 * 60 * 60 * 1000) return;
+    } catch (e) {}
+
+    const issues = [];
+    if (!features.tts) issues.push('🔇 음성 안내 불가');
+    if (!features.camera) issues.push('📷 카메라 접근 불가');
+    else issues.push('📷 카메라 일부 불안정 가능');
+    if (!features.motion) issues.push('📱 모션센서 권한 거부');
+
+    const currentUrl = window.location.href;
+
+    // 모달 생성
+    const modal = document.createElement('div');
+    modal.className = 'inapp-modal';
+    modal.innerHTML = `
+      <div class="inapp-card">
+        <div class="inapp-icon">⚠️</div>
+        <div class="inapp-title">${detected.name} 인앱 브라우저로 접속 중</div>
+        <div class="inapp-msg">
+          정확한 건강 측정을 위해서는 <strong>외부 브라우저</strong>로 열어주세요.
+        </div>
+        <div class="inapp-issues">
+          ${issues.map(i => `<div class="inapp-issue">${i}</div>`).join('')}
+        </div>
+        <div class="inapp-actions">
+          <button class="inapp-btn primary" onclick="App._openInExternalBrowser()">
+            🌐 Chrome / 기본 브라우저로 열기
+          </button>
+          <button class="inapp-btn secondary" onclick="App._copyUrlAndClose()">
+            📋 링크 복사
+          </button>
+          <button class="inapp-btn tertiary" onclick="App._dismissInAppNotice()">
+            그래도 계속 사용
+          </button>
+        </div>
+        <div class="inapp-hint">
+          💡 우측 상단 ⋮ 메뉴 → "다른 브라우저로 열기" 또는 "외부 브라우저로 열기"
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    setTimeout(() => modal.classList.add('show'), 10);
+    this._inAppModal = modal;
+  },
+
+  _openInExternalBrowser() {
+    const url = window.location.href;
+    const ua = navigator.userAgent.toLowerCase();
+
+    // 안드로이드: Chrome Intent URL로 강제 외부 열기
+    if (/android/.test(ua)) {
+      // Chrome으로 직접 열기 시도
+      try {
+        // Chrome intent (안드로이드 표준)
+        const chromeUrl = `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
+        window.location.href = chromeUrl;
+        // 일정 시간 후 기본 브라우저 fallback
+        setTimeout(() => {
+          window.location.href = url;
+        }, 1500);
+      } catch (e) {
+        this._copyUrlAndClose();
+      }
+    }
+    // iOS: x-safari-https 스킴으로 Safari 열기
+    else if (/iphone|ipad|ipod/.test(ua)) {
+      const safariUrl = url.replace(/^https?:/, 'x-safari-https:');
+      try {
+        window.location.href = safariUrl;
+        // fallback
+        setTimeout(() => this._copyUrlAndClose(), 1500);
+      } catch (e) {
+        this._copyUrlAndClose();
+      }
+    } else {
+      this._copyUrlAndClose();
+    }
+  },
+
+  _copyUrlAndClose() {
+    const url = window.location.href;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          alert('링크가 복사되었습니다.\n\nChrome, Safari, Samsung Internet 등 기본 브라우저를 열고 주소창에 붙여넣어 주세요.');
+        });
+      } else {
+        // fallback: textarea를 통한 복사
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('링크가 복사되었습니다.\n\nChrome, Safari, Samsung Internet 등 기본 브라우저를 열고 주소창에 붙여넣어 주세요.');
+      }
+    } catch (e) {
+      prompt('아래 링크를 복사해서 기본 브라우저에 붙여넣어 주세요:', url);
+    }
+  },
+
+  _dismissInAppNotice() {
+    if (this._inAppModal) {
+      this._inAppModal.classList.remove('show');
+      setTimeout(() => this._inAppModal.remove(), 300);
+    }
+    try {
+      localStorage.setItem('inapp_notice_shown', Date.now().toString());
+    } catch (e) {}
+  },
+
+  // ★ v13.8: TTS 실패 시 1회만 토스트 알림 (반복 차단)
+  _noticeTTSFailedOnce() {
+    if (this._ttsNoticeShown) return;
+    this._ttsNoticeShown = true;
+
+    const toast = document.createElement('div');
+    toast.className = 'tts-fail-toast';
+    toast.innerHTML = `
+      <div class="tts-fail-icon">🔇</div>
+      <div class="tts-fail-text">
+        <div class="tts-fail-title">음성 안내가 들리지 않나요?</div>
+        <div class="tts-fail-sub">현재 브라우저는 음성을 지원하지 않습니다. 화면 안내와 진동으로 측정을 진행합니다.</div>
+      </div>
+      <button class="tts-fail-close" onclick="this.parentElement.remove()">✕</button>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 400);
+    }, 6000);
   },
 
   // ════════════════════════════════════════════════════════════════
@@ -670,19 +877,43 @@ const App = {
     if (!banner) {
       banner = document.createElement('div');
       banner.id = 'speech-banner';
-      banner.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(16,185,129,.95);color:#fff;padding:18px 24px;border-radius:18px;font-size:16px;font-weight:700;z-index:2000;backdrop-filter:blur(12px);max-width:80%;text-align:center;line-height:1.4;box-shadow:0 8px 32px rgba(0,0,0,.4);transition:opacity .3s, transform .3s;';
+      // ★ v13.8: 상단 배치 (카메라 가리지 않게) + 더 큰 텍스트
+      banner.style.cssText = `
+        position: fixed;
+        top: max(80px, env(safe-area-inset-top, 20px) + 60px);
+        left: 50%;
+        transform: translateX(-50%) translateY(-20px);
+        background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+        color: #fff;
+        padding: 16px 22px;
+        border-radius: 18px;
+        font-size: 16px;
+        font-weight: 700;
+        z-index: 2000;
+        max-width: 88vw;
+        min-width: 200px;
+        text-align: center;
+        line-height: 1.4;
+        box-shadow: 0 12px 40px rgba(34, 197, 94, .4);
+        transition: opacity .3s, transform .3s;
+        opacity: 0;
+        pointer-events: none;
+      `;
       document.body.appendChild(banner);
     }
-    banner.textContent = '🔊 ' + text;
+    // ★ v13.8: TTS 실패 환경에서는 아이콘으로 시각 강조
+    const icon = this._ttsNoticeShown ? '📢' : '🔊';
+    banner.textContent = icon + ' ' + text;
     banner.style.opacity = '1';
-    banner.style.transform = 'translate(-50%,-50%) scale(1)';
+    banner.style.transform = 'translateX(-50%) translateY(0)';
     clearTimeout(this._speakBannerTimer);
-    // 텍스트 길이에 비례한 노출 시간 (최소 2초, 최대 6초)
-    const duration = Math.max(2000, Math.min(6000, text.length * 100));
+    // ★ v13.8: TTS 미지원 환경에선 더 오래 표시 (사용자가 읽을 시간)
+    const baseDuration = Math.max(2000, Math.min(6000, text.length * 100));
+    const duration = this._ttsNoticeShown ? baseDuration + 1500 : baseDuration;
     this._speakBannerTimer = setTimeout(() => {
       if (banner) {
         banner.style.opacity = '0';
-        banner.style.transform = 'translate(-50%,-50%) scale(.95)';
+        banner.style.transform = 'translateX(-50%) translateY(-20px)';
       }
     }, duration);
   },
@@ -690,7 +921,7 @@ const App = {
   _tryTTS(text, onEnd) {
     if (!('speechSynthesis' in window)) {
       console.log('[Speech] TTS 미지원 — 시각 안내만');
-      // TTS 없을 때도 onEnd는 _speak의 안전망에서 처리됨
+      this._noticeTTSFailedOnce();
       return;
     }
     try {
@@ -703,16 +934,32 @@ const App = {
 
       // ★ v13.1: 음성 종료 콜백
       let endCalled = false;
+      let startedOk = false;
       const safeEnd = () => {
         if (endCalled) return;
         endCalled = true;
         if (typeof onEnd === 'function') onEnd();
       };
+      utter.onstart = () => { startedOk = true; };
       utter.onend = safeEnd;
-      utter.onerror = safeEnd;
+      utter.onerror = (e) => {
+        console.warn('[Speech] onerror:', e.error);
+        safeEnd();
+        // 인앱 브라우저에서 TTS 실패 시 알림
+        if (e.error === 'not-allowed' || e.error === 'synthesis-failed' || e.error === 'audio-busy') {
+          this._noticeTTSFailedOnce();
+        }
+      };
       // 안전망: 텍스트 길이 + 1초 후에도 onend 안 오면 강제 종료 (일부 환경 대응)
       const fallbackMs = Math.max(2500, text.length * 180) + 1000;
-      setTimeout(safeEnd, fallbackMs);
+      setTimeout(() => {
+        if (!startedOk) {
+          // TTS 시작 자체가 안 됨 (카카오톡, 일부 안드로이드 WebView)
+          console.warn('[Speech] TTS 시작 안 됨 - 시각/진동만 사용');
+          this._noticeTTSFailedOnce();
+        }
+        safeEnd();
+      }, fallbackMs);
 
       // voiceschanged 이벤트 후 voice 적용 (Chrome Android 호환)
       const trySpeak = () => {

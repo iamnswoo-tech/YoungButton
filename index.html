@@ -312,6 +312,163 @@ body::before {
 }
 
 /* 배지 획득 토스트 */
+/* ★ v13.8: 인앱 브라우저 안내 모달 */
+.inapp-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  transition: opacity .3s;
+}
+.inapp-modal.show { opacity: 1; }
+.inapp-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px 22px 20px;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 24px 80px rgba(0,0,0,.4);
+  text-align: center;
+}
+.inapp-icon {
+  font-size: 48px;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+.inapp-title {
+  font-size: 17px;
+  font-weight: 900;
+  color: #0f172a;
+  margin-bottom: 10px;
+  letter-spacing: -.02em;
+}
+.inapp-msg {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+.inapp-msg strong {
+  color: #16a34a;
+  font-weight: 800;
+}
+.inapp-issues {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.inapp-issue {
+  font-size: 12px;
+  font-weight: 700;
+  color: #92400e;
+  padding: 3px 0;
+}
+.inapp-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.inapp-btn {
+  padding: 13px 16px;
+  border: none;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .12s;
+}
+.inapp-btn.primary {
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(34, 197, 94, .35);
+}
+.inapp-btn.secondary {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.inapp-btn.tertiary {
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+.inapp-btn:active { transform: scale(0.97); }
+.inapp-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.5;
+  padding: 10px;
+  background: #f8fafc;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* TTS 실패 토스트 */
+.tts-fail-toast {
+  position: fixed;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+  color: #422006;
+  padding: 14px 18px;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(245, 158, 11, .4);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 92vw;
+  width: 360px;
+  transition: top .4s cubic-bezier(.34, 1.56, .64, 1);
+}
+.tts-fail-toast.show {
+  top: max(20px, env(safe-area-inset-top, 0px) + 12px);
+}
+.tts-fail-icon {
+  font-size: 26px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.tts-fail-text {
+  flex: 1;
+  min-width: 0;
+}
+.tts-fail-title {
+  font-size: 13px;
+  font-weight: 900;
+  margin-bottom: 2px;
+}
+.tts-fail-sub {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  opacity: 0.9;
+}
+.tts-fail-close {
+  background: rgba(255,255,255,.4);
+  border: none;
+  color: #422006;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
 .badge-toast {
   position: fixed;
   top: -100px;
@@ -1622,7 +1779,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v13.7 · 그래프</span>
+  <span class="hd-ver">v13.8 · 호환성</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -2241,7 +2398,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
     rPPG 엔진: <a href="https://github.com/Health-HCI-Group/ME-rPPG-demo" target="_blank" style="color:var(--primary);text-decoration:none">ME-rPPG</a> (Apache 2.0)<br>
-🚀 RESET BUTTON ⌚ Planning and Development: SeungWoo<br>
+💘Reset Button *Planning and Development:SeungWoo💘<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>
