@@ -1,0 +1,6 @@
+중요: 이 패치 적용 시 legacy 폴더를 완전히 삭제해주세요.
+
+cd C:\Users\kingi\Desktop\AI-health-manager
+rmdir /s /q legacy
+
+이후 4개 파일 덮어쓰기 → git add -A → commit → push

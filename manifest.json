@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v13.9",
-  "short_name": "건강측정 v13.9",
-  "description": "v13.9 — 음성 보존 + 손가락 측정 통합 디자인",
+  "name": "건강 측정 v14.0",
+  "short_name": "건강측정 v14.0",
+  "description": "v14.0 — 손가락 측정 제거 + 건강 측정 결과 종합 페이지",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

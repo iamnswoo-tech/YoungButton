@@ -1,5 +1,5 @@
 // 건강 측정 v12.0 ME-rPPG — Service Worker
-const CACHE_NAME = 'healthmeas-v13-s10';
+const CACHE_NAME = 'healthmeas-v14-s1';
 const ASSETS = [
   './',
   './index.html',
@@ -7,7 +7,6 @@ const ASSETS = [
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './legacy/index.html',
   // ME-rPPG assets
   './me-rppg/onnxWorker.js',
   './me-rppg/welchWorker.js',

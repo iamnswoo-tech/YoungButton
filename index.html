@@ -415,117 +415,270 @@ body::before {
 }
 
 /* TTS 실패 토스트 */
-/* ★ v13.9: 손가락 측정 페이지 (메인 앱) - 통합 디자인 */
-.finger-hero {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.10) 0%, rgba(74, 222, 128, 0.06) 100%);
-  border: 1.5px solid rgba(34, 197, 94, 0.25);
+/* ★ v14.0: 건강 측정 결과 페이지 */
+.res-hero {
+  background: var(--card);
   border-radius: 20px;
-  padding: 28px 22px 24px;
-  margin: 12px 12px 16px;
+  padding: 24px 22px;
+  margin: 14px 12px 14px;
   text-align: center;
-  box-shadow: 0 8px 32px rgba(34, 197, 94, .12);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
 }
-.finger-hero-icon {
-  font-size: 64px;
-  line-height: 1;
-  margin-bottom: 12px;
-  filter: drop-shadow(0 4px 12px rgba(34, 197, 94, .35));
-}
-.finger-hero-title {
-  font-size: 22px;
-  font-weight: 900;
-  color: var(--text);
-  margin-bottom: 10px;
-  letter-spacing: -.02em;
-}
-.finger-hero-desc {
-  font-size: 14px;
+.res-hero-label {
+  font-size: 13px;
+  font-weight: 700;
   color: var(--text2);
-  line-height: 1.6;
-  font-weight: 500;
+  margin-bottom: 8px;
+  letter-spacing: -.01em;
+}
+.res-hero-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.res-hero-num {
+  font-size: 56px;
+  font-weight: 900;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.res-hero-unit {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.res-hero-grade {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text2);
+  margin-bottom: 14px;
+}
+.res-hero-bar {
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.res-hero-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .8s cubic-bezier(.25, .46, .45, .94);
 }
 
-.finger-features {
+.res-streak-row {
   display: flex;
-  flex-direction: column;
   gap: 10px;
-  margin: 0 12px 18px;
+  margin: 0 12px 14px;
 }
-.finger-feat {
+.res-streak {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  border: 1px solid rgba(251, 146, 60, .25);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.res-streak-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+.res-streak-text { flex: 1; min-width: 0; }
+.res-streak-num {
+  font-size: 14px;
+  font-weight: 900;
+  color: #c2410c;
+}
+.res-streak-sub {
+  font-size: 10px;
+  color: #9a3412;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.res-badges {
+  background: linear-gradient(135deg, #fefce8, #fef9c3);
+  border: 1px solid rgba(234, 179, 8, .25);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  min-width: 78px;
+}
+.res-badges:active { transform: scale(.96); }
+.res-badges-icons {
+  display: flex;
+  gap: 2px;
+  font-size: 18px;
+}
+.res-badges-count {
+  font-size: 10px;
+  font-weight: 800;
+  color: #854d0e;
+}
+
+/* 신체/피부 나이 카드 */
+.res-age-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 12px 14px;
+}
+.res-age-card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 16px 14px;
+  text-align: center;
+  border: 1.5px solid var(--c, var(--border));
+  box-shadow: var(--shadow);
+}
+.res-age-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text2);
+  margin-bottom: 8px;
+  letter-spacing: -.01em;
+}
+.res-age-num {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.03em;
+}
+.res-age-unit {
+  font-size: 10px;
+  color: var(--text3);
+  font-weight: 700;
+  margin: 4px 0 6px;
+}
+.res-age-diff {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+
+/* 섹션 타이틀 */
+.res-section-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 16px 16px 10px;
+  letter-spacing: -.02em;
+}
+
+/* 측정 항목 카드 */
+.res-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 12px;
+}
+.res-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 14px 16px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 14px;
   box-shadow: var(--shadow);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: transform .12s;
 }
-.finger-feat-icon {
+.res-card:active { transform: scale(.98); }
+.res-card.pending {
+  background: var(--bg);
+  border-style: dashed;
+}
+.res-card-icon {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: var(--primary-light);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 22px;
   flex: 0 0 auto;
 }
-.finger-feat-text { flex: 1; min-width: 0; }
-.finger-feat-title {
+.res-card-body { flex: 1; min-width: 0; }
+.res-card-name {
   font-size: 14px;
   font-weight: 800;
   color: var(--text);
-  margin-bottom: 3px;
+  margin-bottom: 2px;
 }
-.finger-feat-sub {
-  font-size: 12px;
-  color: var(--text3);
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.finger-cta {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin: 0 12px 14px;
-  padding: 16px 24px;
-  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
-  color: #fff;
-  border-radius: 16px;
-  text-decoration: none;
-  font-weight: 900;
-  font-size: 16px;
-  box-shadow: 0 8px 24px rgba(34, 197, 94, .35);
-  transition: transform .12s;
-  letter-spacing: -.01em;
-}
-.finger-cta:active { transform: scale(0.98); }
-.finger-cta-icon {
-  font-size: 14px;
-  background: rgba(255,255,255,.25);
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.finger-note {
-  margin: 0 12px 80px;
-  padding: 12px 14px;
+.res-card-unit {
   font-size: 11px;
   color: var(--text3);
-  background: var(--bg);
-  border-radius: 12px;
-  line-height: 1.6;
-  font-weight: 500;
-  border: 1px dashed var(--border2);
+  font-weight: 600;
 }
+.res-card-meta {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-top: 3px;
+}
+.res-card-score {
+  text-align: right;
+  flex: 0 0 auto;
+  min-width: 50px;
+}
+.res-card-num {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.res-card-grade {
+  font-size: 10px;
+  color: var(--text3);
+  font-weight: 700;
+  margin-top: 2px;
+}
+.res-card-pending {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.3;
+}
+
+.res-tip {
+  margin: 14px 12px;
+  padding: 12px 14px;
+  background: var(--primary-light);
+  border: 1px solid rgba(34, 197, 94, .2);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.res-reset-btn {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 0 12px 80px;
+  padding: 12px;
+  background: transparent;
+  color: var(--text3);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.res-reset-btn:active { background: var(--bg); }
 
 .tts-fail-toast {
   position: fixed;
@@ -775,7 +928,7 @@ body::before {
 }
 .measure-card.face::before  { background: linear-gradient(to bottom, #7c3aed, #a78bfa); }
 .measure-card.body::before  { background: linear-gradient(to bottom, #06b6d4, #22d3ee); }
-.measure-card.legacy::before{ background: linear-gradient(to bottom, #f59e0b, #fbbf24); }
+.measure-card.results::before { background: linear-gradient(to bottom, #22c55e, #4ade80); }
 .measure-card:active { transform: scale(.98); box-shadow: 0 2px 8px rgba(124,58,237,.1); }
 .mc-icon {
   width: 52px; height: 52px; flex-shrink: 0;
@@ -784,13 +937,13 @@ body::before {
 }
 .mc-icon.face  { background: linear-gradient(135deg, #ede9fe, #ddd6fe); }
 .mc-icon.body  { background: linear-gradient(135deg, #cffafe, #a5f3fc); }
-.mc-icon.legacy{ background: linear-gradient(135deg, #fef3c7, #fde68a); }
+.mc-icon.results { background: linear-gradient(135deg, #dcfce7, #bbf7d0); }
 .mc-content { flex: 1; }
 .mc-title { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
 .mc-badge { font-size: 9px; font-weight: 800; padding: 3px 8px; border-radius: 8px; letter-spacing: .03em; }
 .mc-badge.new { background: #ede9fe; color: #7c3aed; }
 .mc-badge.beta { background: #cffafe; color: #0891b2; }
-.mc-badge.legacy { background: #fef3c7; color: #b45309; }
+.mc-badge.results { background: #dcfce7; color: #166534; }
 .mc-desc { font-size: 12px; color: var(--text2); line-height: 1.4; }
 .mc-arrow { color: var(--primary); font-size: 22px; flex-shrink: 0; font-weight: 800; }
 
@@ -1891,7 +2044,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v13.9 · 통합</span>
+  <span class="hd-ver">v14.0 · 결과</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -1925,11 +2078,12 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="mc-arrow">›</div>
     </button>
 
-    <button type="button" class="measure-card legacy" onclick="App.goPage('legacy')">
-      <div class="mc-icon legacy">👆</div>
+    <!-- ★ v14.0: 손가락 측정 제거 → "건강 측정 결과" 카드로 대체 -->
+    <button type="button" class="measure-card results" onclick="App._scrollToWellness()">
+      <div class="mc-icon results">📊</div>
       <div class="mc-content">
-        <div class="mc-title">손가락 측정 <span class="mc-badge legacy">레거시</span></div>
-        <div class="mc-desc">기존 손가락+플래시 PPG 측정 (참고용)</div>
+        <div class="mc-title">건강 측정 결과 <span class="mc-badge results">종합</span></div>
+        <div class="mc-desc">전체 측정 결과를 한 화면에서 확인하세요</div>
       </div>
       <div class="mc-arrow">›</div>
     </button>
@@ -2456,59 +2610,18 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="bt-result" id="bt-bodycomp-result" style="display:none"></div>
 </div>
 
-<!-- ═══════════ LEGACY PAGE (손가락) ═══════════ -->
-<div class="page" id="page-legacy">
+<!-- ★ v14.0: 손가락 측정 페이지 완전 삭제 → "건강 측정 결과" 페이지로 대체 -->
+<div class="page" id="page-results">
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.goPage('home')">←</button>
     <div>
-      <div class="page-title">👆 손가락 측정</div>
-      <div class="page-subtitle">손가락+카메라 플래시 기반 PPG</div>
+      <div class="page-title">📊 건강 측정 결과</div>
+      <div class="page-subtitle">전체 측정 결과 종합</div>
     </div>
   </div>
 
-  <!-- v13.9: 통합 디자인 - 단일 카드로 정리 -->
-  <div class="finger-hero">
-    <div class="finger-hero-icon">👆</div>
-    <div class="finger-hero-title">손가락으로 측정하기</div>
-    <div class="finger-hero-desc">
-      카메라 렌즈에 손가락을 가볍게 대고<br>
-      30초간 측정하면 심박수와 HRV가 자동 산출됩니다
-    </div>
-  </div>
-
-  <div class="finger-features">
-    <div class="finger-feat">
-      <div class="finger-feat-icon">💓</div>
-      <div class="finger-feat-text">
-        <div class="finger-feat-title">정확한 심박수</div>
-        <div class="finger-feat-sub">손가락 접촉식이라 얼굴보다 안정적</div>
-      </div>
-    </div>
-    <div class="finger-feat">
-      <div class="finger-feat-icon">⏱️</div>
-      <div class="finger-feat-text">
-        <div class="finger-feat-title">30초 측정</div>
-        <div class="finger-feat-sub">간단하고 빠르게</div>
-      </div>
-    </div>
-    <div class="finger-feat">
-      <div class="finger-feat-icon">🔦</div>
-      <div class="finger-feat-text">
-        <div class="finger-feat-title">플래시 활용</div>
-        <div class="finger-feat-sub">측정 시작 시 손전등을 직접 켜주세요</div>
-      </div>
-    </div>
-  </div>
-
-  <a href="legacy/index.html" class="finger-cta">
-    <span class="finger-cta-icon">▶</span>
-    <span class="finger-cta-text">손가락 측정 시작하기</span>
-  </a>
-
-  <div class="finger-note">
-    💡 갤럭시 등 일부 기기는 플래시 자동 제어가 불가능하여 수동 ON이 필요합니다.<br>
-    측정 결과는 얼굴 측정과 별도로 저장됩니다.
-  </div>
+  <!-- 종합 대시보드 (App._renderResultsPage()가 채움) -->
+  <div id="results-dashboard"></div>
 </div>
 
 <!-- BOTTOM NAV -->
@@ -2525,16 +2638,15 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <span class="nav-icon">🏃</span>
     <span class="nav-label">신체</span>
   </button>
-  <button class="nav-btn" id="nav-legacy" type="button" onclick="App.goPage('legacy')">
-    <span class="nav-icon">👆</span>
-    <span class="nav-label">손가락</span>
+  <button class="nav-btn" id="nav-results" type="button" onclick="App.goPage('results')">
+    <span class="nav-icon">📊</span>
+    <span class="nav-label">결과</span>
   </button>
 </nav>
 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
     rPPG 엔진: <a href="https://github.com/Health-HCI-Group/ME-rPPG-demo" target="_blank" style="color:var(--primary);text-decoration:none">ME-rPPG</a> (Apache 2.0)<br>
-    💘Reset Button *Planning and Development:SeungWoo💘<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>

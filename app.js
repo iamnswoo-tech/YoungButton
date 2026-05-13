@@ -1073,7 +1073,167 @@ const App = {
     document.querySelectorAll('.nav-btn').forEach(n => n.classList.remove('on'));
     document.getElementById('nav-' + page)?.classList.add('on');
     this.state.page = page;
+    // ★ v14.0: 결과 페이지 진입 시 종합 렌더링
+    if (page === 'results') {
+      this._renderResultsPage();
+    }
     window.scrollTo(0, 0);
+  },
+
+  // ★ v14.0: 홈에서 결과 카드 클릭 → 결과 페이지로
+  _scrollToWellness() {
+    this.goPage('results');
+  },
+
+  // ★ v14.0: 건강 측정 결과 종합 페이지 렌더링
+  _renderResultsPage() {
+    const dashboard = document.getElementById('results-dashboard');
+    if (!dashboard) return;
+    const w = this.state.wellness || {};
+    const result = this._wellnessComputeScore();
+    const color = result.score >= 85 ? '#22c55e' : result.score >= 70 ? '#3b82f6' : result.score >= 50 ? '#f59e0b' : '#ef4444';
+
+    const streak = this._streakGet();
+    const badges = this._badgesGet();
+
+    // 측정 항목 메타데이터
+    const items = [
+      { key: 'face', icon: '😊', name: '심혈관', unit: 'HR/HRV/스트레스', page: 'face' },
+      { key: 'balance', icon: '⚖️', name: '균형 감각', unit: '눈뜨고/감기 흔들림', page: 'body', test: 'balance' },
+      { key: 'gait', icon: '🚶', name: '보행 패턴', unit: '걸음수/케이던스', page: 'body', test: 'gait' },
+      { key: 'tremor', icon: '✋', name: '손떨림', unit: '진폭/주파수', page: 'body', test: 'tremor' },
+      { key: 'reaction', icon: '⚡', name: '반응속도', unit: 'ms 평균', page: 'body', test: 'reaction' },
+      { key: 'posture', icon: '🧍', name: '자세 평가', unit: '어깨/머리 정렬', page: 'body', test: 'posture' },
+      { key: 'bodycomp', icon: '📐', name: '신체 지수', unit: 'BMI/WHtR/ABSI', page: 'body', test: 'bodycomp' },
+    ];
+
+    // 측정 카드 생성
+    let cardsHTML = '';
+    for (const it of items) {
+      const data = w[it.key];
+      const measured = !!data;
+      const score = measured ? (data.score || 0) : 0;
+      const scoreColor = score >= 85 ? '#22c55e' : score >= 70 ? '#3b82f6' : score >= 50 ? '#f59e0b' : '#ef4444';
+      const onClick = it.test
+        ? `App.goPage('${it.page}');setTimeout(()=>App.startBodyTest('${it.test}'),400)`
+        : `App.goPage('${it.page}')`;
+      const dateStr = measured && data.t ? this._formatRelativeTime(data.t) : '미측정';
+      cardsHTML += `
+        <button class="res-card ${measured ? 'measured' : 'pending'}" onclick="${onClick}" type="button">
+          <div class="res-card-icon" style="background:${measured ? scoreColor + '22' : 'var(--bg)'};color:${measured ? scoreColor : '#94a3b8'}">${it.icon}</div>
+          <div class="res-card-body">
+            <div class="res-card-name">${it.name}</div>
+            <div class="res-card-unit">${it.unit}</div>
+            <div class="res-card-meta">${dateStr}</div>
+          </div>
+          <div class="res-card-score">
+            ${measured ? `
+              <div class="res-card-num" style="color:${scoreColor}">${score}</div>
+              <div class="res-card-grade">점</div>
+            ` : `
+              <div class="res-card-pending">측정<br>하기 ▸</div>
+            `}
+          </div>
+        </button>
+      `;
+    }
+
+    // 신체 나이/피부 나이 카드 (bodycomp 있을 때만)
+    let ageHTML = '';
+    if (w.bodycomp && w.bodycomp.bodyAge) {
+      const bc = w.bodycomp;
+      const diff = bc.ageDiff || 0;
+      const skinDiff = bc.skinAgeDiff || 0;
+      const bodyColor = diff <= 0 ? '#22c55e' : diff <= 3 ? '#f59e0b' : '#ef4444';
+      const skinColor = skinDiff <= 0 ? '#a78bfa' : skinDiff <= 3 ? '#f59e0b' : '#ef4444';
+      ageHTML = `
+        <div class="res-age-grid">
+          <div class="res-age-card" style="--c:${bodyColor}">
+            <div class="res-age-label">🧬 신체 나이</div>
+            <div class="res-age-num" style="color:${bodyColor}">${bc.bodyAge}</div>
+            <div class="res-age-unit">세 (실제 ${bc.age}세)</div>
+            <div class="res-age-diff" style="color:${bodyColor}">
+              ${diff > 0 ? '+' : ''}${diff}년
+              · 신뢰도 ${bc.bodyAgeConfidence || 50}%
+            </div>
+          </div>
+          <div class="res-age-card" style="--c:${skinColor}">
+            <div class="res-age-label">✨ 피부 나이</div>
+            <div class="res-age-num" style="color:${skinColor}">${bc.skinAge || bc.age}</div>
+            <div class="res-age-unit">세 (참고용)</div>
+            <div class="res-age-diff" style="color:${skinColor}">
+              ${skinDiff > 0 ? '+' : ''}${skinDiff}년
+              · 신뢰도 ${bc.skinAgeConfidence || 40}%
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    dashboard.innerHTML = `
+      <!-- 종합 점수 헤로 -->
+      <div class="res-hero">
+        <div class="res-hero-label">📊 종합 건강 점수</div>
+        <div class="res-hero-score" style="color:${color}">
+          <span class="res-hero-num">${result.score}</span>
+          <span class="res-hero-unit">/ 100</span>
+        </div>
+        <div class="res-hero-grade">${result.grade} · ${result.completeness}% 완료</div>
+        <div class="res-hero-bar"><div class="res-hero-fill" style="width:${result.score}%;background:${color}"></div></div>
+      </div>
+
+      ${streak.count > 0 ? `
+      <!-- 스트릭 + 배지 -->
+      <div class="res-streak-row">
+        <div class="res-streak">
+          <div class="res-streak-icon">${streak.count >= 7 ? '🔥' : streak.count >= 3 ? '✨' : '🌱'}</div>
+          <div class="res-streak-text">
+            <div class="res-streak-num">${streak.count}일 연속 측정</div>
+            <div class="res-streak-sub">${streak.count >= 7 ? '대단해요!' : streak.count >= 3 ? '잘하고 있어요' : '꾸준히 측정해보세요'}</div>
+          </div>
+        </div>
+        ${badges.length > 0 ? `
+        <div class="res-badges" onclick="App._showBadgeCollection()">
+          <div class="res-badges-icons">${badges.slice(-3).map(b => `<span>${b.icon}</span>`).join('')}</div>
+          <div class="res-badges-count">${badges.length}개 배지</div>
+        </div>` : ''}
+      </div>
+      ` : ''}
+
+      ${ageHTML}
+
+      <!-- 측정 항목 카드 (그리드) -->
+      <div class="res-section-title">측정 항목</div>
+      <div class="res-cards">
+        ${cardsHTML}
+      </div>
+
+      <!-- 안내 -->
+      <div class="res-tip">
+        💡 모든 항목을 측정하면 신체 나이 신뢰도가 95%까지 올라가요
+      </div>
+
+      ${result.completeness >= 100 ? `
+        <button class="res-reset-btn" onclick="App._wellnessConfirmReset()" type="button">
+          🔄 전체 측정 초기화
+        </button>
+      ` : ''}
+    `;
+  },
+
+  // ★ v14.0: 상대 시간 표시 (몇 분 전, 몇 시간 전)
+  _formatRelativeTime(t) {
+    if (!t) return '미측정';
+    const diff = Date.now() - t;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (minutes < 1) return '방금 전';
+    if (minutes < 60) return `${minutes}분 전`;
+    if (hours < 24) return `${hours}시간 전`;
+    if (days < 7) return `${days}일 전`;
+    const d = new Date(t);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
   },
 
   clearConsole(target) { Console.clear(target); },
