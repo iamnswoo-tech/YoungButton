@@ -680,6 +680,342 @@ body::before {
 }
 .res-reset-btn:active { background: var(--bg); }
 
+/* ★ v14.1: 건강 인사이트 + 운동/식단 처방 (노인 친화 디자인) */
+.insights-empty {
+  margin: 20px 12px;
+  padding: 32px 20px;
+  background: var(--card);
+  border-radius: 16px;
+  text-align: center;
+  border: 1px dashed var(--border2);
+}
+.insights-empty-icon { font-size: 48px; margin-bottom: 12px; }
+.insights-empty-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.insights-empty-sub {
+  font-size: 12px;
+  color: var(--text3);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.insights-intro, .rx-intro {
+  margin: 0 16px 12px;
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 600;
+}
+
+.insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 12px 8px;
+}
+
+/* 인사이트 카드 - 큰 글씨, 친근한 톤 */
+.insight-card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--primary);
+}
+.insight-card.good { border-left-color: #22c55e; }
+.insight-card.warn { border-left-color: #f59e0b; }
+.insight-card.bad { border-left-color: #ef4444; }
+
+.insight-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.insight-icon {
+  font-size: 32px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.insight-headline { flex: 1; min-width: 0; }
+.insight-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+  line-height: 1.3;
+  margin-bottom: 3px;
+}
+.insight-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text3);
+}
+.insight-body {
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.6;
+  font-weight: 500;
+}
+.insight-tip {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--primary-light);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.5;
+}
+.insight-tip strong { color: var(--primary-dark); }
+
+/* 운동 처방 카드 */
+.rx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 12px 8px;
+}
+.rx-card {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.rx-header {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--border);
+}
+.rx-priority {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 10px;
+  margin-bottom: 6px;
+  letter-spacing: .02em;
+}
+.rx-priority.high { background: #fee2e2; color: #b91c1c; }
+.rx-priority.mid { background: #dbeafe; color: #1d4ed8; }
+.rx-priority.low { background: #dcfce7; color: #166534; }
+.rx-title {
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+  line-height: 1.3;
+}
+
+.rx-why, .rx-how {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+.rx-why strong, .rx-how strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.rx-steps {
+  margin-top: 6px;
+  padding-left: 20px;
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.7;
+  font-weight: 500;
+}
+.rx-steps li {
+  margin-bottom: 5px;
+}
+
+.rx-dose {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin: 14px 0 10px;
+  padding: 12px;
+  background: var(--bg);
+  border-radius: 12px;
+}
+.rx-dose-item {
+  text-align: center;
+}
+.rx-dose-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+  margin-bottom: 4px;
+}
+.rx-dose-value {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--primary-dark);
+  letter-spacing: -.01em;
+}
+
+.rx-caution {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #fef3c7;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #92400e;
+  font-weight: 700;
+  line-height: 1.5;
+  border: 1px solid #fde68a;
+}
+
+/* 식단 처방 */
+.diet-block {
+  margin: 0 12px;
+}
+.diet-summary {
+  background: linear-gradient(135deg, rgba(34,197,94,.08), rgba(74,222,128,.04));
+  border: 1.5px solid rgba(34,197,94,.2);
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.diet-summary-title {
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--primary-dark);
+  margin-bottom: 8px;
+  letter-spacing: -.02em;
+}
+.diet-summary-desc {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.diet-meals {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.diet-meal-card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.diet-meal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border);
+}
+.diet-meal-time {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--primary-dark);
+  background: var(--primary-light);
+  padding: 4px 10px;
+  border-radius: 10px;
+}
+.diet-meal-title {
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+}
+.diet-meal-foods {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.diet-food-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px dotted var(--border);
+}
+.diet-food-row:last-child { border-bottom: none; }
+.diet-food-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.diet-food-amount {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text3);
+  white-space: nowrap;
+}
+.diet-meal-tip {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+  font-weight: 600;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+
+.diet-avoid-card, .diet-prefer-card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.diet-avoid-card { border-left: 4px solid #ef4444; }
+.diet-prefer-card { border-left: 4px solid #22c55e; }
+.diet-avoid-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #b91c1c;
+  margin-bottom: 8px;
+}
+.diet-prefer-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--primary-dark);
+  margin-bottom: 8px;
+}
+.diet-avoid-list, .diet-prefer-list {
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.7;
+  font-weight: 500;
+}
+.diet-avoid-list li, .diet-prefer-list li {
+  margin-bottom: 4px;
+}
+
+/* 의료 면책 */
+.medical-disclaimer {
+  margin: 20px 12px 80px;
+  padding: 14px 16px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  font-size: 11px;
+  color: #92400e;
+  line-height: 1.6;
+  text-align: center;
+  font-weight: 600;
+}
+
 .tts-fail-toast {
   position: fixed;
   top: -120px;
@@ -2044,7 +2380,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v14.0 · 결과</span>
+  <span class="hd-ver">v14.1 · 처방</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -2647,6 +2983,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
     rPPG 엔진: <a href="https://github.com/Health-HCI-Group/ME-rPPG-demo" target="_blank" style="color:var(--primary);text-decoration:none">ME-rPPG</a> (Apache 2.0)<br>
+    🚀 Reset Button - SeungWoo ‍🚀
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>

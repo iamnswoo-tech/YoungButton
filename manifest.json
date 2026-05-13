@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v14.0",
-  "short_name": "건강측정 v14.0",
-  "description": "v14.0 — 손가락 측정 제거 + 건강 측정 결과 종합 페이지",
+  "name": "건강 측정 v14.1",
+  "short_name": "건강측정 v14.1",
+  "description": "v14.1 — 통합 건강 해석 + 맞춤 운동·식단 처방",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

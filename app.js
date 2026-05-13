@@ -1213,12 +1213,652 @@ const App = {
         💡 모든 항목을 측정하면 신체 나이 신뢰도가 95%까지 올라가요
       </div>
 
+      <!-- ★ v14.1: 상세 건강 해석 + 운동/식단 추천 -->
+      ${this._renderHealthInsights()}
+
       ${result.completeness >= 100 ? `
         <button class="res-reset-btn" onclick="App._wellnessConfirmReset()" type="button">
           🔄 전체 측정 초기화
         </button>
       ` : ''}
     `;
+  },
+
+  // ★ v14.1: 통합 건강 해석 + 맞춤 운동/식단 추천 (노인도 이해 쉽게)
+  _renderHealthInsights() {
+    const w = this.state.wellness || {};
+    const measuredCount = ['face','balance','gait','tremor','reaction','posture','bodycomp']
+      .filter(k => w[k]).length;
+    if (measuredCount === 0) {
+      return `
+        <div class="insights-empty">
+          <div class="insights-empty-icon">📋</div>
+          <div class="insights-empty-title">측정을 시작하면 맞춤 건강 분석이 나옵니다</div>
+          <div class="insights-empty-sub">하나라도 측정하면 자세한 해석과 맞춤 운동·식단을 알려드려요</div>
+        </div>
+      `;
+    }
+
+    // ====== 1. 건강 인사이트 (통합 해석) 생성 ======
+    const insights = this._generateHealthInsights(w);
+    // ====== 2. 운동 처방 ======
+    const exercises = this._generateExerciseRecommendations(w);
+    // ====== 3. 식단 처방 ======
+    const diet = this._generateDietRecommendations(w);
+
+    // 인사이트 HTML
+    const insightsHTML = insights.map(ins => `
+      <div class="insight-card ${ins.cls}">
+        <div class="insight-header">
+          <div class="insight-icon">${ins.icon}</div>
+          <div class="insight-headline">
+            <div class="insight-title">${ins.title}</div>
+            <div class="insight-label">${ins.label}</div>
+          </div>
+        </div>
+        <div class="insight-body">${ins.body}</div>
+        ${ins.tip ? `<div class="insight-tip">💡 <strong>한 줄 조언:</strong> ${ins.tip}</div>` : ''}
+      </div>
+    `).join('');
+
+    // 운동 HTML
+    const exercisesHTML = exercises.map(ex => `
+      <div class="rx-card">
+        <div class="rx-header">
+          <div class="rx-priority ${ex.priority}">${ex.priority === 'high' ? '⭐ 가장 필요' : ex.priority === 'mid' ? '추천' : '유지'}</div>
+          <div class="rx-title">${ex.icon} ${ex.name}</div>
+        </div>
+        <div class="rx-why">
+          <strong>왜 필요한가요?</strong> ${ex.why}
+        </div>
+        <div class="rx-how">
+          <strong>어떻게 하나요?</strong>
+          <ol class="rx-steps">
+            ${ex.steps.map(s => `<li>${s}</li>`).join('')}
+          </ol>
+        </div>
+        <div class="rx-dose">
+          <div class="rx-dose-item">
+            <div class="rx-dose-label">횟수</div>
+            <div class="rx-dose-value">${ex.frequency}</div>
+          </div>
+          <div class="rx-dose-item">
+            <div class="rx-dose-label">시간</div>
+            <div class="rx-dose-value">${ex.duration}</div>
+          </div>
+          <div class="rx-dose-item">
+            <div class="rx-dose-label">강도</div>
+            <div class="rx-dose-value">${ex.intensity}</div>
+          </div>
+        </div>
+        ${ex.caution ? `<div class="rx-caution">⚠️ ${ex.caution}</div>` : ''}
+      </div>
+    `).join('');
+
+    // 식단 HTML
+    const dietHTML = `
+      <div class="diet-summary">
+        <div class="diet-summary-title">${diet.headline}</div>
+        <div class="diet-summary-desc">${diet.summary}</div>
+      </div>
+      <div class="diet-meals">
+        ${diet.meals.map(meal => `
+          <div class="diet-meal-card">
+            <div class="diet-meal-header">
+              <div class="diet-meal-time">${meal.time}</div>
+              <div class="diet-meal-title">${meal.icon} ${meal.title}</div>
+            </div>
+            <div class="diet-meal-foods">
+              ${meal.foods.map(f => `
+                <div class="diet-food-row">
+                  <span class="diet-food-name">${f.name}</span>
+                  <span class="diet-food-amount">${f.amount}</span>
+                </div>
+              `).join('')}
+            </div>
+            <div class="diet-meal-tip">${meal.tip}</div>
+          </div>
+        `).join('')}
+      </div>
+      ${diet.avoid.length > 0 ? `
+        <div class="diet-avoid-card">
+          <div class="diet-avoid-title">🚫 이번 주 피하면 좋은 것</div>
+          <ul class="diet-avoid-list">
+            ${diet.avoid.map(a => `<li>${a}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+      ${diet.prefer.length > 0 ? `
+        <div class="diet-prefer-card">
+          <div class="diet-prefer-title">✨ 이번 주 챙기면 좋은 것</div>
+          <ul class="diet-prefer-list">
+            ${diet.prefer.map(a => `<li>${a}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+    `;
+
+    return `
+      <!-- 상세 건강 해석 -->
+      <div class="res-section-title">📋 내 건강 이야기</div>
+      <div class="insights-intro">
+        측정 결과를 종합해서 알기 쉽게 풀어드려요
+      </div>
+      <div class="insights-list">
+        ${insightsHTML}
+      </div>
+
+      <!-- 맞춤 운동 처방 -->
+      <div class="res-section-title">🏃 맞춤 운동 처방</div>
+      <div class="rx-intro">
+        측정 결과를 바탕으로 가장 도움될 운동부터 알려드려요
+      </div>
+      <div class="rx-list">
+        ${exercisesHTML}
+      </div>
+
+      <!-- 맞춤 식단 추천 -->
+      <div class="res-section-title">🥗 맞춤 식단 추천</div>
+      <div class="diet-block">
+        ${dietHTML}
+      </div>
+
+      <!-- 의료기기 아님 안내 -->
+      <div class="medical-disclaimer">
+        ⚠️ 이 내용은 일반적인 건강 가이드이며 의료 진단·처방이 아닙니다.<br>
+        지속되는 증상이나 기저질환이 있으시면 반드시 전문의와 상의하세요.
+      </div>
+    `;
+  },
+
+  // ★ v14.1: 통합 인사이트 생성 (각 측정 결과를 노인도 이해 가능한 언어로)
+  _generateHealthInsights(w) {
+    const insights = [];
+
+    // 1. 심혈관 (얼굴 측정)
+    if (w.face) {
+      const hr = w.face.hr;
+      const rmssd = w.face.rmssd;
+      const stress = w.face.stressLevel || 3;
+      let cls = 'good', icon = '💗', title, label, body, tip;
+      if (hr) {
+        if (hr < 60) {
+          cls = 'good';
+          title = '심장이 매우 안정적이에요';
+          label = `심박수 ${hr} BPM`;
+          body = `심박수가 분당 ${hr}회로 매우 차분합니다. 일반적으로 60회 미만은 평소 운동을 잘 하시거나 휴식을 깊게 취하시는 분들에게 나타나는 좋은 신호입니다. 심장이 한 번 뛸 때 충분히 많은 피를 내보내고 있다는 뜻입니다.`;
+          tip = '지금 컨디션을 유지하면서 가벼운 걷기를 꾸준히 해주세요';
+        } else if (hr < 80) {
+          cls = 'good';
+          title = '심장이 정상적으로 일하고 있어요';
+          label = `심박수 ${hr} BPM`;
+          body = `심박수가 분당 ${hr}회로 건강한 성인의 정상 범위(60~80회) 안에 있습니다. 심장이 무리 없이 잘 일하고 있다는 뜻이에요.`;
+          tip = '주 3회 이상 30분 걷기로 이 상태를 유지하세요';
+        } else if (hr < 100) {
+          cls = 'warn';
+          title = '심장이 평소보다 빠르게 뛰고 있어요';
+          label = `심박수 ${hr} BPM`;
+          body = `심박수가 분당 ${hr}회로 정상 범위 상단입니다. 측정 직전 활동, 카페인 섭취, 긴장 등이 영향을 주었을 수 있어요. 한두 번 더 측정해보고 계속 80 이상이면 휴식과 수분 섭취를 늘려보세요.`;
+          tip = '깊은 호흡(4초 들이쉬고 6초 내쉬기)을 5분 해보세요';
+        } else {
+          cls = 'bad';
+          title = '심장이 빠르게 뛰고 있어요';
+          label = `심박수 ${hr} BPM`;
+          body = `안정 시 심박수가 분당 ${hr}회로 다소 빠릅니다. 카페인, 스트레스, 부족한 수면, 탈수 등이 원인일 수 있어요. 5분간 편안히 앉아 호흡한 후 다시 측정해보세요. 반복적으로 100 이상이면 병원 진료를 권합니다.`;
+          tip = '카페인 줄이고 물을 한 잔 마신 후 다시 측정해보세요';
+        }
+      }
+      if (title) {
+        insights.push({ cls, icon, title, label, body, tip });
+      }
+
+      // 스트레스 인사이트 별도
+      if (stress >= 4) {
+        insights.push({
+          cls: stress === 5 ? 'bad' : 'warn',
+          icon: '😰',
+          title: stress === 5 ? '높은 스트레스 신호가 감지됐어요' : '약간 긴장된 상태예요',
+          label: `스트레스 ${stress}/5단계`,
+          body: `자율신경(심박변이도)이 평소보다 긴장된 패턴을 보입니다. 만성 스트레스나 피로가 누적되면 면역력 저하, 수면 장애, 혈압 상승으로 이어질 수 있어요. 오늘 하루 10분이라도 의도적인 휴식을 가져보세요.`,
+          tip: '4-7-8 호흡법: 4초 들이쉬고 7초 멈췄다가 8초 내쉬기를 3번 반복',
+        });
+      } else if (stress <= 2) {
+        insights.push({
+          cls: 'good',
+          icon: '😌',
+          title: '마음이 편안한 상태예요',
+          label: `스트레스 ${stress}/5단계`,
+          body: `자율신경이 안정적이고 부교감신경(휴식 모드)이 잘 작동하고 있습니다. 이런 상태에서는 회복, 소화, 면역 기능이 활발하게 일어납니다.`,
+          tip: '이 좋은 컨디션을 유지하려면 규칙적인 수면이 가장 중요해요',
+        });
+      }
+    }
+
+    // 2. 신체 지수 (BMI/WHtR/ABSI + 나이)
+    if (w.bodycomp) {
+      const bc = w.bodycomp;
+      const bmi = bc.bmi;
+      const whtr = bc.whtr;
+      const ageDiff = bc.ageDiff || 0;
+
+      // BMI 인사이트
+      let bmiCls, bmiBody, bmiTip;
+      if (bmi < 18.5) {
+        bmiCls = 'warn';
+        bmiBody = `체질량지수(BMI)가 ${bmi.toFixed(1)}로 표준 체중보다 가벼우십니다. 나이가 들수록 적정 체중 유지가 면역력과 근력에 매우 중요합니다. 끼니를 거르지 않으시고 단백질 위주로 드세요.`;
+        bmiTip = '하루 단백질(고기·생선·두부·계란) 손바닥 크기 3번 이상';
+      } else if (bmi < 25) {
+        bmiCls = 'good';
+        bmiBody = `체질량지수(BMI)가 ${bmi.toFixed(1)}로 정상 범위입니다. 현재 체중 유지를 위해 균형 잡힌 식사와 규칙적인 운동이 중요합니다.`;
+        bmiTip = '주 3회 30분 걷기 + 단백질 충분히 = 현재 체형 유지의 핵심';
+      } else if (bmi < 30) {
+        bmiCls = 'warn';
+        bmiBody = `체질량지수(BMI)가 ${bmi.toFixed(1)}로 과체중 범위입니다. 키와 비교해서 체중이 약간 많은 상태로, 무릎·허리 부담과 혈압·혈당 상승 위험이 살짝 있습니다. 무리한 다이어트보다는 한 끼 양을 조금씩 줄이고 매일 30분 걷기가 효과적입니다.`;
+        bmiTip = '저녁 식사 양만 30% 줄여보세요 (아침·점심은 그대로)';
+      } else {
+        bmiCls = 'bad';
+        bmiBody = `체질량지수(BMI)가 ${bmi.toFixed(1)}로 비만 범위입니다. 당뇨, 고혈압, 무릎관절 부담이 커질 수 있어서 체중 관리가 필요합니다. 한 번에 많이 빼려 하지 마시고 3개월에 5kg 정도가 안전하고 지속 가능합니다.`;
+        bmiTip = '의사 상담 후 식단·운동 계획을 세우시는 것이 안전합니다';
+      }
+      insights.push({
+        cls: bmiCls, icon: '⚖️', title: bmiBody.split('.')[0] + '.',
+        label: `BMI ${bmi.toFixed(1)}`, body: bmiBody, tip: bmiTip,
+      });
+
+      // WHtR (복부비만)
+      if (whtr >= 0.5) {
+        insights.push({
+          cls: whtr >= 0.6 ? 'bad' : 'warn',
+          icon: '🎯',
+          title: '뱃살 관리가 필요해요',
+          label: `허리/키 ${whtr.toFixed(2)}`,
+          body: `허리둘레가 키의 ${(whtr * 100).toFixed(0)}%로, 건강 기준(50% 미만)을 넘었습니다. 뱃살은 단순 체중보다 더 중요한 건강 위험 신호로, 당뇨와 심장병 위험을 높입니다. 복부 운동보다는 전체 체중 감량과 식단 조절이 효과적입니다.`,
+          tip: '흰쌀밥을 잡곡밥으로, 라면·국수를 콩나물·두부로 바꿔보세요',
+        });
+      }
+
+      // 신체 나이
+      if (ageDiff <= -3) {
+        insights.push({
+          cls: 'good',
+          icon: '🧬',
+          title: '실제 나이보다 젊게 살고 계세요',
+          label: `신체 나이 ${bc.bodyAge}세 (실제 ${bc.age}세)`,
+          body: `신체 나이가 실제 나이보다 ${Math.abs(ageDiff)}살 어립니다. 측정한 모든 항목이 건강한 범주에 있다는 뜻이에요. 현재 생활 습관이 노화를 늦추고 있습니다.`,
+          tip: '지금 하시는 운동·식습관을 그대로 이어가세요',
+        });
+      } else if (ageDiff >= 5) {
+        insights.push({
+          cls: 'bad',
+          icon: '🧬',
+          title: '몸이 실제 나이보다 더 노화되고 있어요',
+          label: `신체 나이 ${bc.bodyAge}세 (실제 ${bc.age}세)`,
+          body: `신체 나이가 실제보다 ${ageDiff}살 많게 측정됐습니다. 체중·뱃살·운동 부족 중 하나가 영향을 미치고 있어요. 3개월간 식단·걷기를 꾸준히 하시면 신체 나이를 2~5년 되돌릴 수 있다는 연구 결과가 있습니다.`,
+          tip: '오늘부터 매일 10분 더 걷기 — 작은 시작이 큰 변화를 만듭니다',
+        });
+      }
+    }
+
+    // 3. 균형 + 보행 통합 (낙상 위험 신호)
+    if (w.balance && w.gait) {
+      const bScore = w.balance.score || 0;
+      const gScore = w.gait.score || 0;
+      const combined = (bScore + gScore) / 2;
+      if (combined < 60) {
+        insights.push({
+          cls: 'bad',
+          icon: '⚠️',
+          title: '낙상 위험이 있어요',
+          label: `균형 ${bScore}점 · 보행 ${gScore}점`,
+          body: `균형감과 걸음걸이가 모두 약해진 상태입니다. 65세 이상에서 낙상은 골절·입원의 가장 큰 원인입니다. 욕실에 미끄럼방지 매트, 침대 옆 야간등을 두시고, 의자에서 일어나실 때 두 번 깊게 호흡하고 천천히 일어나세요.`,
+          tip: '하루 한 번 의자 잡고 한 발 서기 10초씩 — 균형감 회복의 첫걸음',
+        });
+      } else if (combined >= 80) {
+        insights.push({
+          cls: 'good',
+          icon: '🚶',
+          title: '걷기와 균형감이 모두 좋아요',
+          label: `균형 ${bScore}점 · 보행 ${gScore}점`,
+          body: `다리 근력, 균형감, 신경 반응이 모두 양호합니다. 나이가 들수록 가장 중요한 능력 중 하나로, 잘 유지하면 낙상 위험이 매우 낮아집니다.`,
+          tip: '이 능력을 80대까지 유지하려면 주 2회 계단 오르기를 추천해요',
+        });
+      }
+    }
+
+    // 4. 반응속도 (인지 노화 지표 - Deary 2010)
+    if (w.reaction) {
+      const score = w.reaction.score || 0;
+      const avg = w.reaction.avg || 0;
+      if (score < 60 && avg > 0) {
+        insights.push({
+          cls: 'warn',
+          icon: '🧠',
+          title: '반응이 다소 느려졌어요',
+          label: `평균 ${Math.round(avg)}ms`,
+          body: `반응속도가 평균보다 느립니다. 뇌의 정보 처리 속도와 관련이 있어 인지 기능의 한 부분입니다. 수면 부족, 피로, 또는 자연스러운 노화일 수 있어요. 두뇌 자극 활동(독서·퍼즐·새 취미)이 도움됩니다.`,
+          tip: '잠을 충분히 (7시간) 자고 다시 측정해보세요',
+        });
+      }
+    }
+
+    return insights;
+  },
+
+  // ★ v14.1: 맞춤 운동 처방 (학술 근거 기반)
+  _generateExerciseRecommendations(w) {
+    const recommendations = [];
+
+    // 1. 심혈관 (HR/RMSSD 기반)
+    const stressLevel = w.face?.stressLevel || 3;
+    if (stressLevel >= 4 || (w.face?.hr && w.face.hr >= 80)) {
+      // 스트레스 높거나 심박수 빠름 - 호흡 우선
+      recommendations.push({
+        priority: 'high',
+        icon: '🧘',
+        name: '호흡 명상 (이완 운동)',
+        why: '자율신경이 긴장 상태입니다. 천천히 호흡하면 부교감신경(휴식 신경)이 활성화되어 심박수와 혈압이 떨어집니다.',
+        steps: [
+          '편안한 자세로 앉거나 누우세요',
+          '코로 4초간 천천히 들이마시고 배가 부풀게',
+          '2초간 멈춥니다',
+          '입으로 6초간 천천히 내쉽니다',
+          '이걸 10번 반복하세요'
+        ],
+        frequency: '매일 2회',
+        duration: '5~10분',
+        intensity: '매우 약함',
+        caution: '어지러우면 즉시 중단하세요',
+      });
+    }
+
+    // 2. BMI/WHtR 기반 유산소 운동
+    const bmi = w.bodycomp?.bmi;
+    const whtr = w.bodycomp?.whtr;
+    if (bmi >= 25 || whtr >= 0.5) {
+      recommendations.push({
+        priority: 'high',
+        icon: '🚶‍♂️',
+        name: '빨리 걷기 (체중·뱃살 감량 최우선)',
+        why: `${bmi >= 25 ? '체중 감량이' : ''}${whtr >= 0.5 ? '뱃살 감량이' : ''} 필요합니다. 빨리 걷기는 무릎 부담이 적으면서 내장지방을 효과적으로 줄여줍니다. 달리기보다 부상 위험이 낮아 매일 가능합니다.`,
+        steps: [
+          '5분간 천천히 걸어 몸을 풀어주세요 (준비운동)',
+          '약간 숨이 차고 옆 사람과 대화는 가능한 속도로 (시속 5~6km)',
+          '팔을 자연스럽게 흔들면서 등을 펴고 걸으세요',
+          '20~30분 유지',
+          '마지막 5분은 천천히 걸어 마무리'
+        ],
+        frequency: '주 5회',
+        duration: '30~40분',
+        intensity: '약간 숨참 (대화는 가능)',
+        caution: bmi >= 30 ? '관절에 무리가 오면 수영이나 자전거로 대체하세요' : null,
+      });
+    } else {
+      recommendations.push({
+        priority: 'mid',
+        icon: '🚶',
+        name: '꾸준한 걷기 (현재 컨디션 유지)',
+        why: '체중과 허리둘레가 건강 범위에 있습니다. 이 상태를 유지하려면 규칙적인 유산소 운동이 핵심입니다.',
+        steps: [
+          '편한 신발을 신으세요',
+          '동네 한 바퀴, 또는 공원이나 산책로',
+          '약간 빠른 걸음으로',
+          '30분간 꾸준히'
+        ],
+        frequency: '주 3~5회',
+        duration: '30분',
+        intensity: '편하게 대화 가능한 속도',
+      });
+    }
+
+    // 3. 균형/보행 약함 → 균형 운동
+    const balanceScore = w.balance?.score || 100;
+    const gaitScore = w.gait?.score || 100;
+    if (balanceScore < 75 || gaitScore < 75) {
+      recommendations.push({
+        priority: 'high',
+        icon: '🦵',
+        name: '균형 운동 (낙상 예방)',
+        why: '균형감이 약해진 상태입니다. 65세 이상에서 낙상은 가장 흔한 사고 원인입니다. 단 8주간 균형 운동으로 낙상 위험을 30% 줄일 수 있다는 연구가 있습니다.',
+        steps: [
+          '의자 등받이를 손으로 잡고 서세요',
+          '한 발을 들어 10초간 버티세요 (오른발)',
+          '내려놓고 반대 발도 10초',
+          '익숙해지면 의자 없이 시도',
+          '더 익숙해지면 눈을 감고 시도'
+        ],
+        frequency: '매일',
+        duration: '5분 (각 발 10초씩 양쪽)',
+        intensity: '약함',
+        caution: '꼭 잡을 것이 있는 곳에서 하세요',
+      });
+    }
+
+    // 4. 손떨림 또는 반응속도 약함 → 두뇌·손 협응
+    const tremorScore = w.tremor?.score || 100;
+    const reactionScore = w.reaction?.score || 100;
+    if (tremorScore < 70 || reactionScore < 60) {
+      recommendations.push({
+        priority: 'mid',
+        icon: '🤲',
+        name: '손-눈 협응 운동 (뇌 자극)',
+        why: '손떨림이나 반응속도가 약해지면 두뇌-신경 연결을 자극하는 운동이 도움됩니다. 새로운 자극이 뇌의 신경 가소성(새 회로 만들기)을 촉진합니다.',
+        steps: [
+          '공이나 작은 물건을 한 손에서 다른 손으로 던지기',
+          '익숙해지면 두 개로 늘리기',
+          '또는 박수 운동: 박수 → 무릎 치기 → 박수 → 어깨 치기 반복',
+          '천천히 시작해서 점점 빠르게'
+        ],
+        frequency: '매일',
+        duration: '5~10분',
+        intensity: '약함',
+      });
+    }
+
+    // 5. 자세 운동 (모든 사람에게 기본)
+    const postureScore = w.posture?.score || 100;
+    if (postureScore < 80) {
+      recommendations.push({
+        priority: 'mid',
+        icon: '🧍',
+        name: '자세 교정 운동',
+        why: '자세가 흐트러지면 만성 통증, 호흡 부족, 어깨 결림을 일으킵니다. 하루 5분만으로도 큰 변화가 있습니다.',
+        steps: [
+          '벽에 등을 대고 서세요',
+          '뒤통수, 어깨, 엉덩이, 발뒤꿈치를 벽에 닿게',
+          '이 자세로 1분 유지하며 호흡',
+          '하루 2~3번 반복'
+        ],
+        frequency: '매일 2~3회',
+        duration: '5분',
+        intensity: '매우 약함',
+      });
+    }
+
+    // 6. 건강한 사람에게도 근력 운동 권장
+    if (recommendations.length < 3) {
+      recommendations.push({
+        priority: 'mid',
+        icon: '💪',
+        name: '하체 근력 강화 (스쿼트)',
+        why: '하체 근력은 모든 활동의 기반이며, 50세 이후 매년 1~2%씩 감소합니다. 의자 사용 스쿼트는 무릎 부담 없이 효과적입니다.',
+        steps: [
+          '의자 앞에 등 펴고 서세요',
+          '발은 어깨 너비',
+          '엉덩이가 의자에 살짝 닿을 때까지 천천히 앉기',
+          '바로 다시 일어서기 (앉지 말고)',
+          '10번 반복 × 2세트'
+        ],
+        frequency: '주 3회',
+        duration: '10분',
+        intensity: '중간',
+        caution: '무릎이 발끝을 넘지 않게 주의',
+      });
+    }
+
+    return recommendations.slice(0, 4); // 최대 4개
+  },
+
+  // ★ v14.1: 맞춤 식단 추천
+  _generateDietRecommendations(w) {
+    const bmi = w.bodycomp?.bmi || 22;
+    const whtr = w.bodycomp?.whtr || 0.45;
+    const stressLevel = w.face?.stressLevel || 3;
+    const hr = w.face?.hr || 70;
+
+    // 헤드라인 결정
+    let headline, summary;
+    const avoid = [];
+    const prefer = [];
+
+    if (bmi >= 25 || whtr >= 0.5) {
+      headline = '🎯 체중·뱃살 관리 식단';
+      summary = '한 끼 양을 조금씩 줄이고, 흰 탄수화물을 잡곡·채소로 바꾸세요. 단백질은 매 끼 챙기면 근육 손실을 막을 수 있어요.';
+      avoid.push('흰쌀밥, 흰빵, 라면, 국수 (혈당을 급격히 올려요)');
+      avoid.push('단 음료, 과자, 빵 (특히 저녁 시간대)');
+      avoid.push('튀김, 부침개, 삼겹살 (지방 함량 높음)');
+      prefer.push('잡곡밥, 현미, 통밀빵 (혈당 안정)');
+      prefer.push('생선·두부·계란 (단백질, 매 끼)');
+      prefer.push('나물, 김치, 채소 반찬 (식이섬유)');
+    } else if (bmi < 18.5) {
+      headline = '🎯 건강 체중 회복 식단';
+      summary = '체중이 가벼우신 분께는 끼니를 거르지 않고 단백질을 충분히 드시는 것이 가장 중요해요. 나이가 들수록 근육 유지가 면역력의 핵심입니다.';
+      avoid.push('끼니 거르기 (특히 아침)');
+      avoid.push('과한 다이어트 식품, 저칼로리 식사');
+      prefer.push('계란·생선·두부·고기 (매 끼 단백질)');
+      prefer.push('견과류, 우유, 요거트 (간식으로 칼로리 보충)');
+      prefer.push('잡곡밥은 한 공기씩 챙기기');
+    } else {
+      headline = '✅ 현재 식단 유지 + 약간의 개선';
+      summary = '현재 체중이 건강 범위에 있어요. 균형 잡힌 식사를 유지하면서 단백질과 채소를 좀 더 챙기시면 좋습니다.';
+      prefer.push('단백질을 매 끼 챙기기 (근육 유지)');
+      prefer.push('하루 채소 5색 (다양한 색깔)');
+      prefer.push('물 8잔, 규칙적으로');
+    }
+
+    // 스트레스 높음 → 카페인/알코올 줄이기
+    if (stressLevel >= 4 || hr >= 85) {
+      avoid.push('과도한 커피·녹차 (하루 1잔 이하로)');
+      avoid.push('술 (수면 질을 떨어뜨려요)');
+      prefer.push('따뜻한 허브차 (캐모마일, 루이보스)');
+      prefer.push('마그네슘이 풍부한 음식 (시금치, 견과류, 다크초콜릿)');
+    }
+
+    // 식사 시간표
+    const meals = [];
+
+    if (bmi >= 25 || whtr >= 0.5) {
+      // 체중감량 식단
+      meals.push({
+        time: '아침 (7~9시)',
+        icon: '🍳',
+        title: '든든하게 시작',
+        foods: [
+          { name: '잡곡밥 또는 통밀빵', amount: '한 공기 / 1쪽' },
+          { name: '계란 또는 두부', amount: '2개 / 반 모' },
+          { name: '나물 또는 샐러드', amount: '한 접시' },
+          { name: '물 또는 따뜻한 차', amount: '1잔' },
+        ],
+        tip: '💡 아침을 든든히 먹으면 점심·저녁 폭식을 막아줘요',
+      });
+      meals.push({
+        time: '점심 (12~13시)',
+        icon: '🍱',
+        title: '균형 잡힌 한 끼',
+        foods: [
+          { name: '잡곡밥', amount: '2/3 공기' },
+          { name: '생선·고기·두부 (택1)', amount: '손바닥 크기' },
+          { name: '나물 반찬', amount: '3가지' },
+          { name: '국 (간 적게)', amount: '반 그릇' },
+        ],
+        tip: '💡 천천히 씹어드시면 적게 먹어도 포만감이 오래 갑니다',
+      });
+      meals.push({
+        time: '저녁 (18~19시)',
+        icon: '🥗',
+        title: '가볍게 마무리',
+        foods: [
+          { name: '잡곡밥', amount: '반 공기' },
+          { name: '생선구이 또는 닭가슴살', amount: '손바닥 크기' },
+          { name: '채소 듬뿍 (나물·샐러드)', amount: '두 접시' },
+          { name: '국물 (탄수화물 없이)', amount: '맑은 국 한 그릇' },
+        ],
+        tip: '💡 저녁은 자기 3시간 전까지 마치는 것이 좋아요',
+      });
+    } else if (bmi < 18.5) {
+      // 체중 증량 식단
+      meals.push({
+        time: '아침 (7~9시)',
+        icon: '🍳',
+        title: '꼭 드세요',
+        foods: [
+          { name: '잡곡밥 또는 죽', amount: '한 공기' },
+          { name: '계란 + 생선·두부', amount: '2가지 다' },
+          { name: '나물 반찬', amount: '2~3가지' },
+          { name: '우유 또는 두유', amount: '1잔' },
+        ],
+        tip: '💡 아침을 거르지 마세요 — 근육 유지의 핵심',
+      });
+      meals.push({
+        time: '간식 (10시, 15시)',
+        icon: '🥜',
+        title: '소량씩 자주',
+        foods: [
+          { name: '견과류 (호두·아몬드)', amount: '한 줌' },
+          { name: '바나나 또는 사과', amount: '1개' },
+          { name: '요거트 또는 두유', amount: '1잔' },
+        ],
+        tip: '💡 한 번에 많이 드시지 못한다면 자주 드세요',
+      });
+      meals.push({
+        time: '점심·저녁',
+        icon: '🍱',
+        title: '단백질 중심',
+        foods: [
+          { name: '잡곡밥', amount: '한 공기' },
+          { name: '생선 또는 고기', amount: '손바닥 + 손가락' },
+          { name: '두부·계란 곁들이', amount: '추가로' },
+          { name: '나물 반찬', amount: '3가지 이상' },
+        ],
+        tip: '💡 매 끼 단백질이 가장 중요해요',
+      });
+    } else {
+      // 유지 식단
+      meals.push({
+        time: '아침 (7~9시)',
+        icon: '🍳',
+        title: '균형 잡힌 시작',
+        foods: [
+          { name: '잡곡밥 또는 통밀빵', amount: '한 공기 / 1쪽' },
+          { name: '계란 또는 생선', amount: '1~2개' },
+          { name: '과일 또는 채소', amount: '한 접시' },
+        ],
+        tip: '💡 아침 단백질이 하루 근육 유지의 시작',
+      });
+      meals.push({
+        time: '점심 (12~13시)',
+        icon: '🍱',
+        title: '한식 균형식',
+        foods: [
+          { name: '잡곡밥', amount: '한 공기' },
+          { name: '단백질 (생선·고기·두부)', amount: '손바닥 크기' },
+          { name: '나물 반찬', amount: '3가지' },
+        ],
+        tip: '💡 골고루 천천히 드세요',
+      });
+      meals.push({
+        time: '저녁 (18~19시)',
+        icon: '🥗',
+        title: '가볍게',
+        foods: [
+          { name: '잡곡밥', amount: '2/3 공기' },
+          { name: '생선·닭가슴살·두부', amount: '손바닥 크기' },
+          { name: '채소 듬뿍', amount: '두 접시' },
+        ],
+        tip: '💡 저녁은 자기 3시간 전 마무리',
+      });
+    }
+
+    return { headline, summary, meals, avoid, prefer };
   },
 
   // ★ v14.0: 상대 시간 표시 (몇 분 전, 몇 시간 전)
