@@ -788,6 +788,11 @@ body::before {
   box-shadow: 0 8px 24px rgba(34, 197, 94, .25);
   transition: transform .12s;
 }
+/* ★ v14.3: 트렌드 버전은 블루 */
+.res-detail-cta.trends {
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, .25);
+}
 .res-detail-cta:active { transform: scale(.98); }
 .res-detail-cta-icon {
   width: 48px;
@@ -1257,6 +1262,214 @@ body::before {
   line-height: 1.6;
   text-align: center;
   font-weight: 600;
+}
+
+/* ★ v14.3: 시계열 트렌드 페이지 */
+.trends-period-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 14px 12px 14px;
+  padding: 4px;
+  background: var(--bg);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.trends-period-tab {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+  letter-spacing: -.01em;
+}
+.trends-period-tab.on {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, .25);
+}
+
+.trends-summary {
+  margin: 0 12px 14px;
+  padding: 18px;
+  background: linear-gradient(135deg, var(--primary-light), rgba(74, 222, 128, .05));
+  border: 1px solid rgba(34, 197, 94, .2);
+  border-radius: 16px;
+  text-align: center;
+}
+.trends-summary-num {
+  font-size: 36px;
+  font-weight: 900;
+  color: var(--primary-dark);
+  letter-spacing: -.03em;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.trends-summary-label {
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 700;
+}
+
+.trends-section-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 16px 16px 10px;
+  letter-spacing: -.02em;
+}
+
+.trends-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 12px 14px;
+}
+.trend-insight {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--primary);
+}
+.trend-insight.good { border-left-color: #22c55e; }
+.trend-insight.warn { border-left-color: #f59e0b; }
+.trend-insight.bad { border-left-color: #ef4444; }
+.trend-insight.info { border-left-color: #3b82f6; }
+.trend-insight-icon {
+  font-size: 26px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.trend-insight-body { flex: 1; min-width: 0; }
+.trend-insight-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 3px;
+  letter-spacing: -.02em;
+}
+.trend-insight-desc {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* 차트 카드 */
+.trend-chart-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 0 12px 12px;
+  box-shadow: var(--shadow);
+}
+.trend-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.trend-chart-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+}
+.trend-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 10px;
+  letter-spacing: -.01em;
+}
+.trend-badge.good { background: #dcfce7; color: #166534; }
+.trend-badge.warn { background: #fef3c7; color: #92400e; }
+.trend-badge.stable { background: #dbeafe; color: #1d4ed8; }
+
+.trend-chart-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+.trend-stat { text-align: center; }
+.trend-stat-label {
+  font-size: 10px;
+  color: var(--text3);
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+.trend-stat-value {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.trend-stat-unit {
+  font-size: 10px;
+  color: var(--text3);
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.trend-chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.trends-empty {
+  margin: 40px 16px;
+  padding: 40px 24px;
+  background: var(--card);
+  border-radius: 20px;
+  border: 1px dashed var(--border2);
+  text-align: center;
+}
+.trends-empty-icon {
+  font-size: 56px;
+  margin-bottom: 14px;
+}
+.trends-empty-title {
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: -.02em;
+}
+.trends-empty-sub {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+.trends-empty-cta {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 6px 18px rgba(34, 197, 94, .25);
 }
 
 .tts-fail-toast {
@@ -2710,7 +2923,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v14.2 · 차트</span>
+  <span class="hd-ver">v14.3 · 추이</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -3313,6 +3526,18 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div id="detail-dashboard"></div>
 </div>
 
+<!-- ★ v14.3: 시계열 트렌드 페이지 -->
+<div class="page" id="page-trends">
+  <div class="back-bar">
+    <button class="back-btn" type="button" onclick="App.goPage('results')">←</button>
+    <div>
+      <div class="page-title">📈 시계열 추이</div>
+      <div class="page-subtitle">기간별 건강 변화 분석</div>
+    </div>
+  </div>
+  <div id="trends-dashboard"></div>
+</div>
+
 <!-- BOTTOM NAV -->
 <nav class="bottom-nav">
   <button class="nav-btn on" id="nav-home" type="button" onclick="App.goPage('home')">
@@ -3335,8 +3560,8 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
-    rPPG 엔진: <a href="https://github.com/Health-HCI-Group/ME-rPPG-demo" target="_blank" style="color:var(--primary);text-decoration:none">ME-rPPG</a> (Apache 2.0)<br>
     🚀 Reset Button - SeungWoo ‍🚀<br>
+    rPPG 엔진: <a href="https://github.com/Health-HCI-Group/ME-rPPG-demo" target="_blank" style="color:var(--primary);text-decoration:none">ME-rPPG</a> (Apache 2.0)<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>

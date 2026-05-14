@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v14.2",
-  "short_name": "건강측정 v14.2",
-  "description": "v14.2 — 결과 그래프 강화 + 상세 분석 분리 + 휠 충돌 해결",
+  "name": "건강 측정 v14.3",
+  "short_name": "건강측정 v14.3",
+  "description": "v14.3 — 시계열 트렌드 분석 + 변화 인사이트",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

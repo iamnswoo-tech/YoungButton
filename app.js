@@ -411,12 +411,112 @@ const App = {
     // 배지 자동 부여
     this._badgesCheck(category, data);
 
+    // ★ v14.3: 시계열 히스토리 저장 (카테고리별 최대 100개)
+    this._historyAppend(category, data);
+
     try {
       localStorage.setItem('wellness_data', JSON.stringify(this.state.wellness));
     } catch (e) {
       console.warn('[Wellness] 저장 실패:', e);
     }
     this._wellnessRender();
+  },
+
+  // ★ v14.3: 측정 히스토리 누적 저장
+  _historyAppend(category, data) {
+    try {
+      const key = `history_${category}`;
+      let history = [];
+      try {
+        history = JSON.parse(localStorage.getItem(key) || '[]');
+      } catch (e) { history = []; }
+
+      // 카테고리별 핵심 필드만 압축 저장 (용량 절약)
+      const snapshot = { t: data.t };
+      if (category === 'face') {
+        snapshot.hr = data.hr;
+        snapshot.rmssd = data.rmssd;
+        snapshot.stressLevel = data.stressLevel;
+        snapshot.respRate = data.respRate;
+        snapshot.score = data.score;
+      } else if (category === 'bodycomp') {
+        snapshot.bmi = data.bmi;
+        snapshot.whtr = data.whtr;
+        snapshot.absi = data.absi;
+        snapshot.weight = data.weight;
+        snapshot.waist = data.waist;
+        snapshot.bodyAge = data.bodyAge;
+        snapshot.skinAge = data.skinAge;
+        snapshot.score = data.score;
+      } else if (category === 'balance') {
+        snapshot.openRms = data.openRms;
+        snapshot.closedRms = data.closedRms;
+        snapshot.score = data.score;
+      } else if (category === 'gait') {
+        snapshot.cadence = data.cadence;
+        snapshot.steps = data.steps;
+        snapshot.score = data.score;
+      } else if (category === 'tremor') {
+        snapshot.amp = data.amp;
+        snapshot.freq = data.freq;
+        snapshot.score = data.score;
+      } else if (category === 'reaction') {
+        snapshot.avg = data.avg;
+        snapshot.min = data.min;
+        snapshot.score = data.score;
+      } else if (category === 'posture') {
+        snapshot.shoulder = data.shoulder;
+        snapshot.head = data.head;
+        snapshot.score = data.score;
+      }
+
+      history.push(snapshot);
+      // 최대 100개 유지 (오래된 것부터 제거)
+      if (history.length > 100) {
+        history = history.slice(-100);
+      }
+      localStorage.setItem(key, JSON.stringify(history));
+      console.log(`[History] ${category} 저장 (총 ${history.length}회)`);
+    } catch (e) {
+      console.warn('[History] 저장 실패:', e);
+    }
+  },
+
+  // ★ v14.3: 카테고리별 히스토리 조회
+  _historyGet(category) {
+    try {
+      return JSON.parse(localStorage.getItem(`history_${category}`) || '[]');
+    } catch (e) {
+      return [];
+    }
+  },
+
+  // ★ v14.3: 기간 필터 (days 일 전부터 지금까지)
+  _historyFilter(history, days) {
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    return history.filter(h => h.t >= cutoff);
+  },
+
+  // ★ v14.3: 통계 계산 (평균/표준편차/추세)
+  _historyStats(history, field) {
+    const values = history.map(h => h[field]).filter(v => v != null && !isNaN(v));
+    if (values.length === 0) return null;
+    const sum = values.reduce((a, b) => a + b, 0);
+    const mean = sum / values.length;
+    const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+    const std = Math.sqrt(variance);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    // 추세: 최신 30% vs 이전 30% 비교
+    const n = values.length;
+    let trend = 0;
+    if (n >= 6) {
+      const recentN = Math.max(2, Math.floor(n * 0.3));
+      const recent = values.slice(-recentN).reduce((a,b) => a+b, 0) / recentN;
+      const past = values.slice(0, recentN).reduce((a,b) => a+b, 0) / recentN;
+      if (past !== 0) trend = ((recent - past) / past) * 100;
+    }
+    return { mean, std, min, max, count: values.length, trend, latest: values[values.length - 1] };
   },
 
   // ★ v13.3: 스트릭(연속 측정) 시스템
@@ -1081,6 +1181,10 @@ const App = {
     if (page === 'detail') {
       this._renderDetailPage();
     }
+    // ★ v14.3: 트렌드 페이지 진입 시 렌더링
+    if (page === 'trends') {
+      this._renderTrendsPage();
+    }
     window.scrollTo(0, 0);
   },
 
@@ -1238,6 +1342,16 @@ const App = {
           <div class="res-detail-cta-body">
             <div class="res-detail-cta-title">상세 분석 & 맞춤 처방</div>
             <div class="res-detail-cta-sub">건강 해석, 운동·식단 추천 보기</div>
+          </div>
+          <div class="res-detail-cta-arrow">›</div>
+        </button>
+
+        <!-- ★ v14.3: 트렌드 페이지 CTA -->
+        <button class="res-detail-cta trends" onclick="App.goPage('trends')" type="button">
+          <div class="res-detail-cta-icon">📈</div>
+          <div class="res-detail-cta-body">
+            <div class="res-detail-cta-title">시계열 추이 분석</div>
+            <div class="res-detail-cta-sub">7일·30일·90일 변화 그래프</div>
           </div>
           <div class="res-detail-cta-arrow">›</div>
         </button>
@@ -1975,6 +2089,397 @@ const App = {
     if (days < 7) return `${days}일 전`;
     const d = new Date(t);
     return `${d.getMonth() + 1}/${d.getDate()}`;
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // ★ v14.3: 시계열 트렌드 분석
+  // ════════════════════════════════════════════════════════════════
+
+  // 트렌드 페이지 렌더링
+  _renderTrendsPage() {
+    const container = document.getElementById('trends-dashboard');
+    if (!container) return;
+
+    // 현재 선택된 기간 (기본 30일)
+    const period = this._trendPeriod || 30;
+    const periodLabel = period === 7 ? '7일' : period === 30 ? '30일' : '90일';
+
+    // 측정 횟수 카운트
+    const allCategories = ['face', 'bodycomp', 'balance', 'gait', 'tremor', 'reaction', 'posture'];
+    let totalMeasurements = 0;
+    const categoryCounts = {};
+    for (const cat of allCategories) {
+      const h = this._historyGet(cat);
+      const filtered = this._historyFilter(h, period);
+      categoryCounts[cat] = filtered.length;
+      totalMeasurements += filtered.length;
+    }
+
+    if (totalMeasurements === 0) {
+      container.innerHTML = `
+        <div class="trends-empty">
+          <div class="trends-empty-icon">📈</div>
+          <div class="trends-empty-title">아직 데이터가 부족해요</div>
+          <div class="trends-empty-sub">
+            여러 번 측정하시면 추이 그래프가 나타나요.<br>
+            첫 측정과 비교해서 좋아지고 있는지 확인할 수 있어요.
+          </div>
+          <button class="trends-empty-cta" type="button" onclick="App.goPage('home')">
+            홈으로 가서 측정 시작 →
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    // 기간 선택 탭
+    const periodTabs = `
+      <div class="trends-period-tabs">
+        <button type="button" class="trends-period-tab ${period === 7 ? 'on' : ''}" onclick="App._switchTrendPeriod(7)">7일</button>
+        <button type="button" class="trends-period-tab ${period === 30 ? 'on' : ''}" onclick="App._switchTrendPeriod(30)">30일</button>
+        <button type="button" class="trends-period-tab ${period === 90 ? 'on' : ''}" onclick="App._switchTrendPeriod(90)">90일</button>
+      </div>
+    `;
+
+    // 요약 카드 (이번 기간 측정 횟수)
+    const summary = `
+      <div class="trends-summary">
+        <div class="trends-summary-num">${totalMeasurements}</div>
+        <div class="trends-summary-label">최근 ${periodLabel}간 측정 횟수</div>
+      </div>
+    `;
+
+    // 변화 인사이트 자동 생성
+    const insights = this._generateTrendInsights(period);
+    let insightsHTML = '';
+    if (insights.length > 0) {
+      insightsHTML = `
+        <div class="trends-section-title">📌 이번 ${periodLabel}의 변화</div>
+        <div class="trends-insights">
+          ${insights.map(ins => `
+            <div class="trend-insight ${ins.cls}">
+              <div class="trend-insight-icon">${ins.icon}</div>
+              <div class="trend-insight-body">
+                <div class="trend-insight-title">${ins.title}</div>
+                <div class="trend-insight-desc">${ins.desc}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    // 카테고리별 트렌드 차트
+    let chartsHTML = '<div class="trends-section-title">📊 항목별 추이</div>';
+
+    // 얼굴 측정 차트들
+    const faceHistory = this._historyFilter(this._historyGet('face'), period);
+    if (faceHistory.length >= 2) {
+      chartsHTML += this._renderTrendChart({
+        title: '심박수 (HR)',
+        icon: '💗',
+        history: faceHistory,
+        field: 'hr',
+        unit: 'BPM',
+        normalMin: 60,
+        normalMax: 100,
+        color: '#ef4444',
+      });
+      chartsHTML += this._renderTrendChart({
+        title: '심박변이도 (HRV/RMSSD)',
+        icon: '✨',
+        history: faceHistory,
+        field: 'rmssd',
+        unit: 'ms',
+        normalMin: 19,
+        normalMax: 75,
+        color: '#7c3aed',
+      });
+      chartsHTML += this._renderTrendChart({
+        title: '스트레스 단계',
+        icon: '😌',
+        history: faceHistory,
+        field: 'stressLevel',
+        unit: '단계',
+        normalMin: 1,
+        normalMax: 3,
+        color: '#f59e0b',
+        yMin: 1,
+        yMax: 5,
+        invert: true,
+      });
+    }
+
+    // 신체 지수 차트들
+    const bodycompHistory = this._historyFilter(this._historyGet('bodycomp'), period);
+    if (bodycompHistory.length >= 2) {
+      chartsHTML += this._renderTrendChart({
+        title: 'BMI',
+        icon: '⚖️',
+        history: bodycompHistory,
+        field: 'bmi',
+        unit: 'kg/m²',
+        normalMin: 18.5,
+        normalMax: 25,
+        color: '#3b82f6',
+      });
+      chartsHTML += this._renderTrendChart({
+        title: '체중',
+        icon: '📐',
+        history: bodycompHistory,
+        field: 'weight',
+        unit: 'kg',
+        color: '#06b6d4',
+      });
+      chartsHTML += this._renderTrendChart({
+        title: '신체 나이',
+        icon: '🧬',
+        history: bodycompHistory,
+        field: 'bodyAge',
+        unit: '세',
+        color: '#22c55e',
+        invert: true,
+      });
+    }
+
+    // 기타 점수
+    for (const cat of ['balance', 'gait', 'reaction', 'tremor', 'posture']) {
+      const h = this._historyFilter(this._historyGet(cat), period);
+      if (h.length >= 2) {
+        const meta = {
+          balance: { title: '균형 점수', icon: '⚖️' },
+          gait: { title: '보행 점수', icon: '🚶' },
+          reaction: { title: '반응속도 점수', icon: '⚡' },
+          tremor: { title: '손떨림 점수', icon: '✋' },
+          posture: { title: '자세 점수', icon: '🧍' },
+        }[cat];
+        chartsHTML += this._renderTrendChart({
+          title: meta.title,
+          icon: meta.icon,
+          history: h,
+          field: 'score',
+          unit: '점',
+          normalMin: 70,
+          normalMax: 100,
+          color: '#3b82f6',
+          yMin: 0,
+          yMax: 100,
+        });
+      }
+    }
+
+    container.innerHTML = periodTabs + summary + insightsHTML + chartsHTML;
+  },
+
+  _switchTrendPeriod(days) {
+    this._trendPeriod = days;
+    this._renderTrendsPage();
+  },
+
+  // 트렌드 인사이트 자동 생성
+  _generateTrendInsights(period) {
+    const insights = [];
+
+    // HR 변화
+    const face = this._historyFilter(this._historyGet('face'), period);
+    if (face.length >= 5) {
+      const hrStats = this._historyStats(face, 'hr');
+      if (hrStats && Math.abs(hrStats.trend) >= 5) {
+        const up = hrStats.trend > 0;
+        insights.push({
+          cls: up ? 'warn' : 'good',
+          icon: up ? '📈' : '📉',
+          title: `심박수가 ${Math.abs(hrStats.trend).toFixed(0)}% ${up ? '증가' : '감소'}했어요`,
+          desc: up
+            ? `평균 ${Math.round(hrStats.mean)}BPM. 카페인·스트레스·수면 부족 등의 원인을 점검해보세요.`
+            : `평균 ${Math.round(hrStats.mean)}BPM. 컨디션이 좋아지고 있어요!`,
+        });
+      }
+
+      // RMSSD 변화
+      const rmssdStats = this._historyStats(face, 'rmssd');
+      if (rmssdStats && Math.abs(rmssdStats.trend) >= 10) {
+        const up = rmssdStats.trend > 0;
+        insights.push({
+          cls: up ? 'good' : 'warn',
+          icon: up ? '💪' : '⚠️',
+          title: `심박변이도가 ${Math.abs(rmssdStats.trend).toFixed(0)}% ${up ? '향상' : '저하'}됐어요`,
+          desc: up
+            ? `자율신경이 더 안정되고 있어요. 회복 능력이 좋아진 신호입니다.`
+            : `평소보다 자율신경이 긴장된 상태예요. 휴식과 수면을 늘려보세요.`,
+        });
+      }
+
+      // 스트레스 변화
+      const stressStats = this._historyStats(face, 'stressLevel');
+      if (stressStats && Math.abs(stressStats.trend) >= 15) {
+        const up = stressStats.trend > 0;
+        insights.push({
+          cls: up ? 'bad' : 'good',
+          icon: up ? '😰' : '😌',
+          title: `스트레스가 ${up ? '높아지고' : '낮아지고'} 있어요`,
+          desc: up
+            ? `최근 평균 ${stressStats.mean.toFixed(1)}단계. 깊은 호흡과 규칙적 수면이 도움됩니다.`
+            : `최근 평균 ${stressStats.mean.toFixed(1)}단계. 마음이 안정되어가고 있어요.`,
+        });
+      }
+    }
+
+    // 체중 변화
+    const bc = this._historyFilter(this._historyGet('bodycomp'), period);
+    if (bc.length >= 3) {
+      const weightStats = this._historyStats(bc, 'weight');
+      if (weightStats && Math.abs(weightStats.latest - weightStats.mean) >= 1) {
+        const recent = weightStats.latest;
+        const oldest = bc[0].weight;
+        const diff = recent - oldest;
+        if (Math.abs(diff) >= 1) {
+          insights.push({
+            cls: 'info',
+            icon: '📊',
+            title: `체중이 ${Math.abs(diff).toFixed(1)}kg ${diff > 0 ? '증가' : '감소'}했어요`,
+            desc: `${oldest}kg → ${recent}kg (${period}일간). 지속적인 추적이 건강 관리의 핵심입니다.`,
+          });
+        }
+      }
+    }
+
+    // 측정 횟수 격려
+    if (insights.length === 0 && (face.length + bc.length) >= 5) {
+      insights.push({
+        cls: 'good',
+        icon: '👍',
+        title: '꾸준히 측정하고 계세요',
+        desc: `더 많은 데이터가 쌓이면 더 정확한 추이 분석이 가능해요. 매일 같은 시간 측정해보세요.`,
+      });
+    }
+
+    return insights.slice(0, 4);
+  },
+
+  // 개별 트렌드 차트 (SVG 라인 그래프 + 정상범위 밴드)
+  _renderTrendChart({ title, icon, history, field, unit, normalMin, normalMax, color, yMin, yMax, invert }) {
+    const values = history.map(h => ({ t: h.t, v: h[field] })).filter(p => p.v != null && !isNaN(p.v));
+    if (values.length < 2) return '';
+
+    // Y축 범위
+    let minV = yMin != null ? yMin : Math.min(...values.map(p => p.v));
+    let maxV = yMax != null ? yMax : Math.max(...values.map(p => p.v));
+    if (normalMin != null) minV = Math.min(minV, normalMin);
+    if (normalMax != null) maxV = Math.max(maxV, normalMax);
+    // 여백 10%
+    const range = maxV - minV;
+    const pad = range * 0.15 || 1;
+    minV -= pad;
+    maxV += pad;
+
+    // 차트 dimensions
+    const W = 360, H = 140;
+    const padL = 36, padR = 12, padT = 14, padB = 24;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+
+    const xScale = (t) => {
+      const tMin = values[0].t;
+      const tMax = values[values.length - 1].t;
+      const tRange = tMax - tMin || 1;
+      return padL + ((t - tMin) / tRange) * chartW;
+    };
+    const yScale = (v) => padT + chartH - ((v - minV) / (maxV - minV)) * chartH;
+
+    // 정상 범위 밴드
+    let normalBand = '';
+    if (normalMin != null && normalMax != null) {
+      const yTop = yScale(normalMax);
+      const yBottom = yScale(normalMin);
+      normalBand = `
+        <rect x="${padL}" y="${yTop}" width="${chartW}" height="${yBottom - yTop}"
+              fill="rgba(34, 197, 94, 0.08)" stroke="rgba(34, 197, 94, 0.2)" stroke-dasharray="2,2" stroke-width="1"/>
+        <text x="${padL + chartW - 4}" y="${yTop + 12}" text-anchor="end" font-size="9" fill="#16a34a" font-weight="700">정상 범위</text>
+      `;
+    }
+
+    // Y축 라벨
+    const yLabels = [maxV, (maxV + minV) / 2, minV].map(v => {
+      const decimals = (Math.abs(v) < 10) ? 1 : 0;
+      const label = v.toFixed(decimals);
+      return `<text x="${padL - 6}" y="${yScale(v) + 3}" text-anchor="end" font-size="9" fill="#94a3b8" font-weight="600">${label}</text>`;
+    }).join('');
+
+    // X축 라벨
+    const xLabels = [];
+    const firstDate = new Date(values[0].t);
+    const lastDate = new Date(values[values.length - 1].t);
+    xLabels.push(`<text x="${padL}" y="${H - 4}" font-size="9" fill="#94a3b8" font-weight="600">${firstDate.getMonth()+1}/${firstDate.getDate()}</text>`);
+    xLabels.push(`<text x="${W - padR}" y="${H - 4}" text-anchor="end" font-size="9" fill="#94a3b8" font-weight="600">${lastDate.getMonth()+1}/${lastDate.getDate()}</text>`);
+
+    // 라인 (Path)
+    const points = values.map(p => `${xScale(p.t).toFixed(1)},${yScale(p.v).toFixed(1)}`).join(' L ');
+    const linePath = `M ${points}`;
+
+    // Area (fill below line)
+    const areaPath = `M ${xScale(values[0].t).toFixed(1)},${(padT + chartH).toFixed(1)} L ${points} L ${xScale(values[values.length - 1].t).toFixed(1)},${(padT + chartH).toFixed(1)} Z`;
+
+    // 데이터 포인트
+    const dots = values.map((p, i) => {
+      const x = xScale(p.t).toFixed(1);
+      const y = yScale(p.v).toFixed(1);
+      const isLast = i === values.length - 1;
+      return `
+        <circle cx="${x}" cy="${y}" r="${isLast ? 4 : 2.5}"
+                fill="${isLast ? color : '#fff'}" stroke="${color}" stroke-width="${isLast ? 2 : 1.5}"/>
+      `;
+    }).join('');
+
+    // 통계
+    const stats = this._historyStats(values.map(p => ({ [field]: p.v, t: p.t })), field);
+    const latestV = values[values.length - 1].v;
+    const decimals = (Math.abs(latestV) < 10) ? 1 : 0;
+    const latestStr = latestV.toFixed(decimals);
+    const meanStr = stats.mean.toFixed(decimals);
+
+    // 추세 인디케이터
+    let trendBadge = '';
+    if (stats && Math.abs(stats.trend) >= 3) {
+      const trendUp = stats.trend > 0;
+      const isGood = (invert && !trendUp) || (!invert && trendUp);
+      const trendCls = isGood ? 'good' : 'warn';
+      const arrow = trendUp ? '↑' : '↓';
+      trendBadge = `<span class="trend-badge ${trendCls}">${arrow} ${Math.abs(stats.trend).toFixed(0)}%</span>`;
+    } else if (stats) {
+      trendBadge = `<span class="trend-badge stable">→ 안정</span>`;
+    }
+
+    return `
+      <div class="trend-chart-card">
+        <div class="trend-chart-header">
+          <div class="trend-chart-title">${icon} ${title}</div>
+          ${trendBadge}
+        </div>
+        <div class="trend-chart-stats">
+          <div class="trend-stat">
+            <div class="trend-stat-label">최근</div>
+            <div class="trend-stat-value" style="color:${color}">${latestStr}<span class="trend-stat-unit">${unit}</span></div>
+          </div>
+          <div class="trend-stat">
+            <div class="trend-stat-label">평균</div>
+            <div class="trend-stat-value">${meanStr}<span class="trend-stat-unit">${unit}</span></div>
+          </div>
+          <div class="trend-stat">
+            <div class="trend-stat-label">측정</div>
+            <div class="trend-stat-value">${values.length}<span class="trend-stat-unit">회</span></div>
+          </div>
+        </div>
+        <svg class="trend-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+          ${normalBand}
+          ${yLabels}
+          ${xLabels}
+          <path d="${areaPath}" fill="${color}" opacity="0.10"/>
+          <path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          ${dots}
+        </svg>
+      </div>
+    `;
   },
 
   clearConsole(target) { Console.clear(target); },
