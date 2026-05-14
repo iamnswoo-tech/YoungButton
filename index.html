@@ -574,6 +574,249 @@ body::before {
 }
 
 /* 측정 항목 카드 */
+/* ★ v14.2: 결과 페이지 그래프 카드 (신체지수 스타일) */
+.res-graph-card {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 18px;
+  margin: 0 12px 14px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.res-graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+.res-graph-status {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+.res-graph-status strong {
+  font-weight: 900;
+}
+.res-graph-value {
+  font-size: 28px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+  line-height: 1;
+}
+.res-graph-unit {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.res-graph-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.res-graph-progress {
+  margin-top: 12px;
+}
+.res-graph-progress-track {
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.res-graph-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .8s cubic-bezier(.25, .46, .45, .94);
+}
+.res-graph-progress-meta {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* 카테고리 막대 그래프 */
+.cat-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cat-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cat-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 92px;
+  flex: 0 0 auto;
+}
+.cat-bar-icon { font-size: 16px; line-height: 1; }
+.cat-bar-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+}
+.cat-bar-track {
+  flex: 1;
+  height: 22px;
+  background: var(--bg);
+  border-radius: 11px;
+  overflow: hidden;
+  position: relative;
+}
+.cat-bar-fill {
+  height: 100%;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px;
+  transition: width .8s cubic-bezier(.25, .46, .45, .94);
+  min-width: 22px;
+}
+.cat-bar-score {
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.3);
+}
+.cat-bar-status {
+  font-size: 10px;
+  font-weight: 800;
+  width: 32px;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+/* ★ v14.2: 미니 카드 그리드 (3열) */
+.res-mini-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 12px 14px;
+}
+.res-mini-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  transition: transform .12s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  box-shadow: var(--shadow);
+}
+.res-mini-card:active { transform: scale(.97); }
+.res-mini-card.pending {
+  background: var(--bg);
+  border-style: dashed;
+}
+.res-mini-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  margin-bottom: 2px;
+}
+.res-mini-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+}
+.res-mini-score {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.res-mini-pending {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.4;
+}
+.res-mini-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--bg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.res-mini-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width .8s ease;
+}
+.res-mini-bar-fill.pending {
+  width: 100%;
+  background: repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 3px, transparent 3px, transparent 6px);
+}
+.res-mini-meta {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* ★ v14.2: 상세 분석 페이지 CTA */
+.res-detail-cta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 12px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+  border: none;
+  border-radius: 18px;
+  color: #fff;
+  font-family: inherit;
+  cursor: pointer;
+  width: calc(100% - 24px);
+  text-align: left;
+  box-shadow: 0 8px 24px rgba(34, 197, 94, .25);
+  transition: transform .12s;
+}
+.res-detail-cta:active { transform: scale(.98); }
+.res-detail-cta-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  flex: 0 0 auto;
+}
+.res-detail-cta-body { flex: 1; }
+.res-detail-cta-title {
+  font-size: 16px;
+  font-weight: 900;
+  margin-bottom: 3px;
+}
+.res-detail-cta-sub {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: .9;
+}
+.res-detail-cta-arrow {
+  font-size: 28px;
+  font-weight: 800;
+  opacity: .8;
+}
+
 .res-cards {
   display: flex;
   flex-direction: column;
@@ -1669,6 +1912,93 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 }
 
 /* ★ v13.7: 휠 피커 */
+/* ★ v14.2: 2열 그리드 컴팩트 폼 */
+.bc-grid-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.bc-grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bc-grid-item.full {
+  width: 100%;
+  margin-bottom: 12px;
+}
+.bc-label-mini {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  letter-spacing: -.01em;
+}
+
+/* 컴팩트 휠 (mini) */
+.bc-wheel-wrap.mini {
+  height: 108px;
+  border-radius: 12px;
+}
+.bc-wheel-wrap.mini .bc-wheel-list {
+  padding: 36px 0;
+}
+.bc-wheel-wrap.mini .bc-wheel-item {
+  height: 36px;
+  font-size: 15px;
+}
+.bc-wheel-wrap.mini .bc-wheel-item.far { font-size: 11px; }
+.bc-wheel-wrap.mini .bc-wheel-item.near { font-size: 13px; }
+.bc-wheel-wrap.mini .bc-wheel-item.selected { font-size: 20px; }
+.bc-wheel-wrap.mini .bc-wheel-mask { height: 36px; }
+.bc-wheel-wrap.mini .bc-wheel-selector {
+  height: 36px;
+  left: 6px;
+  right: 36px;
+}
+.bc-wheel-unit.mini {
+  right: 10px;
+  font-size: 11px;
+}
+
+/* 컴팩트 성별 버튼 */
+.bc-gender.mini {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 108px;
+}
+.bc-gender.mini .bc-gender-btn {
+  flex: 1;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all .15s;
+}
+.bc-gender.mini .bc-gender-btn.on {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary-dark);
+}
+.bc-gender.mini .bc-gender-btn:active {
+  transform: scale(0.97);
+}
+.bc-gender-icon {
+  font-size: 18px;
+}
+
 .bc-wheel-wrap {
   position: relative;
   display: flex;
@@ -2380,7 +2710,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v14.1 · 처방</span>
+  <span class="hd-ver">v14.2 · 차트</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -2880,50 +3210,61 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     </div>
 
     <div class="bc-form">
-      <!-- ★ v13.7: 휠 피커 + 단위 전환 -->
-      <div class="bc-input-row wheel">
-        <label class="bc-label">키</label>
-        <div class="bc-wheel-wrap">
-          <div class="bc-wheel" id="bc-height-wheel" data-min="120" data-max="220" data-step="1" data-default="170"></div>
-          <div class="bc-wheel-unit">cm</div>
+      <!-- ★ v14.2: 2열 그리드 - 컴팩트 휠 피커 -->
+      <!-- 1행: 나이 + 성별 -->
+      <div class="bc-grid-row">
+        <div class="bc-grid-item">
+          <label class="bc-label-mini">나이</label>
+          <div class="bc-wheel-wrap mini">
+            <div class="bc-wheel" id="bc-age-wheel" data-min="10" data-max="100" data-step="1" data-default="35"></div>
+            <div class="bc-wheel-unit mini">세</div>
+          </div>
+        </div>
+        <div class="bc-grid-item">
+          <label class="bc-label-mini">성별</label>
+          <div class="bc-gender mini">
+            <button type="button" class="bc-gender-btn" data-gender="male" onclick="App.bcSelectGender('male')">
+              <span class="bc-gender-icon">👨</span>
+              <span>남성</span>
+            </button>
+            <button type="button" class="bc-gender-btn" data-gender="female" onclick="App.bcSelectGender('female')">
+              <span class="bc-gender-icon">👩</span>
+              <span>여성</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="bc-input-row wheel">
-        <label class="bc-label">체중</label>
-        <div class="bc-wheel-wrap">
-          <div class="bc-wheel" id="bc-weight-wheel" data-min="30" data-max="180" data-step="1" data-default="65"></div>
-          <div class="bc-wheel-unit">kg</div>
+      <!-- 2행: 키 + 체중 -->
+      <div class="bc-grid-row">
+        <div class="bc-grid-item">
+          <label class="bc-label-mini">키</label>
+          <div class="bc-wheel-wrap mini">
+            <div class="bc-wheel" id="bc-height-wheel" data-min="120" data-max="220" data-step="1" data-default="170"></div>
+            <div class="bc-wheel-unit mini">cm</div>
+          </div>
+        </div>
+        <div class="bc-grid-item">
+          <label class="bc-label-mini">체중</label>
+          <div class="bc-wheel-wrap mini">
+            <div class="bc-wheel" id="bc-weight-wheel" data-min="30" data-max="180" data-step="1" data-default="65"></div>
+            <div class="bc-wheel-unit mini">kg</div>
+          </div>
         </div>
       </div>
 
-      <div class="bc-input-row wheel">
-        <label class="bc-label">
-          허리둘레
+      <!-- 3행: 허리둘레 (단독, 단위 토글) -->
+      <div class="bc-grid-item full">
+        <label class="bc-label-mini">
+          <span>허리둘레</span>
           <div class="bc-unit-toggle">
             <button type="button" class="bc-unit-btn on" data-unit="cm" onclick="App.bcSwitchWaistUnit('cm')">cm</button>
             <button type="button" class="bc-unit-btn" data-unit="inch" onclick="App.bcSwitchWaistUnit('inch')">inch</button>
           </div>
         </label>
-        <div class="bc-wheel-wrap">
+        <div class="bc-wheel-wrap mini">
           <div class="bc-wheel" id="bc-waist-wheel" data-min="50" data-max="150" data-step="1" data-default="80"></div>
-          <div class="bc-wheel-unit" id="bc-waist-unit">cm</div>
-        </div>
-      </div>
-
-      <div class="bc-input-row">
-        <label class="bc-label">성별</label>
-        <div class="bc-gender">
-          <button type="button" class="bc-gender-btn" data-gender="male" onclick="App.bcSelectGender('male')">남성</button>
-          <button type="button" class="bc-gender-btn" data-gender="female" onclick="App.bcSelectGender('female')">여성</button>
-        </div>
-      </div>
-
-      <div class="bc-input-row wheel">
-        <label class="bc-label">나이</label>
-        <div class="bc-wheel-wrap">
-          <div class="bc-wheel" id="bc-age-wheel" data-min="10" data-max="100" data-step="1" data-default="35"></div>
-          <div class="bc-wheel-unit">세</div>
+          <div class="bc-wheel-unit mini" id="bc-waist-unit">cm</div>
         </div>
       </div>
 
@@ -2960,6 +3301,18 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div id="results-dashboard"></div>
 </div>
 
+<!-- ★ v14.2: 상세 분석 페이지 (결과 페이지에서 진입) -->
+<div class="page" id="page-detail">
+  <div class="back-bar">
+    <button class="back-btn" type="button" onclick="App.goPage('results')">←</button>
+    <div>
+      <div class="page-title">📋 상세 분석 & 맞춤 처방</div>
+      <div class="page-subtitle">건강 해석 + 운동·식단 추천</div>
+    </div>
+  </div>
+  <div id="detail-dashboard"></div>
+</div>
+
 <!-- BOTTOM NAV -->
 <nav class="bottom-nav">
   <button class="nav-btn on" id="nav-home" type="button" onclick="App.goPage('home')">
@@ -2983,7 +3336,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
     rPPG 엔진: <a href="https://github.com/Health-HCI-Group/ME-rPPG-demo" target="_blank" style="color:var(--primary);text-decoration:none">ME-rPPG</a> (Apache 2.0)<br>
-    🚀 Reset Button - SeungWoo ‍🚀
+    🚀 Reset Button - SeungWoo ‍🚀<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>

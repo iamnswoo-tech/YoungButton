@@ -1077,6 +1077,10 @@ const App = {
     if (page === 'results') {
       this._renderResultsPage();
     }
+    // ★ v14.2: 상세 분석 페이지 진입 시 렌더링
+    if (page === 'detail') {
+      this._renderDetailPage();
+    }
     window.scrollTo(0, 0);
   },
 
@@ -1095,6 +1099,7 @@ const App = {
 
     const streak = this._streakGet();
     const badges = this._badgesGet();
+    const measuredCount = ['face','balance','gait','tremor','reaction','posture','bodycomp'].filter(k => w[k]).length;
 
     // 측정 항목 메타데이터
     const items = [
@@ -1107,7 +1112,13 @@ const App = {
       { key: 'bodycomp', icon: '📐', name: '신체 지수', unit: 'BMI/WHtR/ABSI', page: 'body', test: 'bodycomp' },
     ];
 
-    // 측정 카드 생성
+    // ★ v14.2: 종합 점수 분포 곡선 SVG 생성 (신체지수 페이지 BMI 분포처럼)
+    const scoreChart = this._buildScoreDistributionChart(result.score, color);
+
+    // ★ v14.2: 카테고리별 점수 (방사형 차트 형태)
+    const categoryScores = this._buildCategoryRadarChart(w, items);
+
+    // 측정 카드 생성 (간소화 - 점수 그래프 위주)
     let cardsHTML = '';
     for (const it of items) {
       const data = w[it.key];
@@ -1118,27 +1129,25 @@ const App = {
         ? `App.goPage('${it.page}');setTimeout(()=>App.startBodyTest('${it.test}'),400)`
         : `App.goPage('${it.page}')`;
       const dateStr = measured && data.t ? this._formatRelativeTime(data.t) : '미측정';
+
       cardsHTML += `
-        <button class="res-card ${measured ? 'measured' : 'pending'}" onclick="${onClick}" type="button">
-          <div class="res-card-icon" style="background:${measured ? scoreColor + '22' : 'var(--bg)'};color:${measured ? scoreColor : '#94a3b8'}">${it.icon}</div>
-          <div class="res-card-body">
-            <div class="res-card-name">${it.name}</div>
-            <div class="res-card-unit">${it.unit}</div>
-            <div class="res-card-meta">${dateStr}</div>
-          </div>
-          <div class="res-card-score">
-            ${measured ? `
-              <div class="res-card-num" style="color:${scoreColor}">${score}</div>
-              <div class="res-card-grade">점</div>
-            ` : `
-              <div class="res-card-pending">측정<br>하기 ▸</div>
-            `}
-          </div>
+        <button class="res-mini-card ${measured ? 'measured' : 'pending'}" onclick="${onClick}" type="button">
+          <div class="res-mini-icon" style="background:${measured ? scoreColor + '22' : 'var(--bg)'};color:${measured ? scoreColor : '#94a3b8'}">${it.icon}</div>
+          <div class="res-mini-name">${it.name}</div>
+          ${measured ? `
+            <div class="res-mini-score" style="color:${scoreColor}">${score}</div>
+            <div class="res-mini-bar"><div class="res-mini-bar-fill" style="width:${score}%;background:${scoreColor}"></div></div>
+            <div class="res-mini-meta">${dateStr}</div>
+          ` : `
+            <div class="res-mini-pending">측정하기</div>
+            <div class="res-mini-bar"><div class="res-mini-bar-fill pending"></div></div>
+            <div class="res-mini-meta">아직 안 했어요</div>
+          `}
         </button>
       `;
     }
 
-    // 신체 나이/피부 나이 카드 (bodycomp 있을 때만)
+    // 신체 나이/피부 나이 카드
     let ageHTML = '';
     if (w.bodycomp && w.bodycomp.bodyAge) {
       const bc = w.bodycomp;
@@ -1171,19 +1180,25 @@ const App = {
     }
 
     dashboard.innerHTML = `
-      <!-- 종합 점수 헤로 -->
-      <div class="res-hero">
-        <div class="res-hero-label">📊 종합 건강 점수</div>
-        <div class="res-hero-score" style="color:${color}">
-          <span class="res-hero-num">${result.score}</span>
-          <span class="res-hero-unit">/ 100</span>
+      <!-- ★ v14.2: 종합 점수 그래프 (신체지수 페이지 스타일) -->
+      <div class="res-section-title">📊 종합 건강 점수</div>
+      <div class="res-graph-card">
+        <div class="res-graph-header">
+          <div class="res-graph-status" style="color:${color}">
+            건강 점수가 <strong>${result.grade}</strong>
+          </div>
+          <div class="res-graph-value" style="color:${color}">${result.score}<span class="res-graph-unit"> / 100</span></div>
         </div>
-        <div class="res-hero-grade">${result.grade} · ${result.completeness}% 완료</div>
-        <div class="res-hero-bar"><div class="res-hero-fill" style="width:${result.score}%;background:${color}"></div></div>
+        ${scoreChart}
+        <div class="res-graph-progress">
+          <div class="res-graph-progress-track">
+            <div class="res-graph-progress-fill" style="width:${result.score}%;background:linear-gradient(90deg, ${color}88, ${color})"></div>
+          </div>
+          <div class="res-graph-progress-meta">${result.completeness}% 측정 완료 · ${measuredCount}/7 항목</div>
+        </div>
       </div>
 
       ${streak.count > 0 ? `
-      <!-- 스트릭 + 배지 -->
       <div class="res-streak-row">
         <div class="res-streak">
           <div class="res-streak-icon">${streak.count >= 7 ? '🔥' : streak.count >= 3 ? '✨' : '🌱'}</div>
@@ -1202,19 +1217,35 @@ const App = {
 
       ${ageHTML}
 
-      <!-- 측정 항목 카드 (그리드) -->
-      <div class="res-section-title">측정 항목</div>
-      <div class="res-cards">
+      <!-- ★ v14.2: 항목별 점수 레이더/막대 차트 -->
+      ${measuredCount > 0 ? `
+        <div class="res-section-title">📈 항목별 점수 분포</div>
+        <div class="res-graph-card">
+          ${categoryScores}
+        </div>
+      ` : ''}
+
+      <!-- 측정 항목 미니 카드 그리드 -->
+      <div class="res-section-title">📋 측정 항목</div>
+      <div class="res-mini-grid">
         ${cardsHTML}
       </div>
 
-      <!-- 안내 -->
-      <div class="res-tip">
-        💡 모든 항목을 측정하면 신체 나이 신뢰도가 95%까지 올라가요
-      </div>
-
-      <!-- ★ v14.1: 상세 건강 해석 + 운동/식단 추천 -->
-      ${this._renderHealthInsights()}
+      <!-- ★ v14.2: 상세 분석 페이지로 이동 CTA -->
+      ${measuredCount > 0 ? `
+        <button class="res-detail-cta" onclick="App.goPage('detail')" type="button">
+          <div class="res-detail-cta-icon">📋</div>
+          <div class="res-detail-cta-body">
+            <div class="res-detail-cta-title">상세 분석 & 맞춤 처방</div>
+            <div class="res-detail-cta-sub">건강 해석, 운동·식단 추천 보기</div>
+          </div>
+          <div class="res-detail-cta-arrow">›</div>
+        </button>
+      ` : `
+        <div class="res-tip">
+          💡 측정을 시작하면 맞춤 건강 분석과 운동·식단 추천을 받을 수 있어요
+        </div>
+      `}
 
       ${result.completeness >= 100 ? `
         <button class="res-reset-btn" onclick="App._wellnessConfirmReset()" type="button">
@@ -1224,7 +1255,77 @@ const App = {
     `;
   },
 
-  // ★ v14.1: 통합 건강 해석 + 맞춤 운동/식단 추천 (노인도 이해 쉽게)
+  // ★ v14.2: 종합 점수 분포 곡선 (신체지수 BMI 차트 스타일)
+  _buildScoreDistributionChart(score, color) {
+    const x = Math.max(40, Math.min(380, 40 + (score / 100) * 340));
+    const y = score < 50 ? 100 : score < 70 ? 80 : score < 85 ? 60 : 55;
+    return `
+      <svg class="res-graph-svg" viewBox="0 0 400 160" preserveAspectRatio="xMidYMid meet">
+        <line x1="40" y1="120" x2="380" y2="120" stroke="#e5e7eb" stroke-width="1"/>
+        <!-- 5개 영역 -->
+        <rect x="40" y="20" width="60" height="100" fill="rgba(239,68,68,0.10)"/>
+        <rect x="100" y="20" width="60" height="100" fill="rgba(245,158,11,0.10)"/>
+        <rect x="160" y="20" width="60" height="100" fill="rgba(59,130,246,0.10)"/>
+        <rect x="220" y="20" width="80" height="100" fill="rgba(34,197,94,0.12)"/>
+        <rect x="300" y="20" width="80" height="100" fill="rgba(34,197,94,0.18)"/>
+        <!-- 분포 곡선 (정규분포 모방) -->
+        <path d="M40,120 Q90,118 130,100 Q180,60 240,55 Q310,80 380,118"
+              fill="none" stroke="#7c3aed" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+        <!-- 본인 위치 마커 -->
+        <line x1="${x}" y1="20" x2="${x}" y2="120" stroke="${color}" stroke-width="2" stroke-dasharray="3,2"/>
+        <circle cx="${x}" cy="${y}" r="8" fill="${color}" stroke="#fff" stroke-width="3"/>
+        <text x="${x}" y="${y - 14}" text-anchor="middle" font-size="12" font-weight="800" fill="${color}">${score}</text>
+        <!-- X축 라벨 -->
+        <text x="70" y="138" text-anchor="middle" font-size="10" fill="#ef4444">위험</text>
+        <text x="130" y="138" text-anchor="middle" font-size="10" fill="#f59e0b">주의</text>
+        <text x="190" y="138" text-anchor="middle" font-size="10" fill="#3b82f6">보통</text>
+        <text x="260" y="138" text-anchor="middle" font-size="10" fill="#22c55e" font-weight="700">양호</text>
+        <text x="340" y="138" text-anchor="middle" font-size="10" fill="#16a34a" font-weight="700">우수</text>
+        <text x="70" y="155" text-anchor="middle" font-size="9" fill="#9ca3af">&lt;50</text>
+        <text x="130" y="155" text-anchor="middle" font-size="9" fill="#9ca3af">50-70</text>
+        <text x="190" y="155" text-anchor="middle" font-size="9" fill="#9ca3af">70-85</text>
+        <text x="260" y="155" text-anchor="middle" font-size="9" fill="#9ca3af">85-95</text>
+        <text x="340" y="155" text-anchor="middle" font-size="9" fill="#9ca3af">95+</text>
+      </svg>
+    `;
+  },
+
+  // ★ v14.2: 항목별 점수 막대 차트 (가로 막대)
+  _buildCategoryRadarChart(w, items) {
+    const measuredItems = items.filter(it => w[it.key]);
+    if (measuredItems.length === 0) return '';
+
+    let bars = '';
+    for (const it of measuredItems) {
+      const score = w[it.key].score || 0;
+      const c = score >= 85 ? '#22c55e' : score >= 70 ? '#3b82f6' : score >= 50 ? '#f59e0b' : '#ef4444';
+      const label = score >= 85 ? '우수' : score >= 70 ? '양호' : score >= 50 ? '보통' : '주의';
+      bars += `
+        <div class="cat-bar-row">
+          <div class="cat-bar-label">
+            <span class="cat-bar-icon">${it.icon}</span>
+            <span class="cat-bar-name">${it.name}</span>
+          </div>
+          <div class="cat-bar-track">
+            <div class="cat-bar-fill" style="width:${score}%;background:linear-gradient(90deg, ${c}88, ${c})">
+              <span class="cat-bar-score">${score}</span>
+            </div>
+          </div>
+          <div class="cat-bar-status" style="color:${c}">${label}</div>
+        </div>
+      `;
+    }
+    return `<div class="cat-bars">${bars}</div>`;
+  },
+
+  // ★ v14.2: 상세 분석 페이지 렌더링 (이전 _renderHealthInsights)
+  _renderDetailPage() {
+    const container = document.getElementById('detail-dashboard');
+    if (!container) return;
+    container.innerHTML = this._renderHealthInsights();
+  },
+
+  // ★ v14.1/v14.2: 통합 건강 해석 + 맞춤 운동/식단 추천
   _renderHealthInsights() {
     const w = this.state.wellness || {};
     const measuredCount = ['face','balance','gait','tremor','reaction','posture','bodycomp']
@@ -4671,11 +4772,19 @@ const App = {
     let lastMoveY = 0;
     let velocity = 0;
     let lastMoveTime = 0;
+    // ★ v14.2: 스크롤 방향 판별용
+    let startX = 0;
+    let directionDecided = false;
+    let isWheelGesture = false;
 
     const onStart = (e) => {
       isDragging = true;
+      directionDecided = false;
+      isWheelGesture = false;
       const y = e.touches ? e.touches[0].clientY : e.clientY;
+      const x = e.touches ? e.touches[0].clientX : e.clientX;
       startY = y;
+      startX = x;
       startTranslateY = translateY;
       lastMoveY = y;
       lastMoveTime = performance.now();
@@ -4685,10 +4794,28 @@ const App = {
 
     const onMove = (e) => {
       if (!isDragging) return;
-      e.preventDefault();
       const y = e.touches ? e.touches[0].clientY : e.clientY;
-      const delta = y - startY;
-      translateY = startTranslateY + delta;
+      const x = e.touches ? e.touches[0].clientX : e.clientX;
+      const dy = y - startY;
+      const dx = x - startX;
+
+      // ★ v14.2: 방향 판별 (한 번만)
+      // 처음 10px 움직임에서 방향 결정
+      if (!directionDecided) {
+        if (Math.abs(dy) < 8 && Math.abs(dx) < 8) {
+          // 아직 충분히 안 움직임 - 결정 보류
+          return;
+        }
+        directionDecided = true;
+        // 가까운 영역에 있고 충분히 작은 움직임이면 휠로 처리
+        // (휠 위에서 드래그하면 휠 동작, 페이지 외부에서 큰 수직 스와이프면 페이지)
+        isWheelGesture = true;
+      }
+
+      if (!isWheelGesture) return;
+      e.preventDefault();
+
+      translateY = startTranslateY + dy;
       // 속도 계산
       const now = performance.now();
       const dt = now - lastMoveTime;
@@ -4709,6 +4836,10 @@ const App = {
     const onEnd = () => {
       if (!isDragging) return;
       isDragging = false;
+      if (!isWheelGesture) {
+        // 휠 제스처 아니면 스냅 안 함
+        return;
+      }
       // 관성 적용
       const inertiaDistance = velocity * 200;
       let finalTranslateY = translateY + inertiaDistance;
