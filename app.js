@@ -1321,6 +1321,9 @@ const App = {
 
       ${ageHTML}
 
+      <!-- ★ v14.4: 평소 대비 변화 카드 (얼굴 측정 baseline 비교) -->
+      ${this._renderBaselineComparisonCard(w)}
+
       <!-- ★ v14.2: 항목별 점수 레이더/막대 차트 -->
       ${measuredCount > 0 ? `
         <div class="res-section-title">📈 항목별 점수 분포</div>
@@ -1366,6 +1369,122 @@ const App = {
           🔄 전체 측정 초기화
         </button>
       ` : ''}
+    `;
+  },
+
+  // ★ v14.4: 결과 페이지의 평소 대비 변화 카드
+  _renderBaselineComparisonCard(w) {
+    if (!w.face) return '';
+
+    const history = this._historyGet('face');
+    if (history.length < 4) {
+      // 4회 미만이면 baseline 부족
+      const need = 4 - history.length;
+      return `
+        <div class="baseline-need-card">
+          <div class="baseline-need-icon">📊</div>
+          <div class="baseline-need-text">
+            <div class="baseline-need-title">평소 대비 분석 준비 중</div>
+            <div class="baseline-need-sub">${need}회 더 측정하면 본인 평소와 비교한 정확한 분석이 가능해요</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // 최신 1회 제외한 과거 평균
+    const latest = history[history.length - 1];
+    const pastHistory = history.slice(0, -1);
+    const hrStats = this._historyStats(pastHistory, 'hr');
+    const rmssdStats = this._historyStats(pastHistory, 'rmssd');
+    const stressStats = this._historyStats(pastHistory, 'stressLevel');
+
+    // 변화 평가
+    const metrics = [];
+    if (hrStats && latest.hr != null) {
+      const diff = latest.hr - hrStats.mean;
+      const pct = (diff / hrStats.mean) * 100;
+      metrics.push({
+        icon: '💗',
+        name: '심박수',
+        latest: latest.hr,
+        baseline: Math.round(hrStats.mean),
+        unit: 'BPM',
+        diff,
+        pct,
+        // HR은 평소보다 낮을수록 좋음 (이완)
+        cls: Math.abs(pct) < 3 ? 'stable' : pct < 0 ? 'good' : pct > 10 ? 'warn' : 'normal',
+        label: Math.abs(pct) < 3 ? '평소 수준' : pct < 0 ? '평소보다 낮음' : '평소보다 높음',
+      });
+    }
+    if (rmssdStats && latest.rmssd != null) {
+      const diff = latest.rmssd - rmssdStats.mean;
+      const pct = (diff / rmssdStats.mean) * 100;
+      metrics.push({
+        icon: '✨',
+        name: 'HRV',
+        latest: latest.rmssd,
+        baseline: Math.round(rmssdStats.mean),
+        unit: 'ms',
+        diff,
+        pct,
+        // RMSSD는 평소보다 높을수록 좋음 (회복)
+        cls: Math.abs(pct) < 5 ? 'stable' : pct > 0 ? 'good' : pct < -15 ? 'warn' : 'normal',
+        label: Math.abs(pct) < 5 ? '평소 수준' : pct > 0 ? '평소보다 좋음' : '평소보다 낮음',
+      });
+    }
+    if (stressStats && latest.stressLevel != null) {
+      const diff = latest.stressLevel - stressStats.mean;
+      metrics.push({
+        icon: '😌',
+        name: '스트레스',
+        latest: latest.stressLevel,
+        baseline: stressStats.mean.toFixed(1),
+        unit: '/5',
+        diff,
+        pct: 0,
+        // 스트레스는 낮을수록 좋음
+        cls: Math.abs(diff) < 0.3 ? 'stable' : diff < 0 ? 'good' : diff > 0.7 ? 'warn' : 'normal',
+        label: Math.abs(diff) < 0.3 ? '평소 수준' : diff < 0 ? '평소보다 좋음' : '평소보다 높음',
+        isStress: true,
+      });
+    }
+
+    if (metrics.length === 0) return '';
+
+    const cardsHTML = metrics.map(m => {
+      const arrow = m.isStress
+        ? (m.diff > 0.3 ? '↑' : m.diff < -0.3 ? '↓' : '→')
+        : (m.pct > 3 ? '↑' : m.pct < -3 ? '↓' : '→');
+      const changeText = m.isStress
+        ? (Math.abs(m.diff) < 0.3 ? '비슷' : `${arrow} ${Math.abs(m.diff).toFixed(1)}단계`)
+        : (Math.abs(m.pct) < 3 ? '비슷' : `${arrow} ${Math.abs(m.pct).toFixed(0)}%`);
+
+      return `
+        <div class="baseline-metric ${m.cls}">
+          <div class="baseline-metric-header">
+            <span class="baseline-metric-icon">${m.icon}</span>
+            <span class="baseline-metric-name">${m.name}</span>
+          </div>
+          <div class="baseline-metric-row">
+            <div class="baseline-metric-value">
+              <div class="baseline-metric-now">${m.latest}<span class="baseline-metric-unit">${m.unit}</span></div>
+              <div class="baseline-metric-vs">평소 ${m.baseline}${m.unit}</div>
+            </div>
+            <div class="baseline-metric-change">
+              <div class="baseline-metric-arrow">${arrow}</div>
+              <div class="baseline-metric-label">${m.label}</div>
+              <div class="baseline-metric-pct">${changeText}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="res-section-title">📊 평소 대비 변화 <span class="res-section-sub">(지난 ${pastHistory.length}회 평균 기준)</span></div>
+      <div class="baseline-grid">
+        ${cardsHTML}
+      </div>
     `;
   },
 
@@ -3947,6 +4066,22 @@ const App = {
       } else {
         cmt = '심박수가 빠른 편입니다 (120 이상). 충분히 휴식한 뒤 다시 측정해보세요.';
       }
+      // ★ v14.4: 개인 baseline 비교 추가
+      const history = this._historyGet('face');
+      const pastHistory = history.slice(0, -1);
+      const hrStats = pastHistory.length >= 3 ? this._historyStats(pastHistory, 'hr') : null;
+      if (hrStats && hrStats.count >= 3) {
+        const baseline = hrStats.mean;
+        const diff = r.hr - baseline;
+        const diffPct = (diff / baseline) * 100;
+        if (Math.abs(diff) < 3) {
+          cmt += ` 평소(${Math.round(baseline)}BPM)와 비슷한 수준이에요.`;
+        } else if (diff > 0) {
+          cmt += ` 평소(${Math.round(baseline)}BPM)보다 ${Math.round(diff)}BPM (${Math.round(diffPct)}%) 빨라요. ${diffPct > 10 ? '카페인·스트레스·수면 부족을 점검해보세요.' : ''}`;
+        } else {
+          cmt += ` 평소(${Math.round(baseline)}BPM)보다 ${Math.abs(Math.round(diff))}BPM (${Math.abs(Math.round(diffPct))}%) 느려요. 컨디션이 안정적입니다.`;
+        }
+      }
       setComment('fr-hr-cmt', cmt, '');
     } else {
       setComment('fr-hr-cmt', '심박수를 측정할 수 없었습니다.');
@@ -3979,28 +4114,74 @@ const App = {
     }
 
     if (r.rmssd) {
-      // ★ Task Force 1996 / Shaffer 2017 임상 표준
-      // 안정 시 단기 (5분) RMSSD 정상 범위: 19~75ms (평균 42ms)
-      // v13.6: ECG-equivalent 변환값 표시 (rPPG raw → ECG 환산)
+      // ★ v14.4: 개인 baseline 비교 시스템
+      // 절대값 임계값 대신 본인 평균 대비 변화로 평가
+      // 자료 권장: "personalized baseline correction"
       document.getElementById('fr-hv-val').textContent = r.rmssd;
       setArc('fr-hv-arc', r.rmssd, 10, 80);
-      const cls = r.rmssd<19?'bad':r.rmssd<=75?'normal':'high';
-      const lbl = r.rmssd<19?'낮음':r.rmssd<=42?'정상':r.rmssd<=75?'양호':'매우 높음';
-      setBadge('fr-hv-badge', lbl, cls);
-      let cmt;
-      if (r.rmssd < 12) {
-        cmt = '심박변이도가 매우 낮습니다 (12 미만). 만성 스트레스, 피로 누적, 자율신경 불균형이 의심됩니다. 충분한 휴식과 재측정을 권합니다.';
-      } else if (r.rmssd < 19) {
-        cmt = '심박변이도가 임상 정상 범위(19~75ms) 미만입니다. 일시적 스트레스 또는 피로 상태일 수 있습니다.';
-      } else if (r.rmssd <= 42) {
-        cmt = '심박변이도가 임상 정상 범위 안에 있습니다 (정상 평균: 42ms). 자율신경이 안정적입니다.';
-      } else if (r.rmssd <= 75) {
-        cmt = '심박변이도가 양호합니다 (정상 범위 상위). 부교감신경(이완)이 우세한 건강한 상태입니다.';
+
+      // 본인 히스토리에서 baseline 계산 (현재 측정 제외)
+      const history = this._historyGet('face');
+      const pastHistory = history.slice(0, -1); // 방금 저장된 것 제외
+      const rmssdStats = pastHistory.length >= 3 ? this._historyStats(pastHistory, 'rmssd') : null;
+
+      let cls, lbl, cmt;
+
+      if (rmssdStats && rmssdStats.count >= 3) {
+        // ✅ 개인 baseline 있음 — 본인 평균 대비 평가
+        const baseline = rmssdStats.mean;
+        const std = Math.max(rmssdStats.std, 3); // 최소 3ms 표준편차
+        const zScore = (r.rmssd - baseline) / std;
+        const changePercent = ((r.rmssd - baseline) / baseline) * 100;
+
+        if (zScore < -1.5) {
+          // 평소보다 크게 낮음 = 스트레스/피로 신호
+          cls = 'bad';
+          lbl = '평소보다 낮음';
+          cmt = `평소(${Math.round(baseline)}ms)보다 ${Math.abs(Math.round(changePercent))}% 낮은 ${r.rmssd}ms입니다. 피로, 스트레스, 수면 부족 등이 영향을 줄 수 있어요. 충분한 휴식 후 재측정해보세요.`;
+        } else if (zScore < -0.7) {
+          // 평소보다 약간 낮음
+          cls = 'normal';
+          lbl = '평소보다 약간 낮음';
+          cmt = `평소(${Math.round(baseline)}ms)보다 약간 낮은 ${r.rmssd}ms입니다. 컨디션을 점검해보세요.`;
+        } else if (zScore < 0.7) {
+          // 평소와 비슷함
+          cls = 'normal';
+          lbl = '평소 수준';
+          cmt = `평소 수준(${Math.round(baseline)}ms 평균)에서 ${r.rmssd}ms입니다. 자율신경이 본인 정상 범위에 있어요.`;
+        } else if (zScore < 1.5) {
+          // 평소보다 약간 높음 = 좋은 신호
+          cls = 'normal';
+          lbl = '평소보다 좋음';
+          cmt = `평소(${Math.round(baseline)}ms)보다 ${Math.round(changePercent)}% 높은 ${r.rmssd}ms입니다. 자율신경 회복이 좋아 컨디션이 좋은 상태입니다.`;
+        } else {
+          // 평소보다 크게 높음
+          cls = 'high';
+          lbl = '평소보다 매우 좋음';
+          cmt = `평소(${Math.round(baseline)}ms)보다 훨씬 높은 ${r.rmssd}ms입니다. 깊은 이완 상태이거나 측정 노이즈일 수 있어요. 깊은 휴식 직후라면 좋은 신호입니다.`;
+        }
+        cmt += ` (지난 ${rmssdStats.count}회 측정 평균 기준)`;
       } else {
-        cmt = '심박변이도가 매우 높습니다 (75 초과). 깊은 이완 상태이거나 측정 노이즈 가능성. 재측정을 권합니다.';
+        // ❌ baseline 부족 — 임상 절대값 기준 (기존 로직)
+        cls = r.rmssd<19?'bad':r.rmssd<=75?'normal':'high';
+        lbl = r.rmssd<19?'낮음':r.rmssd<=42?'정상':r.rmssd<=75?'양호':'매우 높음';
+        if (r.rmssd < 12) {
+          cmt = '심박변이도가 매우 낮습니다 (12 미만). 만성 스트레스, 피로 누적, 자율신경 불균형이 의심됩니다. 충분한 휴식과 재측정을 권합니다.';
+        } else if (r.rmssd < 19) {
+          cmt = '심박변이도가 임상 정상 범위(19~75ms) 미만입니다. 일시적 스트레스 또는 피로 상태일 수 있습니다.';
+        } else if (r.rmssd <= 42) {
+          cmt = '심박변이도가 임상 정상 범위 안에 있습니다 (정상 평균: 42ms).';
+        } else if (r.rmssd <= 75) {
+          cmt = '심박변이도가 양호합니다 (정상 범위 상위).';
+        } else {
+          cmt = '심박변이도가 매우 높습니다 (75 초과). 깊은 이완 상태이거나 측정 노이즈 가능성.';
+        }
+        const remaining = 3 - (rmssdStats?.count || 0);
+        cmt += ` (앞으로 ${remaining}회 더 측정하면 본인 평균과 비교 가능해요)`;
       }
-      // v13.6: 측정 방식 투명성
-      cmt += ' (※ rPPG 측정값을 ECG 환산하여 표시합니다)';
+
+      cmt += ' ※ rPPG 측정값을 ECG 환산하여 표시합니다.';
+      setBadge('fr-hv-badge', lbl, cls);
       setComment('fr-hv-cmt', cmt, '');
     } else {
       document.getElementById('fr-hv-val').textContent = '--';
@@ -4032,12 +4213,33 @@ const App = {
       const cls = stress5<=2?'normal':stress5<=3?'high':'bad';
       const lbl = stress5<=2?'이완':stress5<=3?'보통':'스트레스';
       setBadge('fr-st-badge', lbl, cls);
+
+      // ★ v14.4: 개인 baseline 비교 추가
+      const history = this._historyGet('face');
+      const pastHistory = history.slice(0, -1);
+      const stressStats = pastHistory.length >= 3 ? this._historyStats(pastHistory, 'stressLevel') : null;
+
       let cmt;
-      if (stress5 === 1)      cmt = '매우 이완된 상태입니다 (1/5). 명상이나 깊은 휴식 후 측정한 듯합니다.';
-      else if (stress5 === 2) cmt = '이완 상태입니다 (2/5). 좋은 컨디션입니다.';
-      else if (stress5 === 3) cmt = '평상시 상태입니다 (3/5). 일반적인 자율신경 균형입니다.';
-      else if (stress5 === 4) cmt = '약간 긴장된 상태입니다 (4/5). 잠시 휴식해보세요.';
+      if (stress5 === 1)      cmt = '매우 이완된 상태입니다 (1/5).';
+      else if (stress5 === 2) cmt = '이완 상태입니다 (2/5).';
+      else if (stress5 === 3) cmt = '평상시 상태입니다 (3/5).';
+      else if (stress5 === 4) cmt = '약간 긴장된 상태입니다 (4/5).';
       else                    cmt = '높은 스트레스 상태입니다 (5/5). 심호흡과 휴식이 필요합니다.';
+
+      if (stressStats && stressStats.count >= 3) {
+        const baseline = stressStats.mean;
+        const diff = stress5 - baseline;
+        if (Math.abs(diff) < 0.5) {
+          cmt += ` 평소(${baseline.toFixed(1)}단계)와 비슷한 수준이에요.`;
+        } else if (diff > 0) {
+          cmt += ` 평소(${baseline.toFixed(1)}단계)보다 스트레스가 ${diff > 1 ? '크게 ' : '약간 '}높아진 상태입니다. 휴식을 권합니다.`;
+        } else {
+          cmt += ` 평소(${baseline.toFixed(1)}단계)보다 더 이완된 좋은 상태입니다.`;
+        }
+      } else {
+        const remaining = 3 - (stressStats?.count || 0);
+        cmt += ` (${remaining}회 더 측정하면 본인 평소 대비 비교 가능)`;
+      }
       setComment('fr-st-cmt', cmt, '');
     } else {
       // RMSSD 없으면 스트레스도 무효 — 정확도가 떨어지므로 표시 안 함
@@ -4294,31 +4496,9 @@ const App = {
     let corrected = Math.round(rawRMSSD * correctionFactor);
     console.log(`[RMSSD] ECG 변환: ${rawRMSSD}ms × ${correctionFactor.toFixed(2)} → ${corrected}ms (ratio=${ratio.toFixed(2)}, sqi=${sqi}, snr=${(snr||0).toFixed(1)})`);
 
-    // ★ v13.7: EMA 안정화 - 이전 측정과 가중평균
-    // 24시간 내 이전 측정이 있으면 70% 신규 + 30% 이전 (점진적 변화)
-    // 자료 권장: "personalized baseline correction"의 단순화 구현
-    try {
-      const prevData = JSON.parse(localStorage.getItem('rmssd_history') || '{}');
-      const now = Date.now();
-      if (prevData.value && (now - prevData.t) < 24 * 60 * 60 * 1000) {
-        // 24시간 내 측정 → EMA 적용
-        const alpha = 0.7; // 신규 가중치 (높을수록 빠른 반응)
-        const smoothed = Math.round(alpha * corrected + (1 - alpha) * prevData.value);
-        // 단, 30% 이상 차이는 신호 변화로 인정 (안정화 강제 적용 안 함)
-        const changeRatio = Math.abs(corrected - prevData.value) / prevData.value;
-        if (changeRatio < 0.3) {
-          console.log(`[RMSSD] EMA 안정화: ${corrected}ms → ${smoothed}ms (이전 ${prevData.value}ms, 변화 ${(changeRatio*100).toFixed(0)}%)`);
-          corrected = smoothed;
-        } else {
-          console.log(`[RMSSD] 큰 변화 감지: ${corrected}ms vs 이전 ${prevData.value}ms (${(changeRatio*100).toFixed(0)}%) - EMA 미적용`);
-        }
-      }
-      // 새 값 저장
-      localStorage.setItem('rmssd_history', JSON.stringify({ value: corrected, t: now }));
-    } catch (e) {
-      console.warn('[RMSSD] EMA 적용 실패:', e);
-    }
-
+    // ★ v14.4: EMA 제거 - 실제 변동을 그대로 노출
+    // 이유: EMA가 과도하게 안정화시켜 컨디션 변화를 못 잡아냄
+    // baseline 비교는 _generatePersonalizedAssessment에서 처리
     return corrected;
   },
 

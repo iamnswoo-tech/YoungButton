@@ -1265,6 +1265,135 @@ body::before {
 }
 
 /* ★ v14.3: 시계열 트렌드 페이지 */
+/* ★ v14.4: 평소 대비 baseline 비교 카드 */
+.baseline-need-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 12px 14px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(167, 139, 250, 0.04));
+  border: 1.5px dashed rgba(124, 58, 237, 0.3);
+  border-radius: 14px;
+}
+.baseline-need-icon {
+  font-size: 36px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.baseline-need-text { flex: 1; min-width: 0; }
+.baseline-need-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #6d28d9;
+  margin-bottom: 3px;
+  letter-spacing: -.02em;
+}
+.baseline-need-sub {
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.res-section-sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text3);
+  letter-spacing: -.01em;
+}
+
+.baseline-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 12px 14px;
+}
+.baseline-metric {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--border2);
+}
+.baseline-metric.good { border-left-color: #22c55e; }
+.baseline-metric.warn { border-left-color: #f59e0b; }
+.baseline-metric.stable { border-left-color: #3b82f6; }
+.baseline-metric.normal { border-left-color: #94a3b8; }
+
+.baseline-metric-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.baseline-metric-icon { font-size: 18px; line-height: 1; }
+.baseline-metric-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+
+.baseline-metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.baseline-metric-value { flex: 1; }
+.baseline-metric-now {
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.baseline-metric-unit {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text3);
+  margin-left: 3px;
+}
+.baseline-metric-vs {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.baseline-metric-change {
+  text-align: right;
+  flex: 0 0 auto;
+}
+.baseline-metric-arrow {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+.baseline-metric.good .baseline-metric-arrow { color: #22c55e; }
+.baseline-metric.warn .baseline-metric-arrow { color: #f59e0b; }
+.baseline-metric.stable .baseline-metric-arrow { color: #3b82f6; }
+.baseline-metric.normal .baseline-metric-arrow { color: #94a3b8; }
+.baseline-metric-label {
+  font-size: 11px;
+  font-weight: 800;
+  margin-top: 2px;
+}
+.baseline-metric.good .baseline-metric-label { color: #15803d; }
+.baseline-metric.warn .baseline-metric-label { color: #92400e; }
+.baseline-metric.stable .baseline-metric-label { color: #1d4ed8; }
+.baseline-metric.normal .baseline-metric-label { color: #475569; }
+.baseline-metric-pct {
+  font-size: 10px;
+  color: var(--text3);
+  font-weight: 700;
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
 .trends-period-tabs {
   display: flex;
   gap: 4px;
@@ -2923,7 +3052,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v14.3 · 추이</span>
+  <span class="hd-ver">v14.4 · 개인화</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
