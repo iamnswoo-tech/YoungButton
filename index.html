@@ -1601,6 +1601,291 @@ body::before {
   box-shadow: 0 6px 18px rgba(34, 197, 94, .25);
 }
 
+/* ★ v14.5: 베타 안내 모달 */
+/* ★ v14.5: 디버그 섹션 (개발자만) */
+.debug-section {
+  margin: 14px 12px 80px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(124,58,237,0.06), rgba(167,139,250,0.03));
+  border: 1px dashed rgba(124,58,237,0.3);
+  border-radius: 12px;
+  text-align: center;
+}
+.debug-title {
+  font-size: 11px;
+  color: #6d28d9;
+  font-weight: 800;
+  margin-bottom: 8px;
+  letter-spacing: .02em;
+}
+.debug-btn {
+  padding: 8px 14px;
+  background: rgba(124,58,237,0.15);
+  border: 1px solid rgba(124,58,237,0.3);
+  border-radius: 8px;
+  color: #6d28d9;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.beta-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  transition: opacity .3s;
+}
+.beta-modal.show { opacity: 1; }
+.beta-card {
+  background: var(--card);
+  border-radius: 22px;
+  padding: 28px 24px 22px;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 24px 80px rgba(0,0,0,.4);
+  text-align: center;
+}
+.beta-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #7c3aed, #a78bfa);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 12px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  letter-spacing: .03em;
+}
+.beta-title {
+  font-size: 19px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 12px;
+  letter-spacing: -.02em;
+}
+.beta-msg {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+  margin-bottom: 18px;
+  font-weight: 500;
+}
+.beta-msg strong { color: var(--primary-dark); font-weight: 800; }
+.beta-list {
+  list-style: none;
+  padding: 14px 16px;
+  margin: 0 0 20px;
+  background: var(--bg);
+  border-radius: 12px;
+  text-align: left;
+}
+.beta-list li {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.6;
+  padding: 4px 0;
+  font-weight: 600;
+}
+.beta-list li strong { color: var(--text); font-weight: 800; }
+.beta-btn {
+  padding: 13px 20px;
+  border: none;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .12s;
+  width: 100%;
+}
+.beta-btn.primary {
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(34, 197, 94, .3);
+}
+.beta-btn.secondary {
+  background: var(--bg);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+.beta-btn:active { transform: scale(0.97); }
+
+/* 플로팅 피드백 버튼 */
+.feedback-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 80px; /* nav 위 */
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7c3aed, #a78bfa);
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, .35);
+  z-index: 100;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .15s, box-shadow .15s;
+}
+.feedback-fab:active {
+  transform: scale(0.92);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, .25);
+}
+
+/* 피드백 모달 */
+.feedback-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .3s;
+}
+.feedback-modal.show { opacity: 1; }
+.feedback-card {
+  background: var(--card);
+  border-radius: 24px 24px 0 0;
+  padding: 18px 18px 28px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 -8px 40px rgba(0,0,0,.3);
+  transform: translateY(20px);
+  transition: transform .3s cubic-bezier(.25, .46, .45, .94);
+}
+.feedback-modal.show .feedback-card { transform: translateY(0); }
+
+.feedback-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.feedback-title {
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+}
+.feedback-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.feedback-label {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: -.01em;
+}
+
+.feedback-types {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.feedback-type-btn {
+  padding: 12px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+  text-align: center;
+}
+.feedback-type-btn.on {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary-dark);
+  font-weight: 800;
+}
+.feedback-type-btn:active { transform: scale(0.96); }
+
+.feedback-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+  margin-bottom: 14px;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+.feedback-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.feedback-meta-toggle {
+  padding: 12px 14px;
+  background: var(--bg);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.feedback-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  cursor: pointer;
+}
+.feedback-checkbox-label input { width: 16px; height: 16px; }
+.feedback-meta-detail {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text3);
+  line-height: 1.5;
+  font-weight: 500;
+  padding-left: 24px;
+}
+
+.feedback-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.feedback-footer .beta-btn { flex: 1; }
+
 .tts-fail-toast {
   position: fixed;
   top: -120px;
@@ -3052,7 +3337,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver">v14.4 · 개인화</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v14.5 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -3689,7 +3974,6 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
-    🚀 Reset Button - SeungWoo ‍🚀<br>
     rPPG 엔진: <a href="https://github.com/Health-HCI-Group/ME-rPPG-demo" target="_blank" style="color:var(--primary);text-decoration:none">ME-rPPG</a> (Apache 2.0)<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>

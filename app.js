@@ -1,22 +1,89 @@
 // ════════════════════════════════════════════════════════════════════
-// 건강 측정 v11.0 — 얼굴 rPPG 메인 앱
+// 건강 측정 v14.5 — 얼굴 rPPG 메인 앱
 // 알고리즘: POS (Wang et al. 2017, IEEE TBME) + 다중 ROI
 // ════════════════════════════════════════════════════════════════════
 
-// === 화면 콘솔 (스마트폰 진단용) ===
+// ★ v14.5: 프로덕션 모드 시스템 — 외부 베타 준비
+// URL에 ?debug=1 또는 localStorage에 debug=true 설정 시 디버그 모드
+// 기본은 BETA 모드 (콘솔 출력 최소화, 에러는 자동 수집)
+const APP_MODE = (() => {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get('debug') === '1') return 'debug';
+  try {
+    if (localStorage.getItem('app_debug') === 'true') return 'debug';
+  } catch (e) {}
+  return 'beta';
+})();
+const IS_DEBUG = APP_MODE === 'debug';
+
+// === 화면 콘솔 (스마트폰 진단용) — 디버그 모드에서만 활성 ===
 const Console = {
   buffers: { face: [], body: [] },
   origLog: console.log.bind(console),
   origWarn: console.warn.bind(console),
   origError: console.error.bind(console),
   init() {
-    // 콘솔 메시지를 face/body 모두에 출력 (해당 페이지에 표시)
-    console.log = (...args) => { this.origLog(...args); this._append('face', 'log', args); this._append('body', 'log', args); };
-    console.warn = (...args) => { this.origWarn(...args); this._append('face', 'warn', args); this._append('body', 'warn', args); };
-    console.error = (...args) => { this.origError(...args); this._append('face', 'error', args); this._append('body', 'error', args); };
-    console.log('[Console] v11.0 화면 콘솔 활성화');
-    console.log('[Console] UA:', navigator.userAgent.substring(0, 60));
+    if (IS_DEBUG) {
+      // 디버그 모드: 화면 콘솔에 모든 로그 표시 (개발자 진단용)
+      console.log = (...args) => { this.origLog(...args); this._append('face', 'log', args); this._append('body', 'log', args); };
+      console.warn = (...args) => { this.origWarn(...args); this._append('face', 'warn', args); this._append('body', 'warn', args); };
+      console.error = (...args) => { this.origError(...args); this._append('face', 'error', args); this._append('body', 'error', args); this._captureError(args); };
+      console.log('[Console] DEBUG 모드 활성화');
+      console.log('[Console] UA:', navigator.userAgent.substring(0, 60));
+    } else {
+      // BETA 모드: 일반 로그는 무음, 경고는 표시, 에러는 자동 수집
+      console.log = () => {};
+      console.warn = (...args) => { this.origWarn(...args); };
+      console.error = (...args) => { this.origError(...args); this._captureError(args); };
+      // 화면 콘솔 div 자체를 숨김
+      setTimeout(() => {
+        document.querySelectorAll('.console-card, .console-output').forEach(el => {
+          if (el) el.style.display = 'none';
+        });
+      }, 100);
+    }
+
+    // ★ v14.5: 글로벌 에러 핸들러 (외부 사용자 에러 자동 수집)
+    window.addEventListener('error', (e) => {
+      this._captureError([{
+        type: 'js_error',
+        msg: e.message,
+        file: e.filename ? e.filename.split('/').pop() : '',
+        line: e.lineno,
+        col: e.colno,
+        stack: e.error?.stack?.substring(0, 500),
+      }]);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      this._captureError([{
+        type: 'promise_rejection',
+        reason: String(e.reason).substring(0, 200),
+        stack: e.reason?.stack?.substring(0, 500),
+      }]);
+    });
   },
+
+  _captureError(args) {
+    try {
+      const errors = JSON.parse(localStorage.getItem('beta_errors') || '[]');
+      const text = args.map(a => {
+        try {
+          if (typeof a === 'object') return JSON.stringify(a);
+          return String(a);
+        } catch (e) { return '<obj>'; }
+      }).join(' ');
+      errors.push({
+        t: Date.now(),
+        msg: text.substring(0, 500),
+        ua: navigator.userAgent.substring(0, 100),
+        url: window.location.pathname,
+      });
+      // 최대 50개 유지
+      if (errors.length > 50) errors.splice(0, errors.length - 50);
+      localStorage.setItem('beta_errors', JSON.stringify(errors));
+    } catch (e) {}
+  },
+
   _append(target, type, args) {
     const time = new Date().toTimeString().substring(0, 8);
     const text = args.map(a => {
@@ -134,7 +201,7 @@ const App = {
   // ─── 초기화 ───
   init() {
     Console.init();
-    console.log('[App v13.0] 초기화');
+    console.log('[App v14.5] 초기화 - 모드:', APP_MODE);
     this._setupCanvas();
     this._bindFaceButton();
     this._bindVisibilityHandler();
@@ -152,9 +219,274 @@ const App = {
     // ★ 첫 방문 시 권한 일괄 요청 안내
     setTimeout(() => this._maybeShowPermissionGuide(), 1000);
 
+    // ★ v14.5: 베타 안내 모달 (첫 방문 1회만)
+    setTimeout(() => this._maybeShowBetaNotice(), 1500);
+
+    // ★ v14.5: 피드백 플로팅 버튼 추가
+    this._injectFeedbackButton();
+
+    // ★ v14.5: 익명 분석 이벤트 (페이지 진입)
+    this._trackEvent('app_open');
+
     // ★ 음성 합성 워밍업 (사용자 첫 인터랙션 후 한 번 깨우기)
     document.addEventListener('click', () => this._warmupSpeech(), { once: true, capture: true });
     document.addEventListener('touchstart', () => this._warmupSpeech(), { once: true, capture: true });
+  },
+
+  // ★ v14.5: 베타 안내 모달
+  _maybeShowBetaNotice() {
+    try {
+      const lastShown = localStorage.getItem('beta_notice_shown');
+      if (lastShown) {
+        // 이미 한 번 봤으면 7일 후에 다시
+        const days = (Date.now() - parseInt(lastShown)) / (1000 * 60 * 60 * 24);
+        if (days < 7) return;
+      }
+    } catch (e) {}
+
+    const modal = document.createElement('div');
+    modal.className = 'beta-modal';
+    modal.innerHTML = `
+      <div class="beta-card">
+        <div class="beta-badge">🧪 베타 테스트</div>
+        <div class="beta-title">함께 만들어가는 건강 측정 앱</div>
+        <div class="beta-msg">
+          현재 베타 버전입니다. 측정 결과는 <strong>참고용</strong>이며,
+          정확도 개선을 위해 여러분의 피드백이 큰 도움이 됩니다.
+        </div>
+        <ul class="beta-list">
+          <li>✅ 모든 측정은 <strong>본인 기기에만</strong> 저장돼요</li>
+          <li>✅ 개인정보를 서버로 보내지 않아요</li>
+          <li>💬 화면 우측 하단 <strong>💬 버튼</strong>으로 의견 보내주세요</li>
+        </ul>
+        <button class="beta-btn primary" onclick="App._dismissBetaNotice()">시작하기</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    setTimeout(() => modal.classList.add('show'), 10);
+    this._betaModal = modal;
+    this._trackEvent('beta_notice_shown');
+  },
+
+  _dismissBetaNotice() {
+    if (this._betaModal) {
+      this._betaModal.classList.remove('show');
+      setTimeout(() => this._betaModal.remove(), 300);
+    }
+    try {
+      localStorage.setItem('beta_notice_shown', Date.now().toString());
+    } catch (e) {}
+    this._trackEvent('beta_notice_dismissed');
+  },
+
+  // ★ v14.5: 플로팅 피드백 버튼
+  _injectFeedbackButton() {
+    const btn = document.createElement('button');
+    btn.className = 'feedback-fab';
+    btn.type = 'button';
+    btn.innerHTML = '💬';
+    btn.title = '의견 보내기';
+    btn.setAttribute('aria-label', '의견 보내기');
+    btn.onclick = () => this._openFeedback();
+    document.body.appendChild(btn);
+  },
+
+  _openFeedback() {
+    this._trackEvent('feedback_opened');
+    const errors = (() => {
+      try { return JSON.parse(localStorage.getItem('beta_errors') || '[]'); }
+      catch (e) { return []; }
+    })();
+    const events = (() => {
+      try { return JSON.parse(localStorage.getItem('beta_events') || '[]'); }
+      catch (e) { return []; }
+    })();
+    const wellness = this.state.wellness || {};
+    const measuredItems = ['face','bodycomp','balance','gait','tremor','reaction','posture']
+      .filter(k => wellness[k]).join(', ') || '없음';
+
+    const modal = document.createElement('div');
+    modal.className = 'feedback-modal';
+    modal.innerHTML = `
+      <div class="feedback-card">
+        <div class="feedback-header">
+          <div class="feedback-title">💬 의견 보내기</div>
+          <button class="feedback-close" type="button" onclick="App._closeFeedback()">✕</button>
+        </div>
+        <div class="feedback-body">
+          <div class="feedback-label">어떤 종류의 의견인가요?</div>
+          <div class="feedback-types">
+            <button type="button" class="feedback-type-btn" data-type="bug" onclick="App._selectFeedbackType('bug')">
+              🐛 버그 신고
+            </button>
+            <button type="button" class="feedback-type-btn" data-type="suggestion" onclick="App._selectFeedbackType('suggestion')">
+              💡 개선 제안
+            </button>
+            <button type="button" class="feedback-type-btn" data-type="praise" onclick="App._selectFeedbackType('praise')">
+              😊 사용 후기
+            </button>
+            <button type="button" class="feedback-type-btn" data-type="question" onclick="App._selectFeedbackType('question')">
+              ❓ 질문
+            </button>
+          </div>
+          <div class="feedback-label">의견 내용</div>
+          <textarea
+            id="feedback-text"
+            class="feedback-textarea"
+            placeholder="겪으신 문제나 개선 아이디어를 자유롭게 적어주세요..."
+            rows="5"
+          ></textarea>
+          <div class="feedback-meta-toggle">
+            <label class="feedback-checkbox-label">
+              <input type="checkbox" id="feedback-include-meta" checked>
+              <span>기술 정보 함께 보내기 (오류 로그, 측정 상태)</span>
+            </label>
+            <div class="feedback-meta-detail">
+              측정 항목: ${measuredItems}<br>
+              자동 수집된 오류: ${errors.length}건<br>
+              기기: ${navigator.userAgent.substring(0, 50)}
+            </div>
+          </div>
+        </div>
+        <div class="feedback-footer">
+          <button class="beta-btn secondary" type="button" onclick="App._closeFeedback()">취소</button>
+          <button class="beta-btn primary" type="button" onclick="App._sendFeedback()">📧 이메일로 보내기</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    setTimeout(() => modal.classList.add('show'), 10);
+    this._feedbackModal = modal;
+    this._feedbackType = null;
+  },
+
+  _selectFeedbackType(type) {
+    this._feedbackType = type;
+    document.querySelectorAll('.feedback-type-btn').forEach(b => {
+      b.classList.toggle('on', b.dataset.type === type);
+    });
+  },
+
+  _closeFeedback() {
+    if (this._feedbackModal) {
+      this._feedbackModal.classList.remove('show');
+      setTimeout(() => this._feedbackModal?.remove(), 300);
+      this._feedbackModal = null;
+    }
+  },
+
+  _sendFeedback() {
+    const text = document.getElementById('feedback-text')?.value.trim() || '';
+    if (!text || text.length < 5) {
+      alert('의견을 5자 이상 입력해주세요.');
+      return;
+    }
+
+    const type = this._feedbackType || 'other';
+    const includeMeta = document.getElementById('feedback-include-meta')?.checked;
+
+    // 이메일 본문 구성
+    const typeNames = {
+      bug: '🐛 버그 신고',
+      suggestion: '💡 개선 제안',
+      praise: '😊 사용 후기',
+      question: '❓ 질문',
+      other: '기타',
+    };
+
+    let body = `[${typeNames[type]}]\n\n`;
+    body += `의견:\n${text}\n\n`;
+    body += `─────────────────\n`;
+    body += `날짜: ${new Date().toLocaleString('ko-KR')}\n`;
+    body += `앱 버전: v14.5 (beta)\n`;
+
+    if (includeMeta) {
+      body += `\n[기술 정보]\n`;
+      body += `기기: ${navigator.userAgent.substring(0, 150)}\n`;
+      body += `화면: ${window.innerWidth}x${window.innerHeight}\n`;
+      body += `언어: ${navigator.language}\n`;
+      body += `URL: ${window.location.pathname}\n`;
+
+      try {
+        const errors = JSON.parse(localStorage.getItem('beta_errors') || '[]');
+        if (errors.length > 0) {
+          body += `\n[최근 오류 ${Math.min(errors.length, 5)}건]\n`;
+          errors.slice(-5).forEach((e, i) => {
+            body += `${i+1}. [${new Date(e.t).toLocaleTimeString('ko-KR')}] ${e.msg.substring(0, 200)}\n`;
+          });
+        }
+      } catch (e) {}
+
+      const w = this.state.wellness || {};
+      const measured = ['face','bodycomp','balance','gait','tremor','reaction','posture']
+        .filter(k => w[k]);
+      body += `\n[측정 상태]\n측정 완료: ${measured.length}/7 (${measured.join(', ') || '없음'})\n`;
+    }
+
+    // 이메일 클라이언트 열기
+    const subject = `[건강측정 베타] ${typeNames[type]}`;
+    const recipient = 'iamnswoo@gmail.com'; // 사용자 이메일 (필요 시 변경)
+    const mailto = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    this._trackEvent('feedback_sent', { type });
+
+    // 모바일에서 mailto 호환성
+    try {
+      window.location.href = mailto;
+    } catch (e) {
+      // 복사 fallback
+      const fullText = `받는 사람: ${recipient}\n제목: ${subject}\n\n${body}`;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(fullText).then(() => {
+          alert('의견이 클립보드에 복사되었습니다. 이메일에 붙여넣어 보내주세요.');
+        });
+      } else {
+        prompt('아래 내용을 복사해서 이메일로 보내주세요:', fullText);
+      }
+    }
+
+    this._closeFeedback();
+  },
+
+  // ★ v14.5: 익명 이벤트 트래킹 (로컬 저장, 외부 전송 X)
+  _trackEvent(name, props) {
+    try {
+      const events = JSON.parse(localStorage.getItem('beta_events') || '[]');
+      events.push({
+        t: Date.now(),
+        n: name,
+        p: props || {},
+      });
+      // 최대 200개 유지
+      if (events.length > 200) events.splice(0, events.length - 200);
+      localStorage.setItem('beta_events', JSON.stringify(events));
+    } catch (e) {}
+  },
+
+  // ★ v14.5: 디버그 모드 토글 (헤더 버전 7회 탭)
+  _toggleDebugMode() {
+    if (!this._debugTapCount) this._debugTapCount = 0;
+    this._debugTapCount++;
+    if (this._debugTapCount >= 7) {
+      this._debugTapCount = 0;
+      try {
+        const current = localStorage.getItem('app_debug') === 'true';
+        if (current) {
+          localStorage.removeItem('app_debug');
+          alert('디버그 모드가 OFF 되었습니다. 새로고침합니다.');
+        } else {
+          localStorage.setItem('app_debug', 'true');
+          alert('🛠️ 디버그 모드가 ON 되었습니다. 새로고침합니다.\n(URL 끝에 ?debug=1 을 붙여도 동일 효과)');
+        }
+        location.reload();
+      } catch (e) {}
+    } else if (this._debugTapCount >= 3) {
+      // 3회 이상 탭 시 카운터 표시
+      console.warn(`[Debug] ${7 - this._debugTapCount}회 더 탭하면 디버그 모드 토글`);
+    }
+    // 3초 후 카운터 리셋
+    clearTimeout(this._debugTapTimer);
+    this._debugTapTimer = setTimeout(() => { this._debugTapCount = 0; }, 3000);
   },
 
   // ════════════════════════════════════════════════════════════════
@@ -413,6 +745,9 @@ const App = {
 
     // ★ v14.3: 시계열 히스토리 저장 (카테고리별 최대 100개)
     this._historyAppend(category, data);
+
+    // ★ v14.5: 측정 완료 트래킹
+    this._trackEvent('measurement_complete', { category, score: data.score });
 
     try {
       localStorage.setItem('wellness_data', JSON.stringify(this.state.wellness));
@@ -1173,6 +1508,8 @@ const App = {
     document.querySelectorAll('.nav-btn').forEach(n => n.classList.remove('on'));
     document.getElementById('nav-' + page)?.classList.add('on');
     this.state.page = page;
+    // ★ v14.5: 페이지 이동 트래킹
+    this._trackEvent('page_view', { page });
     // ★ v14.0: 결과 페이지 진입 시 종합 렌더링
     if (page === 'results') {
       this._renderResultsPage();
@@ -1369,7 +1706,91 @@ const App = {
           🔄 전체 측정 초기화
         </button>
       ` : ''}
+
+      <!-- ★ v14.5: 베타 정보 (디버그 모드에서만 표시) -->
+      ${IS_DEBUG ? `
+        <div class="debug-section">
+          <div class="debug-title">🛠️ 디버그 정보</div>
+          <button class="debug-btn" onclick="App._showBetaDebugInfo()" type="button">베타 로그 보기 (에러·이벤트)</button>
+        </div>
+      ` : ''}
     `;
+  },
+
+  // ★ v14.5: 베타 디버그 정보 표시 (개발자용)
+  _showBetaDebugInfo() {
+    let errors = [], events = [];
+    try { errors = JSON.parse(localStorage.getItem('beta_errors') || '[]'); } catch (e) {}
+    try { events = JSON.parse(localStorage.getItem('beta_events') || '[]'); } catch (e) {}
+
+    let info = `=== 베타 디버그 정보 ===\n`;
+    info += `현재 모드: ${APP_MODE}\n`;
+    info += `에러 수: ${errors.length}건\n`;
+    info += `이벤트 수: ${events.length}건\n\n`;
+
+    if (errors.length > 0) {
+      info += `=== 최근 에러 (최대 10건) ===\n`;
+      errors.slice(-10).forEach((e, i) => {
+        info += `${i+1}. [${new Date(e.t).toLocaleString('ko-KR')}]\n   ${e.msg.substring(0, 200)}\n`;
+      });
+    }
+
+    if (events.length > 0) {
+      info += `\n=== 이벤트 카운트 ===\n`;
+      const counts = {};
+      events.forEach(e => { counts[e.n] = (counts[e.n] || 0) + 1; });
+      Object.entries(counts).sort((a,b) => b[1] - a[1]).forEach(([n, c]) => {
+        info += `${n}: ${c}회\n`;
+      });
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'feedback-modal';
+    modal.innerHTML = `
+      <div class="feedback-card">
+        <div class="feedback-header">
+          <div class="feedback-title">🛠️ 베타 디버그 정보</div>
+          <button class="feedback-close" type="button" onclick="this.closest('.feedback-modal').remove()">✕</button>
+        </div>
+        <pre style="font-size:11px;font-family:monospace;background:var(--bg);padding:14px;border-radius:10px;max-height:60vh;overflow:auto;white-space:pre-wrap;color:var(--text);">${info}</pre>
+        <div class="feedback-footer">
+          <button class="beta-btn secondary" type="button" onclick="App._clearBetaData()">데이터 초기화</button>
+          <button class="beta-btn primary" type="button" onclick="App._exportBetaData()">📋 클립보드 복사</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    setTimeout(() => modal.classList.add('show'), 10);
+  },
+
+  _exportBetaData() {
+    let errors = [], events = [];
+    try { errors = JSON.parse(localStorage.getItem('beta_errors') || '[]'); } catch (e) {}
+    try { events = JSON.parse(localStorage.getItem('beta_events') || '[]'); } catch (e) {}
+    const data = {
+      version: 'v14.5',
+      timestamp: Date.now(),
+      ua: navigator.userAgent,
+      errors,
+      events,
+      wellness: this.state.wellness,
+    };
+    const text = JSON.stringify(data, null, 2);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => alert('베타 데이터가 클립보드에 복사되었습니다.'));
+    } else {
+      prompt('베타 데이터 (복사하세요):', text);
+    }
+  },
+
+  _clearBetaData() {
+    if (!confirm('베타 에러 로그와 이벤트 데이터를 모두 삭제하시겠습니까?')) return;
+    try {
+      localStorage.removeItem('beta_errors');
+      localStorage.removeItem('beta_events');
+      alert('베타 데이터가 초기화되었습니다.');
+    } catch (e) {}
+    document.querySelector('.feedback-modal')?.remove();
   },
 
   // ★ v14.4: 결과 페이지의 평소 대비 변화 카드
