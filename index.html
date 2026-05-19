@@ -2716,12 +2716,822 @@ body::before {
 }
 
 /* 결과 액션 */
+/* ════════════════════════════════════════════════════════════════
+   ★ v15.2: 통합 정신건강 카드
+   ════════════════════════════════════════════════════════════════ */
+
+/* === 게임 결과 페이지의 큰 정신건강 카드 === */
+.mental-card {
+  margin: 0 0 12px;
+  padding: 22px 20px;
+  border-radius: 22px;
+  border: 1.5px solid;
+  box-shadow: 0 4px 20px rgba(0,0,0,.06);
+}
+
+.mental-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.mental-overall-label {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 800;
+  letter-spacing: .03em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+.mental-overall-score {
+  font-size: 48px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+}
+.mental-overall-max {
+  font-size: 16px;
+  color: var(--text3);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.mental-pattern {
+  text-align: right;
+}
+.mental-pattern-icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.mental-pattern-label {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+.mental-pattern-desc {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.5;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.55);
+  border-radius: 10px;
+}
+
+/* 자기보고 vs 자율신경 비교 막대 */
+.mental-compare {
+  background: rgba(255,255,255,.6);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.mental-bar {
+  margin-bottom: 10px;
+}
+.mental-bar:last-child { margin-bottom: 0; }
+.mental-bar-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 700;
+}
+.mental-bar-label strong {
+  color: var(--text);
+  font-weight: 900;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.mental-bar-track {
+  height: 8px;
+  background: rgba(0,0,0,.06);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.mental-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .8s ease-out;
+}
+.mental-bar-fill.subj { background: linear-gradient(90deg, #7C3AED, #A78BFA); }
+.mental-bar-fill.auto { background: linear-gradient(90deg, #F59E0B, #FB923C); }
+.mental-alignment {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 700;
+  text-align: center;
+  padding: 6px;
+  background: rgba(255,255,255,.6);
+  border-radius: 8px;
+}
+
+/* 얼굴 측정 없을 때 안내 */
+.mental-no-face {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  background: rgba(255,255,255,.65);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  border: 1px dashed rgba(124, 58, 237, .35);
+}
+.mental-no-face-icon {
+  font-size: 24px;
+  line-height: 1;
+  text-align: center;
+}
+.mental-no-face-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.mental-no-face-sub {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.mental-no-face-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* 4차원 점수 그리드 */
+.mental-dims {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.mental-dim {
+  display: grid;
+  grid-template-columns: 28px 1fr 36px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.6);
+  border-radius: 10px;
+}
+.mental-dim-icon { font-size: 18px; line-height: 1; text-align: center; }
+.mental-dim-info { min-width: 0; }
+.mental-dim-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+.mental-dim-hint {
+  font-size: 9px;
+  color: var(--text3);
+  font-weight: 700;
+  margin-top: 1px;
+  line-height: 1.2;
+}
+.mental-dim-score {
+  font-size: 18px;
+  font-weight: 900;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+
+/* 권유 */
+.mental-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,.7);
+  border-radius: 12px;
+}
+.mental-action-icon { font-size: 18px; line-height: 1; }
+.mental-action-text {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+
+
+/* === 건강 측정 결과 페이지의 정신건강 카드 (요약) === */
+.res-mental-card {
+  margin: 0 12px 14px;
+  background: linear-gradient(135deg, #FAF5FF 0%, #EDE9FE 50%, #DDD6FE 100%);
+  border: 1.5px solid rgba(124, 58, 237, .25);
+  border-radius: 18px;
+  padding: 18px;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .2s;
+}
+.res-mental-card:active {
+  transform: scale(0.99);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, .2);
+}
+
+.rmc-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.rmc-score-area { flex: 1; }
+.rmc-score-label {
+  font-size: 11px;
+  color: #6D28D9;
+  font-weight: 800;
+  letter-spacing: .03em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+.rmc-score-big {
+  font-size: 44px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+}
+.rmc-score-max {
+  font-size: 14px;
+  color: var(--text3);
+  font-weight: 700;
+}
+.rmc-avg {
+  font-size: 10px;
+  color: var(--text2);
+  font-weight: 700;
+  margin-top: 4px;
+}
+.rmc-pattern-area {
+  text-align: right;
+}
+.rmc-pattern-icon {
+  font-size: 36px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.rmc-pattern-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.01em;
+  margin-bottom: 2px;
+}
+.rmc-pattern-time {
+  font-size: 10px;
+  color: var(--text3);
+  font-weight: 600;
+}
+
+.rmc-dims {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 4px;
+  padding: 10px 8px;
+  background: rgba(255,255,255,.55);
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+.rmc-dim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+}
+.rmc-dim-icon { font-size: 14px; line-height: 1; }
+.rmc-dim-label {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--text2);
+  letter-spacing: -.01em;
+}
+.rmc-dim-score {
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+
+.rmc-badge {
+  font-size: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+.rmc-badge.integrated {
+  background: rgba(34, 197, 94, .15);
+  color: #166534;
+  border: 1px solid rgba(34, 197, 94, .25);
+}
+.rmc-badge.partial {
+  background: rgba(245, 158, 11, .15);
+  color: #92400E;
+  border: 1px solid rgba(245, 158, 11, .25);
+}
+
+.rmc-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.7);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+.rmc-arrow {
+  color: #7C3AED;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* 정신건강 측정 안 했을 때 안내 */
+.res-mental-empty {
+  margin: 0 12px 14px;
+  background: linear-gradient(135deg, #FAF5FF 0%, #F0FDF4 100%);
+  border: 1.5px dashed rgba(124, 58, 237, .35);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: 40px 1fr 24px;
+  gap: 14px;
+  align-items: center;
+  cursor: pointer;
+  transition: transform .15s;
+}
+.res-mental-empty:active { transform: scale(0.98); }
+.rme-icon {
+  font-size: 28px;
+  line-height: 1;
+  text-align: center;
+}
+.rme-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #6D28D9;
+  letter-spacing: -.01em;
+  margin-bottom: 2px;
+}
+.rme-sub {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.rme-arrow {
+  color: #7C3AED;
+  font-size: 18px;
+  font-weight: 800;
+}
+
 .result-actions {
   display: flex;
   gap: 8px;
   margin: 16px 0;
 }
 .result-actions-3 .mood-action-btn { flex: 1; padding: 12px 6px; font-size: 12px; }
+
+/* ════════════════════════════════════════════════════════════════
+   ★ v15.2: 통합 정신건강 카드 (감정 게임 + 자율신경)
+   ════════════════════════════════════════════════════════════════ */
+.mental-card {
+  border-radius: 22px;
+  padding: 22px;
+  margin: 0 0 16px;
+  border: 1.5px solid;
+  box-shadow: 0 4px 16px rgba(0,0,0,.06);
+}
+
+.mental-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.mental-overall { flex: 1; }
+.mental-overall-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(0,0,0,0.55);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.mental-overall-score {
+  font-size: 52px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+}
+.mental-overall-max {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(0,0,0,0.4);
+  margin-left: 4px;
+}
+
+.mental-pattern { text-align: right; flex: 0 0 auto; }
+.mental-pattern-icon {
+  font-size: 38px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.mental-pattern-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(0,0,0,0.75);
+  letter-spacing: -.01em;
+}
+
+.mental-pattern-desc {
+  font-size: 13px;
+  color: rgba(0,0,0,0.65);
+  font-weight: 600;
+  line-height: 1.6;
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 12px;
+  margin-bottom: 14px;
+}
+
+.mental-compare {
+  background: rgba(255,255,255,0.5);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.mental-bar { margin-bottom: 10px; }
+.mental-bar:last-child { margin-bottom: 0; }
+.mental-bar-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: rgba(0,0,0,0.7);
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+.mental-bar-label strong {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 900;
+  color: rgba(0,0,0,0.85);
+}
+.mental-bar-track {
+  height: 8px;
+  background: rgba(0,0,0,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.mental-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .8s cubic-bezier(.2,.6,.3,1);
+}
+.mental-bar-fill.subj { background: linear-gradient(90deg, #A78BFA, #7C3AED); }
+.mental-bar-fill.auto { background: linear-gradient(90deg, #FCA5A5, #EF4444); }
+
+.mental-alignment {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(0,0,0,0.1);
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(0,0,0,0.7);
+  text-align: center;
+  letter-spacing: -.01em;
+}
+
+.mental-no-face {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(255,255,255,0.7);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  border: 1px dashed rgba(34, 197, 94, 0.4);
+}
+.mental-no-face-icon { font-size: 28px; line-height: 1; }
+.mental-no-face-body { flex: 1; min-width: 0; }
+.mental-no-face-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 2px;
+  letter-spacing: -.01em;
+}
+.mental-no-face-sub {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.mental-no-face-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  flex: 0 0 auto;
+}
+
+.mental-dims {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.mental-dim {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 12px;
+}
+.mental-dim-icon {
+  font-size: 20px;
+  line-height: 1;
+  text-align: center;
+}
+.mental-dim-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+.mental-dim-hint {
+  font-size: 9px;
+  color: var(--text3);
+  font-weight: 600;
+  margin-top: 1px;
+}
+.mental-dim-score {
+  font-size: 18px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+
+.mental-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.7);
+  border-radius: 12px;
+}
+.mental-action-icon { font-size: 20px; line-height: 1; }
+.mental-action-text {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.5;
+  letter-spacing: -.01em;
+}
+
+/* 건강 결과 페이지에 노출되는 미니 카드 */
+.mental-on-results { margin: 0 12px 14px; }
+.mental-empty-card {
+  background: linear-gradient(135deg, #FAF5FF 0%, #EDE9FE 100%);
+  border: 1.5px dashed #A78BFA;
+  border-radius: 18px;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  margin: 0 12px 14px;
+  cursor: pointer;
+  transition: transform .15s;
+}
+.mental-empty-card:active { transform: scale(0.98); }
+.mental-empty-icon { font-size: 36px; line-height: 1; }
+.mental-empty-body { min-width: 0; }
+.mental-empty-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #5B21B6;
+  margin-bottom: 4px;
+  letter-spacing: -.01em;
+}
+.mental-empty-sub {
+  font-size: 12px;
+  color: #7C3AED;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.mental-empty-arrow {
+  font-size: 22px;
+  font-weight: 800;
+  color: #7C3AED;
+}
+
+/* ─── 건강 결과 페이지의 정신건강 통합 카드 ─── */
+.res-mental-empty {
+  background: linear-gradient(135deg, #FAF5FF 0%, #EDE9FE 100%);
+  border: 1.5px dashed #A78BFA;
+  border-radius: 18px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  margin: 0 12px 14px;
+  cursor: pointer;
+  transition: transform .15s;
+}
+.res-mental-empty:active { transform: scale(0.98); }
+.rme-icon { font-size: 32px; line-height: 1; }
+.rme-body { min-width: 0; }
+.rme-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #5B21B6;
+  margin-bottom: 4px;
+  letter-spacing: -.01em;
+}
+.rme-sub {
+  font-size: 11px;
+  color: #7C3AED;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.rme-arrow {
+  font-size: 22px;
+  font-weight: 800;
+  color: #7C3AED;
+}
+
+.res-mental-card {
+  margin: 0 12px 14px;
+  background: linear-gradient(135deg, #FAF5FF 0%, #F0FDF4 100%);
+  border: 1.5px solid rgba(124, 58, 237, .25);
+  border-radius: 20px;
+  padding: 18px;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .2s;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, .08);
+}
+.res-mental-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, .06);
+}
+
+.rmc-main {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed rgba(124, 58, 237, .2);
+}
+
+.rmc-score-area { min-width: 0; }
+.rmc-score-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #6D28D9;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.rmc-score-big {
+  font-size: 48px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+}
+.rmc-score-max {
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(0,0,0,0.35);
+  margin-left: 4px;
+}
+.rmc-avg {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+}
+
+.rmc-pattern-area {
+  text-align: right;
+  flex: 0 0 auto;
+}
+.rmc-pattern-icon {
+  font-size: 36px;
+  line-height: 1;
+  margin-bottom: 4px;
+  filter: drop-shadow(0 4px 12px rgba(124, 58, 237, .25));
+}
+.rmc-pattern-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.01em;
+  margin-bottom: 2px;
+}
+.rmc-pattern-time {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+}
+
+.rmc-dims {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.rmc-dim {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, .65);
+  border-radius: 10px;
+}
+.rmc-dim-icon { font-size: 14px; line-height: 1; }
+.rmc-dim-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+.rmc-dim-score {
+  font-size: 16px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+
+.rmc-badge {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 10px;
+  letter-spacing: -.01em;
+}
+.rmc-badge.integrated {
+  background: rgba(34, 197, 94, .12);
+  color: #15803D;
+}
+.rmc-badge.partial {
+  background: rgba(245, 158, 11, .12);
+  color: #92400E;
+}
+
+.rmc-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, .7);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+.rmc-action .rmc-arrow {
+  color: #7C3AED;
+  font-weight: 900;
+}
+
 .mood-action-btn {
   flex: 1;
   padding: 14px;
@@ -4830,7 +5640,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.1 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.2 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->

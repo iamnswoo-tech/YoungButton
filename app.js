@@ -1023,15 +1023,16 @@ const App = {
   // 종합 점수 계산
   _wellnessComputeScore() {
     const w = this.state.wellness;
-    // v13.0: 7개 항목으로 재배분 (BMI/ABSI 신체 지수 추가)
+    // v15.2: 정신건강 추가 (8개 항목)
     const weights = {
-      face:     0.30,  // 활력 징후 (HR/호흡)
-      balance:  0.13,  // 균형 (낙상 위험)
-      gait:     0.13,  // 보행 (전신 운동)
-      reaction: 0.10,  // 반응속도 (인지)
-      tremor:   0.11,  // 손떨림 (신경계)
-      posture:  0.08,  // 자세 (근골격계)
-      bodycomp: 0.15,  // 신체 지수 (BMI/허리비율 - 만성질환 위험)
+      face:     0.25,  // 활력 징후 (HR/호흡)
+      balance:  0.12,  // 균형 (낙상 위험)
+      gait:     0.12,  // 보행 (전신 운동)
+      reaction: 0.09,  // 반응속도 (인지)
+      tremor:   0.09,  // 손떨림 (신경계)
+      posture:  0.07,  // 자세 (근골격계)
+      bodycomp: 0.13,  // 신체 지수 (BMI/허리비율)
+      mental:   0.13,  // ★ v15.2: 정신건강 (감정 게임 통합)
     };
 
     let totalWeight = 0;
@@ -1040,8 +1041,26 @@ const App = {
     const missing = [];
 
     for (const [key, weight] of Object.entries(weights)) {
-      if (w[key] && typeof w[key].score === 'number') {
-        weightedSum += w[key].score * weight;
+      let score = null;
+
+      if (key === 'mental') {
+        // ★ v15.2: mental은 별도 source (history_mood의 최신 mental.overall)
+        try {
+          const moodHistory = JSON.parse(localStorage.getItem('history_mood') || '[]');
+          if (moodHistory.length > 0) {
+            const latest = moodHistory[moodHistory.length - 1];
+            // 24시간 이내 측정만 인정
+            if (latest.mental && (Date.now() - latest.t) < 24 * 60 * 60 * 1000) {
+              score = latest.mental.overall;
+            }
+          }
+        } catch (e) {}
+      } else if (w[key] && typeof w[key].score === 'number') {
+        score = w[key].score;
+      }
+
+      if (score !== null) {
+        weightedSum += score * weight;
         totalWeight += weight;
         measured.push(key);
       } else {
@@ -1685,6 +1704,9 @@ const App = {
 
       ${ageHTML}
 
+      <!-- ★ v15.2: 정신건강 점수 카드 (감정 게임 + 자율신경 통합) -->
+      ${this._renderResultsMentalCard()}
+
       <!-- ★ v14.4: 평소 대비 변화 카드 (얼굴 측정 baseline 비교) -->
       ${this._renderBaselineComparisonCard(w)}
 
@@ -1822,6 +1844,128 @@ const App = {
       alert('베타 데이터가 초기화되었습니다.');
     } catch (e) {}
     this._closeFeedback();
+  },
+
+  // ★ v15.2: 건강 측정 결과 페이지의 정신건강 카드 (요약 버전)
+  _renderResultsMentalCard() {
+    let history = [];
+    try { history = JSON.parse(localStorage.getItem('history_mood') || '[]'); } catch (e) {}
+
+    if (history.length === 0) {
+      return `
+        <div class="res-mental-empty" onclick="App.goPage('mood')">
+          <div class="rme-icon">🌿</div>
+          <div class="rme-body">
+            <div class="rme-title">정신건강 측정도 함께 해보세요</div>
+            <div class="rme-sub">감정 게임 + 자율신경으로 완성하는 통합 분석</div>
+          </div>
+          <div class="rme-arrow">→</div>
+        </div>
+      `;
+    }
+
+    // 최근 측정의 mental 점수
+    const latest = history[history.length - 1];
+    const m = latest.mental;
+
+    // mental 없으면(이전 버전 데이터) 안내
+    if (!m) {
+      return `
+        <div class="res-mental-empty" onclick="App.goPage('mood')">
+          <div class="rme-icon">✨</div>
+          <div class="rme-body">
+            <div class="rme-title">새로운 감정 측정 시도해보세요</div>
+            <div class="rme-sub">v15.2 통합 정신건강 점수가 제공돼요</div>
+          </div>
+          <div class="rme-arrow">→</div>
+        </div>
+      `;
+    }
+
+    // 점수 색상
+    const getColor = (score) => {
+      if (score >= 75) return '#22C55E';
+      if (score >= 55) return '#3B82F6';
+      if (score >= 40) return '#F59E0B';
+      return '#EF4444';
+    };
+
+    // 최근 7일 평균
+    const recent7 = history.filter(h => Date.now() - h.t < 7 * 24 * 60 * 60 * 1000 && h.mental);
+    const avg7 = recent7.length > 0
+      ? Math.round(recent7.reduce((s, h) => s + (h.mental.overall || 0), 0) / recent7.length)
+      : null;
+
+    // 측정 시점
+    const date = new Date(latest.t);
+    const minAgo = Math.round((Date.now() - latest.t) / 60000);
+    const timeLabel = minAgo < 60 ? `${minAgo}분 전`
+                    : minAgo < 1440 ? `${Math.round(minAgo/60)}시간 전`
+                    : `${Math.round(minAgo/1440)}일 전`;
+
+    return `
+      <div class="res-section-title">🧠 정신건강 점수 <span class="res-section-sub">(통합 분석)</span></div>
+      <div class="res-mental-card" onclick="App.goPage('mood')">
+
+        <!-- 메인 점수 + 패턴 -->
+        <div class="rmc-main">
+          <div class="rmc-score-area">
+            <div class="rmc-score-label">종합 점수</div>
+            <div class="rmc-score-big" style="color: ${getColor(m.overall)};">
+              ${m.overall}<span class="rmc-score-max">/100</span>
+            </div>
+            ${avg7 !== null && recent7.length >= 2 ? `
+              <div class="rmc-avg">7일 평균 ${avg7}</div>
+            ` : ''}
+          </div>
+          <div class="rmc-pattern-area">
+            <div class="rmc-pattern-icon">${m.patternIcon}</div>
+            <div class="rmc-pattern-label">${m.patternLabel}</div>
+            <div class="rmc-pattern-time">${timeLabel}</div>
+          </div>
+        </div>
+
+        <!-- 4차원 미니 점수 -->
+        <div class="rmc-dims">
+          <div class="rmc-dim">
+            <span class="rmc-dim-icon">💪</span>
+            <span class="rmc-dim-label">회복력</span>
+            <span class="rmc-dim-score" style="color: ${getColor(m.resilience)};">${Math.round(m.resilience)}</span>
+          </div>
+          <div class="rmc-dim">
+            <span class="rmc-dim-icon">🔍</span>
+            <span class="rmc-dim-label">자기인식</span>
+            <span class="rmc-dim-score" style="color: ${getColor(m.selfAwareness)};">${Math.round(m.selfAwareness)}</span>
+          </div>
+          <div class="rmc-dim">
+            <span class="rmc-dim-icon">🫂</span>
+            <span class="rmc-dim-label">연결감</span>
+            <span class="rmc-dim-score" style="color: ${getColor(m.connection)};">${Math.round(m.connection)}</span>
+          </div>
+          <div class="rmc-dim">
+            <span class="rmc-dim-icon">⚖️</span>
+            <span class="rmc-dim-label">감정조절</span>
+            <span class="rmc-dim-score" style="color: ${getColor(m.regulation)};">${Math.round(m.regulation)}</span>
+          </div>
+        </div>
+
+        <!-- 통합 vs 자기보고만 라벨 -->
+        ${m.hasFaceData ? `
+          <div class="rmc-badge integrated">
+            ✓ 자기보고(${Math.round(m.subjective)}) + 자율신경(${Math.round(m.autonomic)}) 통합 분석
+          </div>
+        ` : `
+          <div class="rmc-badge partial">
+            ⚠️ 얼굴 측정을 더하면 정확도가 올라가요
+          </div>
+        `}
+
+        <div class="rmc-action">
+          <span>${m.patternAction}</span>
+          <span class="rmc-arrow">→</span>
+        </div>
+      </div>
+    `;
   },
 
   // ★ v14.4: 결과 페이지의 평소 대비 변화 카드
@@ -2837,6 +2981,51 @@ const App = {
           yMax: 100,
         });
       }
+    }
+
+    // ★ v15.2: 정신건강 통합 점수 차트
+    try {
+      const moodHistory = JSON.parse(localStorage.getItem('history_mood') || '[]');
+      const cutoff = Date.now() - period * 24 * 60 * 60 * 1000;
+      const moodFiltered = moodHistory
+        .filter(h => h.t >= cutoff && h.mental && h.mental.overall != null)
+        .map(h => ({
+          t: h.t,
+          mentalOverall: h.mental.overall,
+          mentalResilience: h.mental.resilience,
+          mentalConnection: h.mental.connection,
+        }));
+      if (moodFiltered.length >= 2) {
+        chartsHTML += '<div class="trends-section-title">🧠 정신건강 추이</div>';
+        chartsHTML += this._renderTrendChart({
+          title: '정신건강 종합 점수',
+          icon: '💜',
+          history: moodFiltered,
+          field: 'mentalOverall',
+          unit: '점',
+          normalMin: 60,
+          normalMax: 100,
+          color: '#7c3aed',
+          yMin: 0,
+          yMax: 100,
+        });
+        if (moodFiltered.some(h => h.mentalConnection != null)) {
+          chartsHTML += this._renderTrendChart({
+            title: '사회적 연결감',
+            icon: '🫂',
+            history: moodFiltered,
+            field: 'mentalConnection',
+            unit: '점',
+            normalMin: 60,
+            normalMax: 100,
+            color: '#A78BFA',
+            yMin: 0,
+            yMax: 100,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[Trends] mood chart fail:', e);
     }
 
     container.innerHTML = periodTabs + summary + insightsHTML + chartsHTML;
@@ -4031,12 +4220,168 @@ const App = {
           hr: w.face.hr,
           rmssd: w.face.rmssd,
           stressLevel: w.face.stressLevel,
+          respRate: w.face.respRate,
           ageMinutes: Math.round((now - faceTime) / 60000),
         };
       }
     }
 
+    // ★ v15.2: 통합 정신건강 점수 계산
+    analysis.mental = this._computeMentalWellnessScore(analysis);
+
     return analysis;
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // ★ v15.2: 통합 정신건강 점수 (Mental Wellness Score)
+  // 자기보고 감정 + 얼굴 측정(자율신경) → 4가지 차원 종합
+  //
+  // 학술 근거:
+  //   - Mauss & Robinson (2009): 자기보고-생리 불일치의 임상 의미
+  //   - Thayer & Lane (2000): Neurovisceral Integration Model
+  //   - Porges (2007): Polyvagal Theory (부교감 톤 = 사회 연결)
+  //   - Shaffer 2017: HRV = 감정 조절 능력 객관 지표
+  // ════════════════════════════════════════════════════════════════
+  _computeMentalWellnessScore(analysis) {
+    const face = analysis.faceLink;
+    const v = analysis.valence || 0; // -1 ~ +1
+    const lon = analysis.loneliness || 0; // 0 ~ 1
+    const negBias = analysis.negBias || 0;
+
+    // 자기보고 점수 (0~100)
+    // valence -1=0점, 0=50점, +1=100점 / 외로움/부정편향 차감
+    let subjective = 50 + v * 40 - lon * 30 - negBias * 20;
+    subjective = Math.max(0, Math.min(100, subjective));
+
+    // 자율신경 점수 (0~100)
+    let autonomic = 50; // 기본값 (얼굴 측정 없음)
+    let hrvLevel = null; // 'low' | 'normal' | 'high' | null
+    let stressFromFace = null;
+
+    if (face && face.rmssd != null) {
+      // 본인 baseline 확보 시
+      const history = this._historyGet ? this._historyGet('face') : [];
+      const past = history.slice(0, -1); // 최신 1회 제외
+      const stats = past.length >= 3 && this._historyStats ? this._historyStats(past, 'rmssd') : null;
+
+      if (stats && stats.count >= 3) {
+        const std = Math.max(stats.std, 3);
+        const z = (face.rmssd - stats.mean) / std;
+        // z-score 기반 자율신경 점수
+        // z >= 0.5: high (좋음 90), z >= -0.5: normal (70), z >= -1.5: low (45), 그 외 (25)
+        if (z >= 0.5) { autonomic = 90; hrvLevel = 'high'; }
+        else if (z >= -0.5) { autonomic = 70; hrvLevel = 'normal'; }
+        else if (z >= -1.5) { autonomic = 45; hrvLevel = 'low'; }
+        else { autonomic = 25; hrvLevel = 'low'; }
+      } else {
+        // baseline 없으면 임상 범위로 (Task Force 1996: 정상 19~75ms 평균 42)
+        if (face.rmssd >= 40) autonomic = 75;
+        else if (face.rmssd >= 25) autonomic = 60;
+        else if (face.rmssd >= 15) autonomic = 45;
+        else autonomic = 30;
+        hrvLevel = face.rmssd >= 25 ? 'normal' : 'low';
+      }
+
+      // 스트레스 보정 (face.stressLevel 1~5)
+      if (face.stressLevel != null) {
+        stressFromFace = face.stressLevel;
+        const stressPenalty = (face.stressLevel - 2.5) * 6; // 4 → +9감점, 1 → -9 보너스
+        autonomic -= stressPenalty;
+        autonomic = Math.max(0, Math.min(100, autonomic));
+      }
+    }
+
+    // ─── 4가지 통합 차원 ───
+
+    // 1. 정신 회복력 (Resilience): 자율신경 안정성 = autonomic 그대로
+    const resilience = autonomic;
+
+    // 2. 자기인식 (Self-awareness): 자기보고-생리 일치도
+    // 둘 다 좋거나 둘 다 나쁘면 일치 (인식 좋음)
+    // 한쪽만 좋으면 불일치 (감정 억압 또는 신체화 가능성)
+    let selfAwareness = 50;
+    if (face && face.rmssd != null) {
+      // |subjective - autonomic|이 작을수록 일치
+      const gap = Math.abs(subjective - autonomic);
+      selfAwareness = Math.max(20, 100 - gap * 1.2);
+    }
+
+    // 3. 사회적 연결감 (Connection): 외로움 역수 + 부교감 톤
+    // Porges Polyvagal: 부교감 톤이 사회 연결의 기반
+    let connection = 50 + (1 - lon) * 30; // 외로움 0이면 +30
+    if (hrvLevel === 'high' || hrvLevel === 'normal') connection += 15;
+    else if (hrvLevel === 'low') connection -= 10;
+    connection = Math.max(0, Math.min(100, connection));
+
+    // 4. 감정 조절 (Regulation): 부정 편향 + 다양성
+    let regulation = 100 - negBias * 50;
+    if (analysis.gameId === 'diary' && analysis.rawData) {
+      // 키워드 다양성 (긍정+부정 함께 선택 = 인식 좋음)
+      const pos = analysis.rawData.posCount || 0;
+      const neg = analysis.rawData.negCount || 0;
+      if (pos > 0 && neg > 0) regulation += 10; // 양가감정 인식
+      if (pos + neg >= 3) regulation += 5; // 어휘 다양성
+    }
+    if (analysis.flag === 'multiple_negative') regulation -= 20;
+    if (analysis.flag === 'depression_signal') regulation -= 25;
+    regulation = Math.max(0, Math.min(100, regulation));
+
+    // ─── 종합 정신건강 점수 (가중평균) ───
+    const overall = Math.round(
+      resilience * 0.30 +
+      selfAwareness * 0.20 +
+      connection * 0.25 +
+      regulation * 0.25
+    );
+
+    // ─── 통합 패턴 분류 (4분면) ───
+    let pattern, patternIcon, patternLabel, patternDesc, patternAction;
+    const subjPositive = v >= 0;
+    const autoGood = autonomic >= 60;
+
+    if (subjPositive && autoGood) {
+      pattern = 'harmony';
+      patternIcon = '🌟';
+      patternLabel = '몸과 마음의 균형';
+      patternDesc = '감정도 좋고 자율신경도 안정적인 황금 상태예요';
+      patternAction = '오늘 무엇이 좋았는지 기억해두세요';
+    } else if (subjPositive && !autoGood) {
+      pattern = 'recovering';
+      patternIcon = '🌸';
+      patternLabel = '회복 중';
+      patternDesc = '마음은 좋은데 몸이 따라가지 못하는 상태';
+      patternAction = '충분한 수면과 휴식을 챙겨주세요';
+    } else if (!subjPositive && autoGood) {
+      pattern = 'enduring';
+      patternIcon = '🌿';
+      patternLabel = '잘 버티고 있어요';
+      patternDesc = '감정은 무거운데 회복력은 살아있는 상태';
+      patternAction = '잠시 멈춤이 필요해요. 자신에게 너그러우세요';
+    } else {
+      pattern = 'exhausted';
+      patternIcon = '🌧️';
+      patternLabel = '많이 지쳐 있어요';
+      patternDesc = '몸도 마음도 함께 지친 상태';
+      patternAction = '적극적 휴식이 필요해요. 누군가에게 도움 요청하기';
+    }
+
+    return {
+      overall,           // 종합 점수 0~100
+      resilience,        // 회복력 (자율신경)
+      selfAwareness,     // 자기인식 (감정-생리 일치도)
+      connection,        // 사회적 연결감
+      regulation,        // 감정 조절
+      subjective,        // 자기보고만의 점수
+      autonomic,         // 자율신경만의 점수
+      hrvLevel,          // 'low' | 'normal' | 'high' | null
+      stressFromFace,
+      pattern,           // 'harmony' | 'recovering' | 'enduring' | 'exhausted'
+      patternIcon,
+      patternLabel,
+      patternDesc,
+      patternAction,
+      hasFaceData: !!face,
+    };
   },
 
   _saveMoodResult(analysis) {
@@ -4052,6 +4397,7 @@ const App = {
         flag: analysis.flag,
         rawData: analysis.rawData,
         faceLink: analysis.faceLink,
+        mental: analysis.mental, // ★ v15.2: 통합 점수 함께 저장
       });
       if (history.length > 100) history.splice(0, history.length - 100);
       localStorage.setItem('history_mood', JSON.stringify(history));
@@ -4093,6 +4439,8 @@ const App = {
           <div class="result-message">${message}</div>
         </div>
 
+        ${this._renderMentalWellnessCard(analysis)}
+
         ${this._renderCircumplexChart(v, a, quadrant)}
 
         ${integratedMsg ? `
@@ -4105,7 +4453,7 @@ const App = {
             <div class="result-suggest-face-icon">😊</div>
             <div class="result-suggest-face-body">
               <div class="result-suggest-face-title">얼굴 측정도 함께 해보세요</div>
-              <div class="result-suggest-face-sub">자율신경과 비교하면 더 정확한 분석이 가능해요</div>
+              <div class="result-suggest-face-sub">자율신경과 함께 보면 4가지 차원 통합 분석이 가능해요</div>
             </div>
             <button class="result-suggest-face-btn" onclick="App.goPage('face')">측정</button>
           </div>
@@ -4150,7 +4498,26 @@ const App = {
   _generateIntegratedMessage(analysis) {
     const v = analysis.valence;
     const face = analysis.faceLink;
-    // RMSSD 본인 평균
+    const m = analysis.mental;
+
+    // mental 패턴 기반 (v15.2 강화)
+    if (m && m.hasFaceData) {
+      const pattern = m.pattern;
+      if (pattern === 'harmony') {
+        return `🌟 몸과 마음이 함께 좋은 균형 상태예요. 심박 ${face.hr}BPM, HRV ${face.rmssd}ms로 자율신경이 안정적이고, 감정도 긍정적입니다. 오늘 무엇이 좋았는지 기억해두면 어려운 날에 도움이 됩니다.`;
+      }
+      if (pattern === 'recovering') {
+        return `🌸 마음은 좋으신데(${Math.round(m.subjective)}점) 몸이 약간 따라가지 못하고 있어요(${Math.round(m.autonomic)}점). HRV ${face.rmssd}ms로 자율신경이 약간 긴장된 상태입니다. 좋은 일에도 몸이 따라가지 못할 때가 있어요. 오늘 밤은 충분히 주무세요.`;
+      }
+      if (pattern === 'enduring') {
+        return `🌿 감정은 무거우신데(${Math.round(m.subjective)}점) 자율신경은 잘 버티고 있어요(${Math.round(m.autonomic)}점). HRV ${face.rmssd}ms로 회복력이 살아있는 상태입니다. 힘든 시기지만 잠시 멈춤이 필요해요. 자신에게 너그러우세요.`;
+      }
+      if (pattern === 'exhausted') {
+        return `🌧️ 몸도 마음도 많이 지치셨네요. 감정 ${Math.round(m.subjective)}점, 자율신경 ${Math.round(m.autonomic)}점으로 모두 회복이 필요한 상태입니다. 오늘은 적극적 휴식이 필요해요. 가까운 누군가에게 도움을 청해보세요.`;
+      }
+    }
+
+    // mental 없거나 face 데이터 없을 때 (기존 fallback)
     const history = this._historyGet('face');
     const past = history.slice(0, -1);
     const rmssdStats = past.length >= 3 ? this._historyStats(past, 'rmssd') : null;
@@ -4170,6 +4537,131 @@ const App = {
       return '마음도 몸도 함께 좋은 상태예요. 이 균형을 기억해두세요.';
     }
     return `현재 심박수 ${face.hr}BPM · HRV ${face.rmssd}ms. 자율신경이 안정적이에요.`;
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // ★ v15.2: 통합 정신건강 카드 (감정 게임 + 얼굴 측정 통합 결과)
+  // ════════════════════════════════════════════════════════════════
+  _renderMentalWellnessCard(analysis) {
+    const m = analysis.mental;
+    if (!m) return '';
+
+    // 점수 색상 결정
+    const getScoreColor = (score) => {
+      if (score >= 75) return '#22C55E';
+      if (score >= 55) return '#3B82F6';
+      if (score >= 40) return '#F59E0B';
+      return '#EF4444';
+    };
+
+    // 패턴별 그라데이션
+    const patternBg = {
+      harmony: 'linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%)',
+      recovering: 'linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%)',
+      enduring: 'linear-gradient(135deg, #F0FDF4 0%, #D1FAE5 100%)',
+      exhausted: 'linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%)',
+    };
+    const patternBorder = {
+      harmony: '#22C55E',
+      recovering: '#EC4899',
+      enduring: '#10B981',
+      exhausted: '#6B7280',
+    };
+
+    // 자기보고 vs 자율신경 일치도 라벨
+    let alignmentLabel = '';
+    if (m.hasFaceData) {
+      const gap = Math.abs(m.subjective - m.autonomic);
+      if (gap < 15) alignmentLabel = '✨ 자기인식 좋음';
+      else if (gap < 30) alignmentLabel = '🌿 보통';
+      else alignmentLabel = '🌫️ 불일치 — 무의식적 신호';
+    }
+
+    const dimensions = [
+      { key: 'resilience', label: '회복력', icon: '💪', score: m.resilience,
+        hint: '자율신경 안정성' },
+      { key: 'selfAwareness', label: '자기인식', icon: '🔍', score: m.selfAwareness,
+        hint: m.hasFaceData ? '감정-신체 일치' : '얼굴 측정 필요' },
+      { key: 'connection', label: '연결감', icon: '🫂', score: m.connection,
+        hint: '사회적 친밀감' },
+      { key: 'regulation', label: '감정조절', icon: '⚖️', score: m.regulation,
+        hint: '인식·표현 능력' },
+    ];
+
+    return `
+      <div class="mental-card" style="background: ${patternBg[m.pattern] || patternBg.exhausted}; border-color: ${patternBorder[m.pattern]};">
+
+        <!-- 종합 점수 + 패턴 -->
+        <div class="mental-header">
+          <div class="mental-overall">
+            <div class="mental-overall-label">정신건강 점수</div>
+            <div class="mental-overall-score" style="color: ${getScoreColor(m.overall)};">
+              ${m.overall}<span class="mental-overall-max">/100</span>
+            </div>
+          </div>
+          <div class="mental-pattern">
+            <div class="mental-pattern-icon">${m.patternIcon}</div>
+            <div class="mental-pattern-label">${m.patternLabel}</div>
+          </div>
+        </div>
+
+        <div class="mental-pattern-desc">${m.patternDesc}</div>
+
+        <!-- 자기보고 vs 자율신경 비교 -->
+        ${m.hasFaceData ? `
+          <div class="mental-compare">
+            <div class="mental-bar">
+              <div class="mental-bar-label">
+                <span>🎮 마음 (게임)</span>
+                <strong>${Math.round(m.subjective)}</strong>
+              </div>
+              <div class="mental-bar-track">
+                <div class="mental-bar-fill subj" style="width: ${m.subjective}%"></div>
+              </div>
+            </div>
+            <div class="mental-bar">
+              <div class="mental-bar-label">
+                <span>💗 몸 (자율신경)</span>
+                <strong>${Math.round(m.autonomic)}</strong>
+              </div>
+              <div class="mental-bar-track">
+                <div class="mental-bar-fill auto" style="width: ${m.autonomic}%"></div>
+              </div>
+            </div>
+            ${alignmentLabel ? `<div class="mental-alignment">${alignmentLabel}</div>` : ''}
+          </div>
+        ` : `
+          <div class="mental-no-face">
+            <div class="mental-no-face-icon">💡</div>
+            <div class="mental-no-face-body">
+              <div class="mental-no-face-title">얼굴 측정을 더하면</div>
+              <div class="mental-no-face-sub">자율신경 데이터로 4차원 분석이 완성돼요</div>
+            </div>
+            <button class="mental-no-face-btn" type="button" onclick="App.goPage('face')">측정 →</button>
+          </div>
+        `}
+
+        <!-- 4차원 점수 -->
+        <div class="mental-dims">
+          ${dimensions.map(d => `
+            <div class="mental-dim">
+              <div class="mental-dim-icon">${d.icon}</div>
+              <div class="mental-dim-info">
+                <div class="mental-dim-label">${d.label}</div>
+                <div class="mental-dim-hint">${d.hint}</div>
+              </div>
+              <div class="mental-dim-score" style="color: ${getScoreColor(d.score)};">${Math.round(d.score)}</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <!-- 권유 -->
+        <div class="mental-action">
+          <div class="mental-action-icon">💚</div>
+          <div class="mental-action-text">${m.patternAction}</div>
+        </div>
+      </div>
+    `;
   },
 
   _renderCircumplexChart(v, a, quadrant) {
@@ -4423,14 +4915,34 @@ const App = {
     const avgV = recent7.reduce((s, h) => s + (h.valence || 0), 0) / recent7.length;
     const avgL = recent7.reduce((s, h) => s + (h.loneliness || 0), 0) / recent7.length;
     const dominant = this._getMoodQuadrant(avgV, 0);
+
+    // ★ v15.2: 정신건강 점수 추이
+    const recentWithMental = recent7.filter(h => h.mental && h.mental.overall != null);
+    let mentalAvg = null, mentalTrend = '→';
+    if (recentWithMental.length >= 2) {
+      mentalAvg = Math.round(recentWithMental.reduce((s, h) => s + h.mental.overall, 0) / recentWithMental.length);
+      // 추이: 최근 절반 vs 이전 절반
+      const half = Math.floor(recentWithMental.length / 2);
+      const newer = recentWithMental.slice(-half);
+      const older = recentWithMental.slice(0, half);
+      const newerAvg = newer.reduce((s, h) => s + h.mental.overall, 0) / newer.length;
+      const olderAvg = older.reduce((s, h) => s + h.mental.overall, 0) / older.length;
+      const diff = newerAvg - olderAvg;
+      if (diff > 5) mentalTrend = '↑';
+      else if (diff < -5) mentalTrend = '↓';
+    }
+
     return `
       <div class="history-summary-card">
         <div class="history-summary-title">지난 7일 마음 풍경</div>
         <div class="history-summary-main">${dominant.icon} ${dominant.label}</div>
         <div class="history-summary-stats">
+          ${mentalAvg !== null ? `
+            <div><span>정신건강</span><strong>${mentalAvg} ${mentalTrend}</strong></div>
+          ` : ''}
           <div><span>긍정 ↔ 부정</span><strong>${avgV >= 0 ? '+' : ''}${(avgV*100).toFixed(0)}</strong></div>
           <div><span>외로움</span><strong>${(avgL*100).toFixed(0)}%</strong></div>
-          <div><span>기록 횟수</span><strong>${recent7.length}회</strong></div>
+          ${mentalAvg === null ? `<div><span>기록 횟수</span><strong>${recent7.length}회</strong></div>` : ''}
         </div>
       </div>
     `;
