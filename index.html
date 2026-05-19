@@ -2721,6 +2721,7 @@ body::before {
   gap: 8px;
   margin: 16px 0;
 }
+.result-actions-3 .mood-action-btn { flex: 1; padding: 12px 6px; font-size: 12px; }
 .mood-action-btn {
   flex: 1;
   padding: 14px;
@@ -2886,6 +2887,497 @@ body::before {
   font-style: italic;
   line-height: 1.5;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   ★ v15.1: 강화된 마스코트 + 확장된 감정 카테고리
+   ════════════════════════════════════════════════════════════════ */
+
+/* ─── 강화된 홈 카드 (마스코트 포함) ─── */
+.mood-card-v2 {
+  position: relative;
+  margin: 16px 12px 22px;
+  border-radius: 26px;
+  padding: 22px 22px 22px 22px;
+  background: linear-gradient(135deg, #FFF7E6 0%, #FFE9D6 50%, #FFD9C4 100%);
+  border: 1.5px solid rgba(251, 191, 36, .3);
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow:
+    0 1px 2px rgba(245, 158, 11, .08),
+    0 8px 24px rgba(245, 158, 11, .15);
+  transition: transform .15s, box-shadow .2s;
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 16px;
+  align-items: center;
+  min-height: 156px;
+}
+.mood-card-v2:active {
+  transform: scale(0.98);
+  box-shadow: 0 1px 2px rgba(245, 158, 11, .08), 0 4px 12px rgba(245, 158, 11, .15);
+}
+.mood-card-v2.played {
+  background: linear-gradient(135deg, #EBFBF1 0%, #D9F5E5 50%, #C7F0DC 100%);
+  border-color: rgba(34, 197, 94, .35);
+}
+
+.mood-card-mascot-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 110px;
+  height: 110px;
+}
+.mood-card-mascot {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 8px 16px rgba(245, 158, 11, .35));
+  animation: mascot-bob 3.2s ease-in-out infinite;
+}
+@keyframes mascot-bob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-6px) rotate(2deg); }
+}
+.mood-card-sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.sparkle {
+  position: absolute;
+  font-size: 14px;
+  opacity: 0;
+  animation: sparkle-pop 2.6s ease-in-out infinite;
+}
+.sparkle.s1 { top: 8%; right: 10%; animation-delay: 0s; }
+.sparkle.s2 { bottom: 12%; left: 4%; animation-delay: 0.9s; font-size: 12px; }
+.sparkle.s3 { top: 30%; left: 0%; animation-delay: 1.6s; font-size: 11px; }
+@keyframes sparkle-pop {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.mood-card-content-v2 {
+  min-width: 0;
+}
+.mood-card-eyebrow-v2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: .1em;
+  color: #B45309;
+  font-weight: 800;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.mc-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #F59E0B;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+}
+.mood-card-v2.played .mood-card-eyebrow-v2 { color: var(--primary-dark); }
+.mood-card-v2.played .mc-dot { background: var(--primary); }
+
+.mood-card-title-v2 {
+  font-size: 18px;
+  font-weight: 900;
+  color: #422006;
+  letter-spacing: -.02em;
+  line-height: 1.3;
+  margin-bottom: 8px;
+}
+.mood-card-v2.played .mood-card-title-v2 { color: #14532D; }
+
+.mood-card-game-v2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255,255,255,.65);
+  border-radius: 999px;
+  margin-bottom: 8px;
+  backdrop-filter: blur(4px);
+}
+.mood-card-icon { font-size: 16px; }
+.mood-card-game-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: #92400E;
+  letter-spacing: -.01em;
+}
+.mood-card-v2.played .mood-card-game-name { color: var(--primary-dark); }
+
+.mood-card-meta-v2 {
+  font-size: 11px;
+  color: #92400E;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  opacity: 0.85;
+}
+.mood-card-dot-sep { opacity: 0.5; }
+.mood-card-v2.played .mood-card-meta-v2 { color: #14532D; }
+
+.mood-card-btn-v2 {
+  background: linear-gradient(135deg, #F59E0B 0%, #FB923C 100%);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, .35);
+  transition: transform .12s, box-shadow .15s;
+  letter-spacing: -.01em;
+}
+.mood-card-btn-v2:active {
+  transform: scale(0.96);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, .25);
+}
+.mood-card-v2.played .mood-card-btn-v2 {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+  box-shadow: 0 4px 14px rgba(34, 197, 94, .35);
+}
+.mc-btn-arrow {
+  display: inline-block;
+  transition: transform .2s;
+}
+.mood-card-v2:active .mc-btn-arrow { transform: translateX(3px); }
+
+@media (max-width: 360px) {
+  .mood-card-v2 {
+    grid-template-columns: 90px 1fr;
+    gap: 12px;
+    padding: 18px;
+  }
+  .mood-card-mascot-wrap { width: 90px; height: 90px; }
+}
+
+/* ─── 이미 측정한 경우 안내 ─── */
+.mood-played-screen {
+  text-align: center;
+  padding: 20px 4px 40px;
+}
+.played-mascot {
+  margin-bottom: 16px;
+  filter: drop-shadow(0 8px 20px rgba(34, 197, 94, .3));
+}
+.played-title {
+  font-size: 19px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+  margin-bottom: 8px;
+}
+.played-sub {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+  margin-bottom: 28px;
+  font-weight: 500;
+}
+.played-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.played-action-card {
+  display: grid;
+  grid-template-columns: 48px 1fr 24px;
+  gap: 14px;
+  align-items: center;
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: transform .12s, border-color .15s;
+}
+.played-action-card:active { transform: scale(0.98); }
+.played-action-card.primary {
+  border-color: #7C3AED;
+  background: linear-gradient(135deg, #FAF5FF, #EDE9FE);
+}
+.pac-icon {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+}
+.played-action-card.primary .pac-icon { background: rgba(124, 58, 237, .15); }
+.pac-content { min-width: 0; }
+.pac-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 2px;
+  letter-spacing: -.01em;
+}
+.pac-sub {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.pac-arrow {
+  color: var(--text3);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* ─── 게임 직접 선택 화면 ─── */
+.game-picker { padding: 4px; }
+.game-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.game-picker-back {
+  width: 36px; height: 36px;
+  background: var(--bg);
+  border: none;
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+  color: var(--text);
+}
+.game-picker-title {
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+}
+.game-picker-sub {
+  font-size: 13px;
+  color: var(--text2);
+  margin: 12px 4px 18px;
+  line-height: 1.5;
+}
+.game-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.game-picker-card {
+  background: linear-gradient(135deg, #FAF5FF, #F0FDF4);
+  border: 1.5px solid rgba(167, 139, 250, .25);
+  border-radius: 18px;
+  padding: 20px 14px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  transition: transform .15s, border-color .15s;
+}
+.game-picker-card:active { transform: scale(0.96); border-color: #7C3AED; }
+.gp-icon { font-size: 36px; margin-bottom: 8px; line-height: 1; }
+.gp-name {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.01em;
+  margin-bottom: 4px;
+}
+.gp-sub {
+  font-size: 10px;
+  color: var(--text2);
+  line-height: 1.4;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.gp-time {
+  font-size: 10px;
+  color: #6D28D9;
+  font-weight: 800;
+  background: rgba(124, 58, 237, .1);
+  padding: 3px 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+/* ─── 강화된 표정 미러링 게임 ─── */
+.mirror-card-v2 {
+  background: var(--card);
+  border-radius: 22px;
+  padding: 24px 18px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.mirror-target-v2 {
+  margin-bottom: 22px;
+  padding: 32px 16px 20px;
+  border-radius: 20px;
+  position: relative;
+}
+.mirror-mascot-anim {
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: mascot-gentle-pulse 2.4s ease-in-out infinite;
+}
+@keyframes mascot-gentle-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.mascot-svg {
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, .12));
+}
+.mirror-label-v2 {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+}
+
+.mirror-question {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 6px;
+  letter-spacing: -.01em;
+  line-height: 1.5;
+  padding: 0 8px;
+}
+.mirror-sub-v2 {
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 24px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.mirror-scale-v2 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.mirror-scale-btn-v2 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+}
+.mirror-scale-btn-v2:hover,
+.mirror-scale-btn-v2:active {
+  background: linear-gradient(135deg, #FAF5FF, #EDE9FE);
+  border-color: #7C3AED;
+  transform: scale(1.05);
+}
+.msb-num {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+}
+.msb-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text2);
+  letter-spacing: -.01em;
+}
+
+/* ─── 확장된 키워드 그룹 (긍정/중립/부정) ─── */
+.kw-group { margin-bottom: 22px; }
+.kw-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+.kw-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.kw-group-dot.pos { background: #22C55E; }
+.kw-group-dot.neu { background: #94A3B8; }
+.kw-group-dot.neg { background: #A78BFA; }
+.kw-group-dot.freq { background: linear-gradient(135deg, #F59E0B, #FB923C); }
+.kw-group-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text2);
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.keyword-grid-v2 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+@media (min-width: 380px) {
+  .keyword-grid-v2 { grid-template-columns: repeat(4, 1fr); }
+}
+.keyword-btn-v2 {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 4px;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transition: all .15s;
+}
+.keyword-btn-v2.on {
+  transform: scale(1.04);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .1);
+}
+.keyword-btn-v2.pos.on {
+  background: linear-gradient(135deg, #ECFDF5, #D1FAE5);
+  border-color: #22C55E;
+}
+.keyword-btn-v2.neu.on {
+  background: linear-gradient(135deg, #F1F5F9, #E2E8F0);
+  border-color: #94A3B8;
+}
+.keyword-btn-v2.neg.on {
+  background: linear-gradient(135deg, #FAF5FF, #EDE9FE);
+  border-color: #A78BFA;
+}
+.keyword-icon-v2 {
+  font-size: 22px;
+  line-height: 1;
+}
+.keyword-label-v2 {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text2);
+  letter-spacing: -.01em;
+}
+.keyword-btn-v2.on .keyword-label-v2 { color: var(--text); font-weight: 900; }
 
 .tts-fail-toast {
   position: fixed;
@@ -4338,7 +4830,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.0 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.1 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -4352,18 +4844,52 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <!-- ★ v13: 종합 Wellness Score 카드 (측정 후 자동 표시) -->
   <div id="wellness-card" class="wellness-card" style="display:none"></div>
 
-  <!-- ★ v15.0: 오늘의 감정 카드 (홈 첫 화면) -->
-  <div id="mood-today-card" class="mood-card" onclick="App.goPage('mood')">
-    <div class="mood-card-bg"></div>
-    <div class="mood-card-content">
-      <div class="mood-card-eyebrow">🌿 오늘의 감정</div>
-      <div class="mood-card-title" id="mood-card-title">오늘 마음은 어떠세요?</div>
-      <div class="mood-card-game" id="mood-card-game">
+  <!-- ★ v15.1: 오늘의 감정 카드 (홈 첫 화면) - 강화된 디자인 -->
+  <div id="mood-today-card" class="mood-card-v2" onclick="App.goPage('mood')">
+    <div class="mood-card-mascot-wrap">
+      <svg class="mood-card-mascot" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="mascotGrad" cx="35%" cy="35%">
+            <stop offset="0%" stop-color="#FFE9B3"/>
+            <stop offset="60%" stop-color="#FBC97F"/>
+            <stop offset="100%" stop-color="#F59E0B"/>
+          </radialGradient>
+        </defs>
+        <!-- Mascot body (rounded blob) -->
+        <path d="M50 12 C72 12, 88 30, 88 52 C88 75, 72 88, 50 88 C28 88, 12 75, 12 52 C12 30, 28 12, 50 12 Z" fill="url(#mascotGrad)" />
+        <!-- Cheeks -->
+        <ellipse cx="30" cy="58" rx="6" ry="4" fill="#FCA5A5" opacity="0.6"/>
+        <ellipse cx="70" cy="58" rx="6" ry="4" fill="#FCA5A5" opacity="0.6"/>
+        <!-- Eyes -->
+        <circle cx="38" cy="46" r="3.5" fill="#1F2937"/>
+        <circle cx="62" cy="46" r="3.5" fill="#1F2937"/>
+        <circle cx="39" cy="45" r="1.2" fill="#fff"/>
+        <circle cx="63" cy="45" r="1.2" fill="#fff"/>
+        <!-- Smile -->
+        <path d="M40 64 Q50 72, 60 64" stroke="#1F2937" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="mood-card-sparkles">
+        <span class="sparkle s1">✨</span>
+        <span class="sparkle s2">💫</span>
+        <span class="sparkle s3">⭐</span>
+      </div>
+    </div>
+    <div class="mood-card-content-v2">
+      <div class="mood-card-eyebrow-v2"><span class="mc-dot"></span> 오늘의 감정</div>
+      <div class="mood-card-title-v2" id="mood-card-title">오늘 마음은 어떠세요?</div>
+      <div class="mood-card-game-v2" id="mood-card-game">
         <span class="mood-card-icon">🎨</span>
         <span class="mood-card-game-name">색으로 표현하는 오늘</span>
       </div>
-      <div class="mood-card-time" id="mood-card-time">약 1분 · 매일 다른 게임</div>
-      <button type="button" class="mood-card-btn">시작하기 <span>→</span></button>
+      <div class="mood-card-meta-v2">
+        <span class="mood-card-time-v2" id="mood-card-time">약 1분</span>
+        <span class="mood-card-dot-sep">·</span>
+        <span class="mood-card-replay-hint">매일 새로운 게임 · 재측정 가능</span>
+      </div>
+      <button type="button" class="mood-card-btn-v2">
+        <span class="mc-btn-text" id="mood-card-btn-text">지금 시작하기</span>
+        <span class="mc-btn-arrow">→</span>
+      </button>
     </div>
   </div>
 

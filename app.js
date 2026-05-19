@@ -358,6 +358,10 @@ const App = {
       </div>
     `;
     document.body.appendChild(modal);
+    // ★ v15.1: 백드롭 클릭으로 닫기 (안전망)
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) this._closeFeedback();
+    });
     setTimeout(() => modal.classList.add('show'), 10);
     this._feedbackModal = modal;
     this._feedbackType = null;
@@ -370,12 +374,23 @@ const App = {
     });
   },
 
+  // ★ v15.1: 모달 즉시 제거 (transition 끝까지 안 기다림 → 백드롭 잔존 버그 방지)
   _closeFeedback() {
-    if (this._feedbackModal) {
-      this._feedbackModal.classList.remove('show');
-      setTimeout(() => this._feedbackModal?.remove(), 300);
-      this._feedbackModal = null;
-    }
+    // 모든 feedback-modal 요소 제거 (중복 방지)
+    document.querySelectorAll('.feedback-modal').forEach(m => {
+      m.classList.remove('show');
+      m.style.opacity = '0';
+      m.style.pointerEvents = 'none';
+      // 짧은 transition 후 제거, 실패 시 즉시 강제 제거
+      setTimeout(() => { try { m.remove(); } catch (e) {} }, 250);
+    });
+    this._feedbackModal = null;
+    // 안전망: 1초 후에도 남은 모달 강제 제거
+    setTimeout(() => {
+      document.querySelectorAll('.feedback-modal').forEach(m => {
+        try { m.remove(); } catch (e) {}
+      });
+    }, 1000);
   },
 
   _sendFeedback() {
@@ -433,6 +448,9 @@ const App = {
 
     this._trackEvent('feedback_sent', { type });
 
+    // ★ v15.1: mailto 호출 전에 모달 먼저 닫기 → 백드롭 잔존 방지
+    this._closeFeedback();
+
     // 모바일에서 mailto 호환성
     try {
       window.location.href = mailto;
@@ -447,8 +465,6 @@ const App = {
         prompt('아래 내용을 복사해서 이메일로 보내주세요:', fullText);
       }
     }
-
-    this._closeFeedback();
   },
 
   // ★ v14.5: 익명 이벤트 트래킹 (로컬 저장, 외부 전송 X)
@@ -1761,7 +1777,7 @@ const App = {
       <div class="feedback-card">
         <div class="feedback-header">
           <div class="feedback-title">🛠️ 베타 디버그 정보</div>
-          <button class="feedback-close" type="button" onclick="this.closest('.feedback-modal').remove()">✕</button>
+          <button class="feedback-close" type="button" onclick="App._closeFeedback()">✕</button>
         </div>
         <pre style="font-size:11px;font-family:monospace;background:var(--bg);padding:14px;border-radius:10px;max-height:60vh;overflow:auto;white-space:pre-wrap;color:var(--text);">${info}</pre>
         <div class="feedback-footer">
@@ -1771,7 +1787,11 @@ const App = {
       </div>
     `;
     document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) this._closeFeedback();
+    });
     setTimeout(() => modal.classList.add('show'), 10);
+    this._feedbackModal = modal;
   },
 
   _exportBetaData() {
@@ -1801,7 +1821,7 @@ const App = {
       localStorage.removeItem('beta_events');
       alert('베타 데이터가 초기화되었습니다.');
     } catch (e) {}
-    document.querySelector('.feedback-modal')?.remove();
+    this._closeFeedback();
   },
 
   // ★ v14.4: 결과 페이지의 평소 대비 변화 카드
@@ -3101,17 +3121,20 @@ const App = {
     const titleEl = document.getElementById('mood-card-title');
     const gameEl = document.getElementById('mood-card-game');
     const timeEl = document.getElementById('mood-card-time');
+    const btnTextEl = document.getElementById('mood-card-btn-text');
 
     if (played) {
-      // 오늘 이미 했음 — 결과 보기 모드
-      titleEl.textContent = '오늘의 감정을 확인했어요';
-      gameEl.innerHTML = `<span class="mood-card-icon">✓</span><span class="mood-card-game-name">결과 다시 보기</span>`;
-      timeEl.textContent = '내일 새로운 게임이 준비됩니다';
+      // 오늘 이미 했음 — 재측정 안내
+      titleEl.textContent = '오늘은 이미 마음을 비춰봤어요';
+      gameEl.innerHTML = `<span class="mood-card-icon">${game.icon}</span><span class="mood-card-game-name">다시 측정하거나 결과 보기</span>`;
+      if (timeEl) timeEl.textContent = '언제든 다시 할 수 있어요';
+      if (btnTextEl) btnTextEl.textContent = '다시 시작하기';
       card.classList.add('played');
     } else {
       titleEl.textContent = '오늘 마음은 어떠세요?';
       gameEl.innerHTML = `<span class="mood-card-icon">${game.icon}</span><span class="mood-card-game-name">${game.name}</span>`;
-      timeEl.textContent = `${game.time} · 매일 다른 게임`;
+      if (timeEl) timeEl.textContent = '약 1분';
+      if (btnTextEl) btnTextEl.textContent = '지금 시작하기';
       card.classList.remove('played');
     }
   },
@@ -3123,11 +3146,126 @@ const App = {
     this._moodState = {}; // 게임 상태 초기화
     container.innerHTML = '';
 
+    // ★ v15.1: 오늘 이미 했으면 선택 화면 (재측정 vs 결과 보기 vs 일지)
     if (this._hasPlayedToday()) {
-      this._renderMoodResultLatest(container);
+      this._renderMoodAlreadyPlayed(container);
     } else {
       this._renderMoodIntro(container);
     }
+  },
+
+  // ★ v15.1: 오늘 이미 측정한 경우 - 선택 화면
+  _renderMoodAlreadyPlayed(container) {
+    const game = this._getTodayGame();
+    let lastResult = null;
+    try {
+      const history = JSON.parse(localStorage.getItem('history_mood') || '[]');
+      const today = new Date().toISOString().slice(0, 10);
+      const todays = history.filter(h => new Date(h.t).toISOString().slice(0, 10) === today);
+      lastResult = todays[todays.length - 1];
+    } catch (e) {}
+
+    const todayCount = (() => {
+      try {
+        const history = JSON.parse(localStorage.getItem('history_mood') || '[]');
+        const today = new Date().toISOString().slice(0, 10);
+        return history.filter(h => new Date(h.t).toISOString().slice(0, 10) === today).length;
+      } catch (e) { return 0; }
+    })();
+
+    container.innerHTML = `
+      <div class="mood-played-screen">
+        <div class="played-mascot">
+          <svg viewBox="0 0 100 100" width="120" height="120" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="playedGrad" cx="35%" cy="35%">
+                <stop offset="0%" stop-color="#C7F0DC"/>
+                <stop offset="60%" stop-color="#7DD3A4"/>
+                <stop offset="100%" stop-color="#22C55E"/>
+              </radialGradient>
+            </defs>
+            <path d="M50 12 C72 12, 88 30, 88 52 C88 75, 72 88, 50 88 C28 88, 12 75, 12 52 C12 30, 28 12, 50 12 Z" fill="url(#playedGrad)"/>
+            <ellipse cx="30" cy="58" rx="6" ry="4" fill="#FCA5A5" opacity="0.6"/>
+            <ellipse cx="70" cy="58" rx="6" ry="4" fill="#FCA5A5" opacity="0.6"/>
+            <path d="M33 45 L43 45" stroke="#1F2937" stroke-width="3" stroke-linecap="round" fill="none"/>
+            <path d="M57 45 L67 45" stroke="#1F2937" stroke-width="3" stroke-linecap="round" fill="none"/>
+            <path d="M40 65 Q50 70, 60 65" stroke="#1F2937" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="played-title">오늘 이미 ${todayCount}번 마음을 비춰봤어요</div>
+        <div class="played-sub">하루 동안 마음은 여러 번 바뀌어요.<br>지금 다시 측정해도 좋아요.</div>
+
+        <div class="played-actions">
+          <button class="played-action-card primary" type="button" onclick="App._startNewMoodGame()">
+            <div class="pac-icon">🔄</div>
+            <div class="pac-content">
+              <div class="pac-title">다시 측정하기</div>
+              <div class="pac-sub">${game.icon} ${game.name}</div>
+            </div>
+            <div class="pac-arrow">→</div>
+          </button>
+
+          <button class="played-action-card" type="button" onclick="App._renderMoodResultLatest(document.getElementById('mood-container'))">
+            <div class="pac-icon">📊</div>
+            <div class="pac-content">
+              <div class="pac-title">최근 결과 보기</div>
+              <div class="pac-sub">방금 측정한 결과 다시 보기</div>
+            </div>
+            <div class="pac-arrow">→</div>
+          </button>
+
+          <button class="played-action-card" type="button" onclick="App._showMoodHistory()">
+            <div class="pac-icon">📓</div>
+            <div class="pac-content">
+              <div class="pac-title">감정 일지 보기</div>
+              <div class="pac-sub">지금까지 쌓인 마음의 흐름</div>
+            </div>
+            <div class="pac-arrow">→</div>
+          </button>
+
+          <button class="played-action-card" type="button" onclick="App._pickAnotherGame()">
+            <div class="pac-icon">🎲</div>
+            <div class="pac-content">
+              <div class="pac-title">다른 게임으로 측정</div>
+              <div class="pac-sub">4가지 게임 중 직접 선택</div>
+            </div>
+            <div class="pac-arrow">→</div>
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  // ★ v15.1: 새 게임 시작 (오늘 게임)
+  _startNewMoodGame() {
+    const game = this._getTodayGame();
+    this._moodState = {};
+    document.getElementById('mood-container').innerHTML = '';
+    this._renderMoodIntro(document.getElementById('mood-container'));
+  },
+
+  // ★ v15.1: 4개 중 직접 선택
+  _pickAnotherGame() {
+    const container = document.getElementById('mood-container');
+    container.innerHTML = `
+      <div class="game-picker">
+        <div class="game-picker-header">
+          <button class="game-picker-back" type="button" onclick="App._renderMoodPage()">←</button>
+          <div class="game-picker-title">게임 선택</div>
+        </div>
+        <div class="game-picker-sub">어떤 방식으로 오늘의 감정을 표현해볼까요?</div>
+        <div class="game-picker-grid">
+          ${this._moodGames.map(g => `
+            <button class="game-picker-card" type="button" onclick="App._startMoodGame('${g.id}')">
+              <div class="gp-icon">${g.icon}</div>
+              <div class="gp-name">${g.name}</div>
+              <div class="gp-sub">${g.sub}</div>
+              <div class="gp-time">${g.time}</div>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
   },
 
   // ─── 인트로 화면 ───
@@ -3169,21 +3307,114 @@ const App = {
   },
 
   // ════════════════════════════════════════════════════════════════
-  // GAME 1: 표정 미러링 (Ekman 1992)
+  // GAME 1: 표정 미러링 (Ekman 1992) - v15.1 마스코트 강화
   // ════════════════════════════════════════════════════════════════
   _renderMirrorGame(container) {
+    // ★ v15.1: 부드러운 마스코트 + 깊이있는 질문
     const emotions = [
-      { id: 'joy', face: '😊', word: '기쁨' },
-      { id: 'sadness', face: '😢', word: '슬픔' },
-      { id: 'anger', face: '😠', word: '분노' },
-      { id: 'fear', face: '😨', word: '불안' },
-      { id: 'surprise', face: '😲', word: '놀람' },
-      { id: 'disgust', face: '😖', word: '불편' },
+      { id: 'joy',      word: '기쁨',  hue: '#FBC97F', cheek: true,
+        eyes: 'crescent', mouth: 'big-smile',
+        question: '오늘 마음 한구석에 기쁨이 있나요?',
+        sub: '작은 즐거움도 괜찮아요' },
+      { id: 'peace',    word: '평온',  hue: '#A7D8E5', cheek: false,
+        eyes: 'soft-closed', mouth: 'gentle-smile',
+        question: '지금 차분한 평온함을 느끼나요?',
+        sub: '깊은 호흡 같은 그런 안정감' },
+      { id: 'sadness',  word: '슬픔',  hue: '#9CB7D4', cheek: false,
+        eyes: 'sad-droop', mouth: 'sad-curve', tear: true,
+        question: '마음 한편에 슬픔이 있나요?',
+        sub: '슬픔도 자연스러운 감정이에요' },
+      { id: 'anxiety',  word: '불안',  hue: '#C8B6FF', cheek: false,
+        eyes: 'worried', mouth: 'wavy',
+        question: '뭔가 걱정되고 불편한 느낌이 있나요?',
+        sub: '두근거림이나 긴장감 같은' },
+      { id: 'anger',    word: '분노',  hue: '#F4A99A', cheek: true,
+        eyes: 'angry', mouth: 'flat-frown',
+        question: '화나거나 짜증나는 마음이 있나요?',
+        sub: '억울함이나 답답함도 포함해요' },
+      { id: 'loneliness',word:'외로움',hue: '#B8B8E0', cheek: false,
+        eyes: 'distant', mouth: 'subtle-frown',
+        question: '혼자라는 느낌이나 그리움이 있나요?',
+        sub: '누군가가 보고 싶은 마음' },
     ];
     this._moodState.emotions = emotions;
-    this._moodState.emotionScores = {}; // 각 표정마다 "얼마나 따라하기 쉬웠나" 1-5
+    this._moodState.emotionScores = {};
     this._moodState.currentIdx = 0;
     this._renderMirrorStep(container);
+  },
+
+  // ★ v15.1: 마스코트 SVG 생성
+  _renderMascotSvg(em, big) {
+    const size = big ? 180 : 80;
+    let eyes = '';
+    if (em.eyes === 'crescent') {
+      eyes = `<path d="M33 45 Q38 41, 43 45" stroke="#1F2937" stroke-width="3" fill="none" stroke-linecap="round"/>
+              <path d="M57 45 Q62 41, 67 45" stroke="#1F2937" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+    } else if (em.eyes === 'soft-closed') {
+      eyes = `<path d="M33 47 L43 47" stroke="#1F2937" stroke-width="2.5" stroke-linecap="round"/>
+              <path d="M57 47 L67 47" stroke="#1F2937" stroke-width="2.5" stroke-linecap="round"/>`;
+    } else if (em.eyes === 'sad-droop') {
+      eyes = `<path d="M33 43 Q38 48, 43 45" stroke="#1F2937" stroke-width="3" fill="none" stroke-linecap="round"/>
+              <path d="M57 45 Q62 48, 67 43" stroke="#1F2937" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+    } else if (em.eyes === 'worried') {
+      eyes = `<circle cx="38" cy="46" r="3" fill="#1F2937"/>
+              <circle cx="62" cy="46" r="3" fill="#1F2937"/>
+              <path d="M32 40 L43 38" stroke="#1F2937" stroke-width="2" stroke-linecap="round"/>
+              <path d="M68 40 L57 38" stroke="#1F2937" stroke-width="2" stroke-linecap="round"/>`;
+    } else if (em.eyes === 'angry') {
+      eyes = `<circle cx="38" cy="47" r="2.5" fill="#1F2937"/>
+              <circle cx="62" cy="47" r="2.5" fill="#1F2937"/>
+              <path d="M30 38 L46 43" stroke="#1F2937" stroke-width="3" stroke-linecap="round"/>
+              <path d="M70 38 L54 43" stroke="#1F2937" stroke-width="3" stroke-linecap="round"/>`;
+    } else if (em.eyes === 'distant') {
+      eyes = `<circle cx="38" cy="46" r="2.5" fill="#1F2937" opacity="0.7"/>
+              <circle cx="62" cy="46" r="2.5" fill="#1F2937" opacity="0.7"/>`;
+    } else {
+      eyes = `<circle cx="38" cy="46" r="3.5" fill="#1F2937"/>
+              <circle cx="62" cy="46" r="3.5" fill="#1F2937"/>
+              <circle cx="39" cy="45" r="1.2" fill="#fff"/>
+              <circle cx="63" cy="45" r="1.2" fill="#fff"/>`;
+    }
+
+    let mouth = '';
+    if (em.mouth === 'big-smile') {
+      mouth = `<path d="M38 62 Q50 76, 62 62" stroke="#1F2937" stroke-width="3" fill="#fff" stroke-linejoin="round"/>`;
+    } else if (em.mouth === 'gentle-smile') {
+      mouth = `<path d="M42 65 Q50 70, 58 65" stroke="#1F2937" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+    } else if (em.mouth === 'sad-curve') {
+      mouth = `<path d="M42 70 Q50 63, 58 70" stroke="#1F2937" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+    } else if (em.mouth === 'wavy') {
+      mouth = `<path d="M40 67 Q45 64, 50 67 Q55 70, 60 67" stroke="#1F2937" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+    } else if (em.mouth === 'flat-frown') {
+      mouth = `<path d="M40 68 L60 68" stroke="#1F2937" stroke-width="2.5" stroke-linecap="round"/>`;
+    } else if (em.mouth === 'subtle-frown') {
+      mouth = `<path d="M42 67 Q50 65, 58 67" stroke="#1F2937" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+    }
+
+    const cheeks = em.cheek
+      ? `<ellipse cx="30" cy="58" rx="6" ry="4" fill="#FCA5A5" opacity="0.6"/>
+         <ellipse cx="70" cy="58" rx="6" ry="4" fill="#FCA5A5" opacity="0.6"/>` : '';
+
+    const tear = em.tear
+      ? `<path d="M40 56 Q40 64, 38 70 Q36 64, 40 56 Z" fill="#7DD3FC" opacity="0.85"/>` : '';
+
+    const gradId = `g-${em.id}`;
+    return `
+      <svg viewBox="0 0 100 100" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" class="mascot-svg">
+        <defs>
+          <radialGradient id="${gradId}" cx="35%" cy="35%">
+            <stop offset="0%" stop-color="${em.hue}" stop-opacity="0.4"/>
+            <stop offset="60%" stop-color="${em.hue}" stop-opacity="0.9"/>
+            <stop offset="100%" stop-color="${em.hue}"/>
+          </radialGradient>
+        </defs>
+        <path d="M50 12 C72 12, 88 30, 88 52 C88 75, 72 88, 50 88 C28 88, 12 75, 12 52 C12 30, 28 12, 50 12 Z" fill="url(#${gradId})"/>
+        ${cheeks}
+        ${eyes}
+        ${mouth}
+        ${tear}
+      </svg>
+    `;
   },
 
   _renderMirrorStep(container) {
@@ -3191,31 +3422,46 @@ const App = {
     const total = this._moodState.emotions.length;
     const emotion = this._moodState.emotions[idx];
     const progress = ((idx) / total) * 100;
+    const mascot = this._renderMascotSvg(emotion, true);
 
     container.innerHTML = `
       <div class="mood-progress"><div class="mood-progress-fill" style="width:${progress}%"></div></div>
       <div class="mood-progress-text">${idx + 1} / ${total}</div>
 
-      <div class="mirror-card">
-        <div class="mirror-target">
-          <div class="mirror-emoji">${emotion.face}</div>
-          <div class="mirror-label">${emotion.word}</div>
+      <div class="mirror-card-v2">
+        <div class="mirror-target-v2" style="background: linear-gradient(135deg, ${emotion.hue}33, ${emotion.hue}11);">
+          <div class="mirror-mascot-anim">${mascot}</div>
+          <div class="mirror-label-v2">${emotion.word}</div>
         </div>
-        <div class="mirror-prompt">이 표정을 따라해보세요</div>
-        <div class="mirror-sub">지금 이 감정이 얼마나 자연스럽게 느껴지나요?</div>
 
-        <div class="mirror-scale">
-          <div class="mirror-scale-label">어색해요</div>
-          <div class="mirror-scale-btns">
-            ${[1,2,3,4,5].map(n => `
-              <button class="mirror-scale-btn" type="button" data-val="${n}" onclick="App._recordMirror(${n})">${n}</button>
-            `).join('')}
-          </div>
-          <div class="mirror-scale-label">자연스러워요</div>
+        <div class="mirror-question">${emotion.question}</div>
+        <div class="mirror-sub-v2">${emotion.sub}</div>
+
+        <div class="mirror-scale-v2">
+          <button class="mirror-scale-btn-v2" type="button" data-val="1" onclick="App._recordMirror(1)">
+            <span class="msb-num">1</span>
+            <span class="msb-label">전혀</span>
+          </button>
+          <button class="mirror-scale-btn-v2" type="button" data-val="2" onclick="App._recordMirror(2)">
+            <span class="msb-num">2</span>
+            <span class="msb-label">조금</span>
+          </button>
+          <button class="mirror-scale-btn-v2" type="button" data-val="3" onclick="App._recordMirror(3)">
+            <span class="msb-num">3</span>
+            <span class="msb-label">보통</span>
+          </button>
+          <button class="mirror-scale-btn-v2" type="button" data-val="4" onclick="App._recordMirror(4)">
+            <span class="msb-num">4</span>
+            <span class="msb-label">꽤</span>
+          </button>
+          <button class="mirror-scale-btn-v2" type="button" data-val="5" onclick="App._recordMirror(5)">
+            <span class="msb-num">5</span>
+            <span class="msb-label">매우</span>
+          </button>
         </div>
 
         <button class="mood-skip-btn" type="button" onclick="App._recordMirror(0)">
-          건너뛰기
+          잘 모르겠어요
         </button>
       </div>
     `;
@@ -3392,42 +3638,116 @@ const App = {
   },
 
   _renderDiaryKeywords(container) {
+    // ★ v15.1: 감정 카테고리 대폭 확장 (28개, 3그룹)
     const keywords = [
-      { id: 'joy', label: '기쁨', icon: '😊', valence: 1 },
-      { id: 'peace', label: '평온', icon: '😌', valence: 0.8 },
-      { id: 'gratitude', label: '감사', icon: '🙏', valence: 0.9 },
-      { id: 'love', label: '애정', icon: '💗', valence: 0.9 },
-      { id: 'hope', label: '희망', icon: '🌅', valence: 0.7 },
-      { id: 'fatigue', label: '피곤함', icon: '😴', valence: -0.3 },
-      { id: 'anxiety', label: '불안', icon: '😟', valence: -0.6 },
-      { id: 'sadness', label: '슬픔', icon: '😢', valence: -0.7 },
-      { id: 'anger', label: '분노', icon: '😠', valence: -0.7 },
-      { id: 'loneliness', label: '외로움', icon: '🥺', valence: -0.8 },
-      { id: 'emptiness', label: '공허', icon: '😶‍🌫️', valence: -0.7 },
-      { id: 'confusion', label: '혼란', icon: '😵‍💫', valence: -0.4 },
+      // ── 긍정 (10개) ──
+      { id: 'joy', label: '기쁨', icon: '😊', valence: 1.0, group: 'pos' },
+      { id: 'peace', label: '평온', icon: '😌', valence: 0.8, group: 'pos' },
+      { id: 'gratitude', label: '감사', icon: '🙏', valence: 0.9, group: 'pos' },
+      { id: 'love', label: '애정', icon: '💗', valence: 0.9, group: 'pos' },
+      { id: 'hope', label: '희망', icon: '🌅', valence: 0.7, group: 'pos' },
+      { id: 'excitement', label: '설렘', icon: '✨', valence: 0.8, group: 'pos' },
+      { id: 'satisfaction', label: '만족', icon: '🥰', valence: 0.8, group: 'pos' },
+      { id: 'pride', label: '뿌듯함', icon: '🏆', valence: 0.7, group: 'pos' },
+      { id: 'relief', label: '안도', icon: '😮‍💨', valence: 0.6, group: 'pos' },
+      { id: 'curiosity', label: '호기심', icon: '🤔', valence: 0.5, group: 'pos' },
+
+      // ── 중립 (6개) ──
+      { id: 'calm', label: '담담함', icon: '🌫️', valence: 0.1, group: 'neu' },
+      { id: 'normal', label: '평범함', icon: '😶', valence: 0.0, group: 'neu' },
+      { id: 'tired', label: '나른함', icon: '😪', valence: -0.1, group: 'neu' },
+      { id: 'busy', label: '분주함', icon: '🏃', valence: 0.0, group: 'neu' },
+      { id: 'thoughtful', label: '생각많음', icon: '💭', valence: -0.1, group: 'neu' },
+      { id: 'expecting', label: '기다림', icon: '⏳', valence: 0.1, group: 'neu' },
+
+      // ── 부정 (12개) ──
+      { id: 'fatigue', label: '피곤함', icon: '😴', valence: -0.3, group: 'neg' },
+      { id: 'anxiety', label: '불안', icon: '😟', valence: -0.6, group: 'neg' },
+      { id: 'worry', label: '걱정', icon: '😣', valence: -0.5, group: 'neg' },
+      { id: 'sadness', label: '슬픔', icon: '😢', valence: -0.7, group: 'neg' },
+      { id: 'depression', label: '우울', icon: '😞', valence: -0.8, group: 'neg' },
+      { id: 'anger', label: '분노', icon: '😠', valence: -0.7, group: 'neg' },
+      { id: 'irritation', label: '짜증', icon: '😤', valence: -0.6, group: 'neg' },
+      { id: 'loneliness', label: '외로움', icon: '🥺', valence: -0.8, group: 'neg' },
+      { id: 'emptiness', label: '공허', icon: '😶‍🌫️', valence: -0.7, group: 'neg' },
+      { id: 'confusion', label: '혼란', icon: '😵‍💫', valence: -0.4, group: 'neg' },
+      { id: 'frustration', label: '답답함', icon: '😮‍💨', valence: -0.5, group: 'neg' },
+      { id: 'regret', label: '후회', icon: '😔', valence: -0.6, group: 'neg' },
     ];
     this._moodState.keywords = keywords;
     this._moodState.results.selectedKeywords = [];
+
+    // 자주 선택한 감정 (최근 7일 기준)
+    const frequentIds = this._getFrequentEmotions();
+    const frequent = frequentIds.map(id => keywords.find(k => k.id === id)).filter(Boolean);
+
+    const renderGroup = (groupId, label, color) => `
+      <div class="kw-group">
+        <div class="kw-group-header">
+          <span class="kw-group-dot ${groupId}"></span>
+          <span class="kw-group-label">${label}</span>
+        </div>
+        <div class="keyword-grid-v2">
+          ${keywords.filter(k => k.group === groupId).map(k => `
+            <button class="keyword-btn-v2 ${k.group}" type="button" data-id="${k.id}" onclick="App._toggleKeyword('${k.id}')">
+              <span class="keyword-icon-v2">${k.icon}</span>
+              <span class="keyword-label-v2">${k.label}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
 
     container.innerHTML = `
       <div class="mood-progress"><div class="mood-progress-fill" style="width:66%"></div></div>
       <div class="mood-progress-text">2 / 3</div>
 
       <div class="diary-card">
-        <div class="diary-prompt">오늘과 어울리는 감정 키워드는?</div>
-        <div class="diary-sub">최대 3개까지 선택할 수 있어요. 어두운 감정도 솔직하게 선택해도 괜찮아요.</div>
-        <div class="keyword-grid" id="keyword-grid">
-          ${keywords.map(k => `
-            <button class="keyword-btn" type="button" data-id="${k.id}" onclick="App._toggleKeyword('${k.id}')">
-              <span class="keyword-icon">${k.icon}</span>
-              <span class="keyword-label">${k.label}</span>
-            </button>
-          `).join('')}
-        </div>
-        <div class="keyword-count" id="keyword-count">0 / 3 선택됨</div>
+        <div class="diary-prompt">지금 느끼는 감정을 골라주세요</div>
+        <div class="diary-sub">하나의 감정만 있지 않아요. 가까운 것 <strong>최대 5개</strong>까지. 어두운 감정도 솔직하게.</div>
+
+        ${frequent.length > 0 ? `
+          <div class="kw-group">
+            <div class="kw-group-header">
+              <span class="kw-group-dot freq"></span>
+              <span class="kw-group-label">자주 쓰는 감정</span>
+            </div>
+            <div class="keyword-grid-v2">
+              ${frequent.map(k => `
+                <button class="keyword-btn-v2 ${k.group}" type="button" data-id="${k.id}" onclick="App._toggleKeyword('${k.id}')">
+                  <span class="keyword-icon-v2">${k.icon}</span>
+                  <span class="keyword-label-v2">${k.label}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        ${renderGroup('pos', '긍정', '#22C55E')}
+        ${renderGroup('neu', '중립', '#94A3B8')}
+        ${renderGroup('neg', '부정', '#A78BFA')}
+
+        <div class="keyword-count" id="keyword-count">0 / 5 선택됨</div>
         <button class="mood-next-btn" type="button" id="keyword-next" onclick="App._submitKeywords()" disabled>다음 <span>→</span></button>
       </div>
     `;
+  },
+
+  // ★ v15.1: 최근 자주 선택한 감정 키워드 추출
+  _getFrequentEmotions() {
+    try {
+      const history = JSON.parse(localStorage.getItem('history_mood') || '[]');
+      const recent = history.filter(h => Date.now() - h.t < 7 * 24 * 60 * 60 * 1000);
+      const counts = {};
+      recent.forEach(h => {
+        const kws = h.rawData?.keywords || [];
+        kws.forEach(k => { counts[k] = (counts[k] || 0) + 1; });
+      });
+      return Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([id]) => id);
+    } catch (e) { return []; }
   },
 
   _toggleKeyword(id) {
@@ -3436,14 +3756,14 @@ const App = {
     if (idx >= 0) {
       selected.splice(idx, 1);
     } else {
-      if (selected.length >= 3) return;
+      if (selected.length >= 5) return; // ★ v15.1: 3 → 5개로 확장
       selected.push(id);
     }
-    // UI 업데이트
-    document.querySelectorAll('.keyword-btn').forEach(b => {
+    // UI 업데이트 (data-id 매칭되는 모든 버튼 동시 토글 - frequent와 group 양쪽)
+    document.querySelectorAll('.keyword-btn-v2').forEach(b => {
       b.classList.toggle('on', selected.includes(b.dataset.id));
     });
-    document.getElementById('keyword-count').textContent = `${selected.length} / 3 선택됨`;
+    document.getElementById('keyword-count').textContent = `${selected.length} / 5 선택됨`;
     document.getElementById('keyword-next').disabled = selected.length === 0;
   },
 
@@ -3632,10 +3952,42 @@ const App = {
         if (k) { valSum += k.valence; count++; }
       });
       analysis.valence = count > 0 ? valSum / count : 0;
-      // 외로움 키워드 직접 감지
-      if (sel.includes('loneliness')) analysis.loneliness = 0.8;
-      else if (sel.includes('emptiness')) analysis.loneliness = 0.6;
-      else if (sel.includes('sadness') || sel.includes('anxiety')) analysis.loneliness = 0.3;
+
+      // ★ v15.1: 확장된 외로움/우울/위기 감지
+      // 직접 외로움 키워드
+      if (sel.includes('loneliness')) {
+        analysis.loneliness = 0.85;
+      } else if (sel.includes('emptiness') && sel.includes('depression')) {
+        analysis.loneliness = 0.75; // 공허+우울 조합은 위험
+      } else if (sel.includes('emptiness')) {
+        analysis.loneliness = 0.55;
+      } else if (sel.includes('depression')) {
+        analysis.loneliness = 0.5;
+      } else if (sel.includes('sadness') && sel.includes('anxiety')) {
+        analysis.loneliness = 0.45;
+      } else if (sel.includes('sadness') || sel.includes('anxiety') || sel.includes('regret')) {
+        analysis.loneliness = 0.25;
+      }
+
+      // 우울 신호 (다중 부정 키워드 = 깊은 부정 상태)
+      const negKeywords = sel.filter(id => {
+        const k = keywords.find(x => x.id === id);
+        return k && k.group === 'neg';
+      }).length;
+      const posKeywords = sel.filter(id => {
+        const k = keywords.find(x => x.id === id);
+        return k && k.group === 'pos';
+      }).length;
+
+      if (negKeywords >= 3 && posKeywords === 0) {
+        analysis.flag = 'multiple_negative';
+      } else if (sel.includes('depression') && sel.includes('emptiness')) {
+        analysis.flag = 'depression_signal';
+      }
+
+      // 키워드 카운트 메타데이터 저장
+      analysis.rawData.negCount = negKeywords;
+      analysis.rawData.posCount = posKeywords;
     }
     else if (game === 'reflex') {
       const reflexes = this._moodState.reflexResults || [];
@@ -3763,9 +4115,10 @@ const App = {
 
         ${this._renderMoodInsights(analysis)}
 
-        <div class="result-actions">
-          <button class="mood-action-btn" type="button" onclick="App.goPage('home')">홈으로</button>
-          <button class="mood-action-btn primary" type="button" onclick="App._showMoodHistory()">지난 일지 보기</button>
+        <div class="result-actions result-actions-3">
+          <button class="mood-action-btn" type="button" onclick="App.goPage('home')">홈</button>
+          <button class="mood-action-btn" type="button" onclick="App._renderMoodPage()">🔄 다시</button>
+          <button class="mood-action-btn primary" type="button" onclick="App._showMoodHistory()">📓 일지</button>
         </div>
 
         <div class="mood-disclaimer">
@@ -3938,7 +4291,9 @@ const App = {
   // ─── 위기 감지 + 안내 ───
   _detectMoodCrisis(analysis) {
     // 단일 회 결과로는 절대 위기 단정 안 함. 누적 패턴 확인
-    if (analysis.loneliness >= 0.7) return 'loneliness_high';
+    if (analysis.loneliness >= 0.75) return 'loneliness_high';
+    if (analysis.flag === 'depression_signal') return 'depression_signal';
+    if (analysis.flag === 'multiple_negative') return 'multiple_negative';
     if (analysis.valence <= -0.7) {
       // 최근 일지 확인
       try {

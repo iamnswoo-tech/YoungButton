@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.0",
-  "short_name": "건강측정 v15.0",
-  "description": "v15.0 — 감정 게임 시스템 (4가지 미니게임 + 일지)",
+  "name": "건강 측정 v15.1",
+  "short_name": "건강측정 v15.1",
+  "description": "v15.1 — 감정 게임 강화 + 버그 수정",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
