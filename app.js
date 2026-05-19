@@ -107,7 +107,16 @@ const Console = {
     }).join('');
     el.scrollTop = el.scrollHeight;
   },
-  _escape(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); },
+  _escape(s) {
+    // ★ v15.2.3: 보안 강화 — 모든 HTML 특수문자 escape
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/`/g, '&#96;');
+  },
   clear(target) {
     if (this.buffers[target]) this.buffers[target].length = 0;
     this._render(target);
@@ -2807,6 +2816,19 @@ const App = {
   },
 
   // ★ v14.0: 상대 시간 표시 (몇 분 전, 몇 시간 전)
+  // ★ v15.2.3: 보안 — 사용자 입력 HTML escape (XSS 방어)
+  // 모든 사용자가 직접 입력한 텍스트는 innerHTML 렌더링 전 반드시 이 함수 통과
+  _esc(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/`/g, '&#96;');
+  },
+
   _formatRelativeTime(t) {
     if (!t) return '미측정';
     const diff = Date.now() - t;
@@ -4747,11 +4769,11 @@ const App = {
       }).join(', ');
       detail = `
         <div class="insight-row"><span>오늘의 한 단어:</span>
-          <strong>"${rd.word || '-'}"</strong></div>
+          <strong>"${this._esc(rd.word || '-')}"</strong></div>
         <div class="insight-row"><span>선택한 키워드:</span>
           <strong>${keywordLabels || '-'}</strong></div>
         ${rd.moment ? `<div class="insight-row column"><span>마음에 남는 순간:</span>
-          <em>"${rd.moment}"</em></div>` : ''}
+          <em>"${this._esc(rd.moment)}"</em></div>` : ''}
       `;
     } else if (game === 'reflex') {
       const reflexes = rd.reflexes || [];
@@ -4898,9 +4920,9 @@ const App = {
           <div class="history-icon">${q.icon}</div>
           <div class="history-body">
             <div class="history-label">${q.label}</div>
-            <div class="history-meta">${dateStr} · ${game?.icon || ''} ${game?.name || h.gameId}</div>
-            ${h.rawData?.word ? `<div class="history-word">"${h.rawData.word}"</div>` : ''}
-            ${h.rawData?.moment ? `<div class="history-moment">💭 ${h.rawData.moment}</div>` : ''}
+            <div class="history-meta">${dateStr} · ${game?.icon || ''} ${this._esc(game?.name || h.gameId)}</div>
+            ${h.rawData?.word ? `<div class="history-word">"${this._esc(h.rawData.word)}"</div>` : ''}
+            ${h.rawData?.moment ? `<div class="history-moment">💭 ${this._esc(h.rawData.moment)}</div>` : ''}
           </div>
         </div>
       `;
