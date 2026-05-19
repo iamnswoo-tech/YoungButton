@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.2.3",
-  "short_name": "건강측정 v15.2.3",
-  "description": "v15.2.3 — 보안 강화 (XSS 방어 + 보안 헤더)",
+  "name": "건강 측정 v15.2.4",
+  "short_name": "건강측정 v15.2.4",
+  "description": "v15.2.4 — CSP 핫픽스 (MediaPipe CDN 허용)",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
