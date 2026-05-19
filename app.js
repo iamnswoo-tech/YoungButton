@@ -1113,17 +1113,29 @@ const App = {
       tremor: { name: '손떨림', icon: '✋' },
       posture: { name: '자세', icon: '🧍' },
       bodycomp: { name: '신체지수', icon: '📏' },
+      mental: { name: '정신건강', icon: '🧠' }, // ★ v15.2.1 추가
     };
 
     const measuredHTML = result.measured.map(k => {
-      const score = this.state.wellness[k].score;
       const lbl = labelMap[k];
+      if (!lbl) return ''; // ★ v15.2.1: 안전망
+      let score;
+      if (k === 'mental') {
+        try {
+          const mh = JSON.parse(localStorage.getItem('history_mood') || '[]');
+          score = mh.length > 0 && mh[mh.length-1].mental ? mh[mh.length-1].mental.overall : '-';
+        } catch (e) { score = '-'; }
+      } else {
+        score = this.state.wellness[k]?.score ?? '-';
+      }
       return `<div class="ws-item ok"><span class="ws-icon">${lbl.icon}</span><span class="ws-name">${lbl.name}</span><span class="ws-score">${score}</span></div>`;
     }).join('');
 
     const missingHTML = result.missing.map(k => {
       const lbl = labelMap[k];
-      return `<div class="ws-item miss" onclick="App._wellnessNavigateToTest('${k}')"><span class="ws-icon">${lbl.icon}</span><span class="ws-name">${lbl.name}</span><span class="ws-score">미측정</span></div>`;
+      if (!lbl) return ''; // ★ v15.2.1: 안전망
+      const nav = k === 'mental' ? 'mood' : k;
+      return `<div class="ws-item miss" onclick="App._wellnessNavigateToTest('${nav}')"><span class="ws-icon">${lbl.icon}</span><span class="ws-name">${lbl.name}</span><span class="ws-score">미측정</span></div>`;
     }).join('');
 
     // ★ v13.2: 신체 나이 추출 (있을 경우 홈 카드에 표시)
@@ -1244,6 +1256,9 @@ const App = {
     } else if (category === 'bodycomp') {
       // 신체지수는 직접 페이지로 이동
       this.openBodyComposition();
+    } else if (category === 'mood' || category === 'mental') {
+      // ★ v15.2.1: 정신건강은 mood 페이지로
+      this.goPage('mood');
     } else {
       // 신체 측정 메뉴로 이동 후 해당 테스트 시작
       this.goPage('body');

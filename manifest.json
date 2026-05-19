@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.2",
-  "short_name": "건강측정 v15.2",
-  "description": "v15.2 — 정신건강 통합 점수 (감정+자율신경)",
+  "name": "건강 측정 v15.2.1",
+  "short_name": "건강측정 v15.2.1",
+  "description": "v15.2.1 — 핫픽스 (mental labelMap 누락 + 안전망)",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
