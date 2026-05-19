@@ -4496,8 +4496,6 @@ const App = {
           </div>
         `}
 
-        ${needsHelp ? this._renderCrisisCard() : ''}
-
         ${this._renderMoodInsights(analysis)}
 
         <div class="result-actions result-actions-3">
@@ -4505,6 +4503,8 @@ const App = {
           <button class="mood-action-btn" type="button" onclick="App._renderMoodPage()">🔄 다시</button>
           <button class="mood-action-btn primary" type="button" onclick="App._showMoodHistory()">📓 일지</button>
         </div>
+
+        ${needsHelp ? this._renderCrisisCard() : ''}
 
         <div class="mood-disclaimer">
           ⚠️ 이 결과는 지금 이 순간의 마음을 비춘 거울일 뿐, 의학적 진단이 아닙니다.
@@ -4790,7 +4790,7 @@ const App = {
     }
     return `
       <div class="result-section">
-        <div class="result-section-title">📝 게임 결과</div>
+        <div class="result-section-title">💚 오늘 나의 감정</div>
         <div class="insight-detail">${detail}</div>
       </div>
     `;
@@ -4873,6 +4873,7 @@ const App = {
         startTime: latest.t,
         results: latest.rawData || {},
       };
+      // ★ v15.2.5: mental 필드도 복원 (정신건강 점수 카드 표시 유지)
       const analysis = {
         gameId: latest.gameId,
         valence: latest.valence,
@@ -4882,9 +4883,19 @@ const App = {
         flag: latest.flag,
         rawData: latest.rawData,
         faceLink: latest.faceLink,
+        mental: latest.mental, // ★ 핵심: 정신건강 통합 점수 복원
       };
+      // mental이 없으면 재계산 (구버전 데이터 호환)
+      if (!analysis.mental && analysis.faceLink) {
+        try {
+          analysis.mental = this._computeMentalWellnessScore(analysis);
+        } catch (e) {
+          console.warn('[Mood] mental 재계산 실패:', e);
+        }
+      }
       this._showMoodResult(analysis);
     } catch (e) {
+      console.warn('[Mood] 최근 결과 로드 실패:', e);
       this._renderMoodIntro(container);
     }
   },

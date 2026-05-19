@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.2.4",
-  "short_name": "건강측정 v15.2.4",
-  "description": "v15.2.4 — CSP 핫픽스 (MediaPipe CDN 허용)",
+  "name": "건강 측정 v15.2.5",
+  "short_name": "건강측정 v15.2.5",
+  "description": "v15.2.5 — 결과 화면 개선 (정신건강 유지 + 위기카드 하단 + 제목 변경)",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
