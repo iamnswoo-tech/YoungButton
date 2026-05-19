@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.2.1",
-  "short_name": "건강측정 v15.2.1",
-  "description": "v15.2.1 — 핫픽스 (mental labelMap 누락 + 안전망)",
+  "name": "건강 측정 v15.2.2",
+  "short_name": "건강측정 v15.2.2",
+  "description": "v15.2.2 — VITALS 풀폭 레이아웃",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
