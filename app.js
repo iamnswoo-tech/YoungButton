@@ -1780,6 +1780,9 @@ const App = {
         </button>
       ` : ''}
 
+      <!-- ★ v15.2.7: 결과 페이지에도 위기 카드 표시 (가장 하단) -->
+      ${this._renderResultsCrisisCard()}
+
       <!-- ★ v14.5: 베타 정보 (디버그 모드에서만 표시) -->
       ${IS_DEBUG ? `
         <div class="debug-section">
@@ -1788,6 +1791,30 @@ const App = {
         </div>
       ` : ''}
     `;
+  },
+
+  // ★ v15.2.7: 결과 페이지의 위기 카드 (최근 mood 결과로부터)
+  // 최근 7일에 외로움/우울 패턴 감지되면 표시 (이미지4의 카드와 동일)
+  _renderResultsCrisisCard() {
+    try {
+      const history = JSON.parse(localStorage.getItem('history_mood') || '[]');
+      if (history.length === 0) return '';
+      const latest = history[history.length - 1];
+
+      // 위기 감지 — 최근 측정과 시계열 모두 고려
+      const crisis = this._detectMoodCrisis({
+        loneliness: latest.loneliness,
+        valence: latest.valence,
+        negBias: latest.negBias,
+        flag: latest.flag,
+      });
+      if (!crisis) return '';
+
+      // _renderCrisisCard와 동일한 풍부한 카드 사용
+      return this._renderCrisisCard();
+    } catch (e) {
+      return '';
+    }
   },
 
   // ★ v14.5: 베타 디버그 정보 표시 (개발자용)
@@ -1871,6 +1898,9 @@ const App = {
   },
 
   // ★ v15.2: 건강 측정 결과 페이지의 정신건강 카드 (요약 버전)
+  // ★ v15.2.7: 결과 페이지 정신건강 카드 — 풍부한 통합 분석 카드 사용
+  // 핵심: mood 결과 페이지와 동일한 풍부한 카드를 결과 페이지에도 표시
+  // (이전엔 작은 요약 카드만 표시되어 통합 분석의 가치가 안 보였음)
   _renderResultsMentalCard() {
     let history = [];
     try { history = JSON.parse(localStorage.getItem('history_mood') || '[]'); } catch (e) {}
@@ -1888,21 +1918,25 @@ const App = {
       `;
     }
 
-    // 최근 측정의 mental 점수
     const latest = history[history.length - 1];
-    let m = latest.mental;
 
-    // ★ v15.2.6: 최신 얼굴 측정이 있고 6시간 이내면 mental 실시간 재계산
-    // (mood 측정 후 얼굴 측정한 경우, 또는 얼굴 측정 후 mood 측정한 경우 모두 커버)
-    try {
-      const w = this.state.wellness || {};
-      const now = Date.now();
-      const hasRecentFace = w.face && w.face.t && (now - w.face.t) < 6 * 60 * 60 * 1000;
-      const moodAge = now - latest.t;
-      const moodRecent = moodAge < 6 * 60 * 60 * 1000;
+    // ★ v15.2.7: 결과 페이지 진입 시 mental 실시간 재계산 (얼굴 측정 통합)
+    // - 얼굴 측정과 mood 측정 순서 무관하게 항상 최신 데이터로 통합
+    const w = this.state.wellness || {};
+    const now = Date.now();
+    const hasRecentFace = w.face && w.face.t && (now - w.face.t) < 6 * 60 * 60 * 1000;
+    const moodRecent = (now - latest.t) < 6 * 60 * 60 * 1000;
 
-      if (hasRecentFace && moodRecent && (!m || !m.hasFaceData)) {
-        // 얼굴 측정 데이터로 mental 재계산
+    // mental 재계산 조건: mental이 없거나, 얼굴 측정 데이터가 없는 mental이거나, 더 새로운 얼굴 측정이 있을 때
+    let needRecalc = !latest.mental;
+    if (hasRecentFace && moodRecent) {
+      if (!latest.mental || !latest.mental.hasFaceData) needRecalc = true;
+      // 얼굴 측정이 mood보다 나중에 있으면 재계산
+      else if (latest.faceLink && w.face.t > (latest.t + (latest.faceLink.ageMinutes || 0) * 60000)) needRecalc = true;
+    }
+
+    if (needRecalc && hasRecentFace) {
+      try {
         const analysisForRecalc = {
           gameId: latest.gameId,
           valence: latest.valence,
@@ -1919,19 +1953,18 @@ const App = {
             ageMinutes: Math.round((now - w.face.t) / 60000),
           },
         };
-        m = this._computeMentalWellnessScore(analysisForRecalc);
-        // 재계산된 mental을 history에도 업데이트 (다음 조회 시 빠르게)
-        try {
-          history[history.length - 1].mental = m;
-          history[history.length - 1].faceLink = analysisForRecalc.faceLink;
-          localStorage.setItem('history_mood', JSON.stringify(history));
-        } catch (e) {}
+        latest.mental = this._computeMentalWellnessScore(analysisForRecalc);
+        latest.faceLink = analysisForRecalc.faceLink;
+        // localStorage에도 업데이트
+        history[history.length - 1] = latest;
+        localStorage.setItem('history_mood', JSON.stringify(history));
+        console.log('[Mental] 결과 페이지 재계산 완료');
+      } catch (e) {
+        console.warn('[Mental] 재계산 실패:', e);
       }
-    } catch (e) {
-      console.warn('[Mental] 재계산 실패:', e);
     }
 
-    // mental 없으면(이전 버전 데이터) 안내
+    const m = latest.mental;
     if (!m) {
       return `
         <div class="res-mental-empty" onclick="App.goPage('mood')">
@@ -1945,88 +1978,34 @@ const App = {
       `;
     }
 
-    // 점수 색상
-    const getColor = (score) => {
-      if (score >= 75) return '#22C55E';
-      if (score >= 55) return '#3B82F6';
-      if (score >= 40) return '#F59E0B';
-      return '#EF4444';
+    // ★ v15.2.7: 풍부한 mental 카드 사용 (mood 결과 페이지와 동일)
+    // 자기보고 vs 자율신경 비교 막대, 불일치 라벨, 4차원 점수 등 모두 표시
+    const analysisForRender = {
+      mental: m,
+      faceLink: latest.faceLink,
     };
 
-    // 최근 7일 평균
+    // 7일 평균 (있으면 부가 표시)
     const recent7 = history.filter(h => Date.now() - h.t < 7 * 24 * 60 * 60 * 1000 && h.mental);
     const avg7 = recent7.length > 0
       ? Math.round(recent7.reduce((s, h) => s + (h.mental.overall || 0), 0) / recent7.length)
       : null;
 
     // 측정 시점
-    const date = new Date(latest.t);
     const minAgo = Math.round((Date.now() - latest.t) / 60000);
     const timeLabel = minAgo < 60 ? `${minAgo}분 전`
                     : minAgo < 1440 ? `${Math.round(minAgo/60)}시간 전`
                     : `${Math.round(minAgo/1440)}일 전`;
 
     return `
-      <div class="res-section-title">🧠 정신건강 점수 <span class="res-section-sub">(통합 분석)</span></div>
-      <div class="res-mental-card" onclick="App.goPage('mood')">
-
-        <!-- 메인 점수 + 패턴 -->
-        <div class="rmc-main">
-          <div class="rmc-score-area">
-            <div class="rmc-score-label">종합 점수</div>
-            <div class="rmc-score-big" style="color: ${getColor(m.overall)};">
-              ${m.overall}<span class="rmc-score-max">/100</span>
-            </div>
-            ${avg7 !== null && recent7.length >= 2 ? `
-              <div class="rmc-avg">7일 평균 ${avg7}</div>
-            ` : ''}
-          </div>
-          <div class="rmc-pattern-area">
-            <div class="rmc-pattern-icon">${m.patternIcon}</div>
-            <div class="rmc-pattern-label">${m.patternLabel}</div>
-            <div class="rmc-pattern-time">${timeLabel}</div>
-          </div>
+      <div class="res-section-title">🧠 정신건강 점수 <span class="res-section-sub">(자기보고 + 자율신경 통합)</span></div>
+      <div class="mental-card-results" onclick="App.goPage('mood')">
+        <div class="mental-results-meta">
+          <span class="mental-results-time">📍 ${timeLabel}</span>
+          ${avg7 !== null && recent7.length >= 2 ? `<span class="mental-results-avg">7일 평균 ${avg7}점</span>` : ''}
+          <span class="mental-results-link">자세히 보기 →</span>
         </div>
-
-        <!-- 4차원 미니 점수 -->
-        <div class="rmc-dims">
-          <div class="rmc-dim">
-            <span class="rmc-dim-icon">💪</span>
-            <span class="rmc-dim-label">회복력</span>
-            <span class="rmc-dim-score" style="color: ${getColor(m.resilience)};">${Math.round(m.resilience)}</span>
-          </div>
-          <div class="rmc-dim">
-            <span class="rmc-dim-icon">🔍</span>
-            <span class="rmc-dim-label">자기인식</span>
-            <span class="rmc-dim-score" style="color: ${getColor(m.selfAwareness)};">${Math.round(m.selfAwareness)}</span>
-          </div>
-          <div class="rmc-dim">
-            <span class="rmc-dim-icon">🫂</span>
-            <span class="rmc-dim-label">연결감</span>
-            <span class="rmc-dim-score" style="color: ${getColor(m.connection)};">${Math.round(m.connection)}</span>
-          </div>
-          <div class="rmc-dim">
-            <span class="rmc-dim-icon">⚖️</span>
-            <span class="rmc-dim-label">감정조절</span>
-            <span class="rmc-dim-score" style="color: ${getColor(m.regulation)};">${Math.round(m.regulation)}</span>
-          </div>
-        </div>
-
-        <!-- 통합 vs 자기보고만 라벨 -->
-        ${m.hasFaceData ? `
-          <div class="rmc-badge integrated">
-            ✓ 자기보고(${Math.round(m.subjective)}) + 자율신경(${Math.round(m.autonomic)}) 통합 분석
-          </div>
-        ` : `
-          <div class="rmc-badge partial">
-            ⚠️ 얼굴 측정을 더하면 정확도가 올라가요
-          </div>
-        `}
-
-        <div class="rmc-action">
-          <span>${m.patternAction}</span>
-          <span class="rmc-arrow">→</span>
-        </div>
+        ${this._renderMentalWellnessCard(analysisForRender)}
       </div>
     `;
   },

@@ -3391,6 +3391,46 @@ body::before {
   color: #7C3AED;
 }
 
+/* ─── v15.2.7: 결과 페이지의 풍부한 mental 카드 래퍼 ─── */
+.mental-card-results {
+  margin: 0 12px 16px;
+  cursor: pointer;
+  transition: transform .15s;
+}
+.mental-card-results:active { transform: scale(0.99); }
+.mental-results-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 10px;
+  flex-wrap: wrap;
+}
+.mental-results-time {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 700;
+}
+.mental-results-avg {
+  font-size: 11px;
+  color: #7C3AED;
+  font-weight: 800;
+  background: rgba(124, 58, 237, .12);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.mental-results-link {
+  font-size: 11px;
+  color: #7C3AED;
+  font-weight: 800;
+  margin-left: auto;
+}
+.res-section-sub {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  letter-spacing: -.01em;
+}
+
 .res-mental-card {
   margin: 0 12px 14px;
   background: linear-gradient(135deg, #FAF5FF 0%, #F0FDF4 100%);
@@ -5640,7 +5680,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.2.6 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.2.7 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
