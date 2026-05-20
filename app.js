@@ -1890,7 +1890,46 @@ const App = {
 
     // 최근 측정의 mental 점수
     const latest = history[history.length - 1];
-    const m = latest.mental;
+    let m = latest.mental;
+
+    // ★ v15.2.6: 최신 얼굴 측정이 있고 6시간 이내면 mental 실시간 재계산
+    // (mood 측정 후 얼굴 측정한 경우, 또는 얼굴 측정 후 mood 측정한 경우 모두 커버)
+    try {
+      const w = this.state.wellness || {};
+      const now = Date.now();
+      const hasRecentFace = w.face && w.face.t && (now - w.face.t) < 6 * 60 * 60 * 1000;
+      const moodAge = now - latest.t;
+      const moodRecent = moodAge < 6 * 60 * 60 * 1000;
+
+      if (hasRecentFace && moodRecent && (!m || !m.hasFaceData)) {
+        // 얼굴 측정 데이터로 mental 재계산
+        const analysisForRecalc = {
+          gameId: latest.gameId,
+          valence: latest.valence,
+          arousal: latest.arousal,
+          loneliness: latest.loneliness,
+          negBias: latest.negBias,
+          flag: latest.flag,
+          rawData: latest.rawData,
+          faceLink: {
+            hr: w.face.hr,
+            rmssd: w.face.rmssd,
+            stressLevel: w.face.stressLevel,
+            respRate: w.face.respRate,
+            ageMinutes: Math.round((now - w.face.t) / 60000),
+          },
+        };
+        m = this._computeMentalWellnessScore(analysisForRecalc);
+        // 재계산된 mental을 history에도 업데이트 (다음 조회 시 빠르게)
+        try {
+          history[history.length - 1].mental = m;
+          history[history.length - 1].faceLink = analysisForRecalc.faceLink;
+          localStorage.setItem('history_mood', JSON.stringify(history));
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.warn('[Mental] 재계산 실패:', e);
+    }
 
     // mental 없으면(이전 버전 데이터) 안내
     if (!m) {
@@ -4885,8 +4924,34 @@ const App = {
         faceLink: latest.faceLink,
         mental: latest.mental, // ★ 핵심: 정신건강 통합 점수 복원
       };
-      // mental이 없으면 재계산 (구버전 데이터 호환)
-      if (!analysis.mental && analysis.faceLink) {
+
+      // ★ v15.2.6: 얼굴 측정이 mood 측정보다 나중에 됐다면 mental 재계산
+      const w = this.state.wellness || {};
+      const now = Date.now();
+      const hasRecentFace = w.face && w.face.t && (now - w.face.t) < 6 * 60 * 60 * 1000;
+      const moodRecent = (now - latest.t) < 6 * 60 * 60 * 1000;
+
+      if (hasRecentFace && moodRecent && (!analysis.mental || !analysis.mental.hasFaceData)) {
+        // 최신 얼굴 데이터로 faceLink 갱신 후 재계산
+        analysis.faceLink = {
+          hr: w.face.hr,
+          rmssd: w.face.rmssd,
+          stressLevel: w.face.stressLevel,
+          respRate: w.face.respRate,
+          ageMinutes: Math.round((now - w.face.t) / 60000),
+        };
+        try {
+          analysis.mental = this._computeMentalWellnessScore(analysis);
+          // history에도 업데이트
+          history[history.length - 1].mental = analysis.mental;
+          history[history.length - 1].faceLink = analysis.faceLink;
+          localStorage.setItem('history_mood', JSON.stringify(history));
+          console.log('[Mood] mental 재계산 (얼굴 측정 통합)');
+        } catch (e) {
+          console.warn('[Mood] mental 재계산 실패:', e);
+        }
+      } else if (!analysis.mental && analysis.faceLink) {
+        // mental만 없으면 재계산 (구버전 호환)
         try {
           analysis.mental = this._computeMentalWellnessScore(analysis);
         } catch (e) {
@@ -6408,11 +6473,15 @@ const App = {
       if (r.stressIdx >= 70) faceScore -= 5;
     }
     faceScore = Math.max(0, Math.min(100, faceScore));
+    // ★ v15.2.6: stressLevel 등 추가 필드 저장 (정신건강 통합 계산용)
     this._wellnessSave('face', {
       hr: r.hr,
       respRate: r.respRate,
       rmssd: r.rmssd,
       stressIdx: r.stressIdx,
+      stressLevel: r.stressLevel,
+      sdnn: r.sdnn,
+      lnRmssd: r.lnRmssd,
       sqi: r.sqi,
       score: faceScore,
     });

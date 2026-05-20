@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.2.5",
-  "short_name": "건강측정 v15.2.5",
-  "description": "v15.2.5 — 결과 화면 개선 (정신건강 유지 + 위기카드 하단 + 제목 변경)",
+  "name": "건강 측정 v15.2.6",
+  "short_name": "건강측정 v15.2.6",
+  "description": "v15.2.6 — 얼굴+감정 통합 실시간 재계산",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
