@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.2.7",
-  "short_name": "건강측정 v15.2.7",
-  "description": "v15.2.7 — 결과 페이지 정신건강 풍부한 표시 + 위기카드 복원",
+  "name": "건강 측정 v15.3",
+  "short_name": "건강측정 v15.3",
+  "description": "v15.3 — 변별력 강화 (나이·성별 보정 점수)",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

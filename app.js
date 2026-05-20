@@ -2847,6 +2847,120 @@ const App = {
       .replace(/`/g, '&#96;');
   },
 
+  // ════════════════════════════════════════════════════════════════
+  // ★ v15.3: 변별력 강화 시스템 — 나이·성별 보정 점수
+  // 학술 근거:
+  //   - HRV: Umetani et al. (1998), Voss et al. (2015), Tegegne (2018)
+  //   - HR: Tanaka et al. (2001) — max HR = 208 - 0.7×age
+  //   - 균형: Springer et al. (2007) — Romberg ratio by age
+  //   - 보행: Studenski et al. (2011) — gait speed mortality
+  //   - 반응속도: Deary et al. (2010) — RT increase with age
+  // ════════════════════════════════════════════════════════════════
+
+  // 사용자 프로필 조회 (나이·성별)
+  _getUserProfile() {
+    try {
+      const bc = JSON.parse(localStorage.getItem('bodycomp_input') || '{}');
+      return {
+        age: bc.age || null,
+        gender: bc.gender || null, // 'male' | 'female' | null
+      };
+    } catch (e) {
+      return { age: null, gender: null };
+    }
+  },
+
+  // 정규분포 z-score → 0~100 점수 변환
+  // z=0이면 50점, z=+1이면 ~84점, z=-1이면 ~16점 (정상분포 cumulative)
+  _zToScore(z) {
+    // Φ(z) = 0.5 × (1 + erf(z/√2)) 근사
+    const erf = (x) => {
+      const t = 1 / (1 + 0.3275911 * Math.abs(x));
+      const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+      return x >= 0 ? y : -y;
+    };
+    const cdf = 0.5 * (1 + erf(z / Math.SQRT2));
+    return Math.round(cdf * 100);
+  },
+
+  // ── 나이별 RMSSD 기준값 (Umetani 1998, Voss 2015 메타분석) ──
+  _refRMSSD(age, gender) {
+    // 메타분석 기반 — 10년 단위 평균(ms), 표준편차
+    // 출처: Voss (2015) "Short-Term Heart Rate Variability—Influence of Gender and Age"
+    if (!age) return { mean: 35, sd: 18 }; // 일반 성인 평균
+    if (age < 25) return { mean: 65, sd: 25 };
+    if (age < 35) return { mean: 50, sd: 22 };
+    if (age < 45) return { mean: 38, sd: 18 };
+    if (age < 55) return { mean: 28, sd: 14 };
+    if (age < 65) return { mean: 22, sd: 12 };
+    if (age < 75) return { mean: 18, sd: 10 };
+    return { mean: 14, sd: 8 };
+  },
+
+  // ── 나이별 안정 시 심박수 기준 (Tanaka 2001 + ACSM) ──
+  _refRestingHR(age, gender) {
+    // 안정 시 HR은 나이로는 큰 변화 없으나, 노화로 HRV 감소로 가변성 줄어듦
+    // 성별 차이: 여성 평균이 약 3-5 BPM 높음
+    const base = gender === 'female' ? 73 : 70;
+    return { mean: base, sd: 10 };
+  },
+
+  // ── 나이별 호흡수 기준 ──
+  _refRespRate(age) {
+    if (!age) return { mean: 15, sd: 3 };
+    if (age < 60) return { mean: 15, sd: 3 };
+    if (age < 75) return { mean: 16, sd: 3 };
+    return { mean: 17, sd: 4 };
+  },
+
+  // ── 나이별 균형 (Romberg ratio = closed/open eyes sway) ──
+  _refRomberg(age) {
+    // Springer (2007), Era (2006)
+    if (!age) return { mean: 1.8, sd: 0.7 };
+    if (age < 40) return { mean: 1.5, sd: 0.4 };
+    if (age < 60) return { mean: 1.8, sd: 0.5 };
+    if (age < 75) return { mean: 2.4, sd: 0.8 };
+    return { mean: 3.2, sd: 1.2 };
+  },
+
+  // ── 나이별 보행 cadence (Auvinet 2002) ──
+  _refCadence(age) {
+    if (!age) return { mean: 115, sd: 10 };
+    if (age < 50) return { mean: 118, sd: 8 };
+    if (age < 65) return { mean: 115, sd: 9 };
+    if (age < 75) return { mean: 110, sd: 11 };
+    return { mean: 105, sd: 13 };
+  },
+
+  // ── 나이별 반응속도 (Der & Deary 2006, ms) ──
+  _refReactionTime(age) {
+    if (!age) return { mean: 300, sd: 60 };
+    if (age < 30) return { mean: 250, sd: 40 };
+    if (age < 50) return { mean: 290, sd: 50 };
+    if (age < 65) return { mean: 340, sd: 65 };
+    if (age < 75) return { mean: 400, sd: 80 };
+    return { mean: 470, sd: 100 };
+  },
+
+  // ── 나이별 손떨림 진폭 (Louis 2019, 단위 임의) ──
+  _refTremor(age) {
+    if (!age) return { mean: 0.15, sd: 0.08 };
+    if (age < 40) return { mean: 0.10, sd: 0.05 };
+    if (age < 60) return { mean: 0.15, sd: 0.07 };
+    if (age < 75) return { mean: 0.22, sd: 0.10 };
+    return { mean: 0.32, sd: 0.15 };
+  },
+
+  // ★ 핵심: 나이·성별 보정 점수 계산 (값 → 0~100 점수)
+  // 'higherIsBetter': true면 값이 클수록 좋음 (예: RMSSD), false면 작을수록 좋음 (예: 반응속도)
+  _ageNormalizedScore(value, ref, higherIsBetter = true) {
+    if (value == null || ref.sd === 0) return 50;
+    const z = (value - ref.mean) / ref.sd;
+    // 양방향(중심값 좋음)이 아닌 단방향
+    const adjustedZ = higherIsBetter ? z : -z;
+    return Math.max(5, Math.min(99, this._zToScore(adjustedZ)));
+  },
+
   _formatRelativeTime(t) {
     if (!t) return '미측정';
     const diff = Date.now() - t;
@@ -6426,32 +6540,71 @@ const App = {
     const panel = document.getElementById('face-result-panel');
     panel.classList.add('show');
 
-    // ★ v13: 얼굴 측정 종합 점수 산출 + 누적 저장
-    // HR 점수: 60-100 정상, 50-110 양호, 그 외 감점
-    let faceScore = 100;
-    if (r.hr) {
-      if (r.hr < 50 || r.hr > 110) faceScore -= 25;
-      else if (r.hr < 60 || r.hr > 100) faceScore -= 8;
+    // ★ v15.3: 변별력 강화 — 나이·성별 보정 점수
+    // 기존: HR 60-100이면 무조건 만점 → 20대도 80대도 동점
+    // 신규: 본인 나이대 평균 대비 z-score 변환 → 명확한 변별
+    const profile = this._getUserProfile();
+    const { age, gender } = profile;
+
+    let faceScore;
+    const subScores = {};
+
+    if (age && r.hr) {
+      // 나이·성별 보정 점수 — 각 항목별 z-score 변환
+      const hrRef = this._refRestingHR(age, gender);
+      // HR은 중심값 좋음 — 너무 낮아도(서맥) 너무 높아도(빈맥) 감점
+      const hrDeviation = Math.abs(r.hr - hrRef.mean) / hrRef.sd;
+      subScores.hr = Math.max(5, Math.min(99, this._zToScore(-hrDeviation + 0.7)));
+
+      // RMSSD — 본인 나이 평균 대비 (높을수록 좋음, z-score 직접 적용)
+      if (r.rmssd) {
+        const rmssdRef = this._refRMSSD(age, gender);
+        subScores.rmssd = this._ageNormalizedScore(r.rmssd, rmssdRef, true);
+      } else {
+        subScores.rmssd = 50;
+      }
+
+      // 호흡수 — 중심값 좋음
+      if (r.respRate) {
+        const rrRef = this._refRespRate(age);
+        const rrDeviation = Math.abs(r.respRate - rrRef.mean) / rrRef.sd;
+        subScores.rr = Math.max(5, Math.min(99, this._zToScore(-rrDeviation + 0.7)));
+      } else {
+        subScores.rr = 50;
+      }
+
+      // SQI 보정 — 신호 품질이 낮으면 신뢰도 낮춤
+      let sqiWeight = 1.0;
+      if (r.sqi != null) {
+        if (r.sqi < 50) sqiWeight = 0.7;
+        else if (r.sqi < 70) sqiWeight = 0.85;
+      }
+
+      // 종합: HR 30% + RMSSD 50% + 호흡 20% (RMSSD가 가장 변별력 큼)
+      faceScore = Math.round((subScores.hr * 0.30 + subScores.rmssd * 0.50 + subScores.rr * 0.20) * sqiWeight);
+      faceScore = Math.max(5, Math.min(99, faceScore));
+
+      console.log(`[Face Score] age=${age} HR=${r.hr}(${subScores.hr}) RMSSD=${r.rmssd}(${subScores.rmssd}) RR=${r.respRate}(${subScores.rr}) → ${faceScore}`);
     } else {
-      faceScore -= 30;
+      // ── Fallback: 나이 정보 없으면 기존 임계 방식 (덜 변별력) ──
+      faceScore = 100;
+      if (r.hr) {
+        if (r.hr < 50 || r.hr > 110) faceScore -= 25;
+        else if (r.hr < 60 || r.hr > 100) faceScore -= 8;
+      } else {
+        faceScore -= 30;
+      }
+      if (r.respRate) {
+        if (r.respRate < 10 || r.respRate > 24) faceScore -= 15;
+        else if (r.respRate < 12 || r.respRate > 20) faceScore -= 5;
+      } else {
+        faceScore -= 10;
+      }
+      if (r.sqi && r.sqi < 70) faceScore -= 10;
+      if (r.rmssd && r.stressFromRMSSD && r.stressIdx >= 70) faceScore -= 5;
+      faceScore = Math.max(0, Math.min(100, faceScore));
     }
-    // 호흡수 점수: 12-20 정상
-    if (r.respRate) {
-      if (r.respRate < 10 || r.respRate > 24) faceScore -= 15;
-      else if (r.respRate < 12 || r.respRate > 20) faceScore -= 5;
-    } else {
-      faceScore -= 10;
-    }
-    // SQI 가중 (신호 품질): 90+ 가산, 70 미만 감산
-    if (r.sqi) {
-      if (r.sqi < 70) faceScore -= 10;
-      else if (r.sqi >= 90) faceScore += 0; // 가산 없음 (이미 만점 가능)
-    }
-    // RMSSD 신뢰 가능 시만 약간 반영 (rPPG 한계 고려, 가중치 낮게)
-    if (r.rmssd && r.stressFromRMSSD) {
-      if (r.stressIdx >= 70) faceScore -= 5;
-    }
-    faceScore = Math.max(0, Math.min(100, faceScore));
+
     // ★ v15.2.6: stressLevel 등 추가 필드 저장 (정신건강 통합 계산용)
     this._wellnessSave('face', {
       hr: r.hr,
@@ -6463,6 +6616,8 @@ const App = {
       lnRmssd: r.lnRmssd,
       sqi: r.sqi,
       score: faceScore,
+      subScores: subScores, // ★ v15.3: 항목별 점수 (UI 표시용)
+      ageAtMeasure: age,    // ★ v15.3: 측정 시점 나이 (재계산 시 참조)
     });
 
     const setArc = (id, val, min, max) => {
@@ -7180,19 +7335,53 @@ const App = {
       rombergRatio = closedMetrics.rms / openMetrics.rms;
     }
 
-    let score = 100;
-    if (closedMetrics.rms > 0.4) score -= 30;
-    else if (closedMetrics.rms > 0.25) score -= 15;
-    if (rombergRatio > 4) score -= 25;
-    else if (rombergRatio > 2.5) score -= 10;
-    score = Math.max(0, Math.min(100, score));
+    // ★ v15.3: 변별력 강화 — 나이 보정 점수
+    const profile = this._getUserProfile();
+    const { age } = profile;
+    let score;
+
+    if (age) {
+      // RMS 점수 (낮을수록 좋음) — 나이별 평균 대비
+      // 20대 RMS 평균 0.15, 80대 0.35 정도. 정확한 norm 데이터 부족하므로 보수적 추정
+      const rmsRef = age < 40 ? { mean: 0.18, sd: 0.10 }
+                   : age < 60 ? { mean: 0.22, sd: 0.12 }
+                   : age < 75 ? { mean: 0.30, sd: 0.15 }
+                   :            { mean: 0.40, sd: 0.18 };
+      const rmsScore = this._ageNormalizedScore(closedMetrics.rms, rmsRef, false);
+
+      // Romberg ratio 점수 (나이별 평균 대비)
+      const rombergRef = this._refRomberg(age);
+      const rombergScore = this._ageNormalizedScore(rombergRatio, rombergRef, false);
+
+      score = Math.round(rmsScore * 0.6 + rombergScore * 0.4);
+      score = Math.max(5, Math.min(99, score));
+      console.log(`[Balance Score] age=${age} RMS=${closedMetrics.rms.toFixed(3)}(${rmsScore}) Romberg=${rombergRatio.toFixed(2)}(${rombergScore}) → ${score}`);
+    } else {
+      // Fallback: 기존 임계 방식
+      score = 100;
+      if (closedMetrics.rms > 0.4) score -= 30;
+      else if (closedMetrics.rms > 0.25) score -= 15;
+      if (rombergRatio > 4) score -= 25;
+      else if (rombergRatio > 2.5) score -= 10;
+      score = Math.max(0, Math.min(100, score));
+    }
+
     const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D';
 
     let cmt;
-    if (score >= 85) cmt = '균형 능력이 우수합니다. 전정 기능과 자세 안정성이 양호합니다.';
-    else if (score >= 70) cmt = '균형 능력이 정상 범위입니다.';
-    else if (score >= 50) cmt = '균형 능력이 다소 떨어집니다. 코어 운동을 고려하세요.';
-    else cmt = '균형이 불안정합니다. 어지러움이 잦다면 전문의 상담을 권합니다.';
+    if (age) {
+      // ★ v15.3: 나이 보정 점수에 맞는 코멘트
+      if (score >= 85) cmt = `${age}세 또래 평균보다 균형 능력이 훨씬 우수합니다. 상위 15% 수준입니다.`;
+      else if (score >= 70) cmt = `${age}세 또래 평균을 약간 상회합니다. 좋은 균형 능력입니다.`;
+      else if (score >= 50) cmt = `${age}세 또래 평균 수준입니다. 코어 운동을 추가하면 더 향상될 수 있어요.`;
+      else if (score >= 30) cmt = `${age}세 또래 평균보다 다소 낮습니다. 발목·코어 근력 강화를 권장합니다.`;
+      else cmt = `${age}세 또래 평균보다 균형이 불안정합니다. 어지러움이 잦다면 전문의 상담을 권합니다.`;
+    } else {
+      if (score >= 85) cmt = '균형 능력이 우수합니다. 전정 기능과 자세 안정성이 양호합니다.';
+      else if (score >= 70) cmt = '균형 능력이 정상 범위입니다.';
+      else if (score >= 50) cmt = '균형 능력이 다소 떨어집니다. 코어 운동을 고려하세요.';
+      else cmt = '균형이 불안정합니다. 어지러움이 잦다면 전문의 상담을 권합니다.';
+    }
 
     document.getElementById('bt-balance-running').style.display = 'none';
     const result = document.getElementById('bt-balance-result');
@@ -7322,10 +7511,25 @@ const App = {
     const cadence = steps * 2; // 30초 → 분당
     const meanInterval = g.samples.length > 0 ? 30000 / Math.max(steps, 1) : 0;
 
-    let score = 100;
-    if (cadence < 80 || cadence > 130) score -= 20;
-    if (steps < 20) score -= 30; // 너무 적게 걸음
-    score = Math.max(0, Math.min(100, score));
+    // ★ v15.3: 나이 보정 보행 점수
+    const profile = this._getUserProfile();
+    const { age } = profile;
+    let score;
+
+    if (age && steps >= 20) {
+      const cadenceRef = this._refCadence(age);
+      // Cadence는 중심값 좋음 (너무 느려도 빨라도 비정상)
+      const deviation = Math.abs(cadence - cadenceRef.mean) / cadenceRef.sd;
+      score = Math.max(5, Math.min(99, this._zToScore(-deviation + 0.7)));
+      console.log(`[Gait Score] age=${age} cadence=${cadence} ref=${cadenceRef.mean}±${cadenceRef.sd} → ${score}`);
+    } else {
+      // Fallback
+      score = 100;
+      if (cadence < 80 || cadence > 130) score -= 20;
+      if (steps < 20) score -= 30;
+      score = Math.max(0, Math.min(100, score));
+    }
+
     const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D';
 
     let cmt;
@@ -7423,13 +7627,25 @@ const App = {
     const dur = t.samples.length / sr;
     const freq = zeroCrosses / 2 / dur; // Hz
 
-    // 임상 기준 (Heldman 2014):
-    // 정상: < 30mg, 가벼운 떨림: 30-100mg, 중간: 100-300mg, 심함: > 300mg
-    let score = 100;
-    if (ampMg > 300) score = 30;
-    else if (ampMg > 100) score = 50;
-    else if (ampMg > 30) score = 75;
-    score = Math.max(0, Math.min(100, score));
+    // ★ v15.3: 나이 보정 손떨림 점수
+    const profile = this._getUserProfile();
+    const { age } = profile;
+    let score;
+
+    if (age) {
+      // ampMg를 g 단위로 변환해서 ref와 비교 (ref는 g 단위)
+      const ampG = ampMg / 1000;
+      const tremorRef = this._refTremor(age);
+      score = this._ageNormalizedScore(ampG, tremorRef, false); // 작을수록 좋음
+      console.log(`[Tremor Score] age=${age} amp=${ampMg.toFixed(0)}mg ref=${(tremorRef.mean*1000).toFixed(0)}±${(tremorRef.sd*1000).toFixed(0)}mg → ${score}`);
+    } else {
+      // Fallback: 임상 기준 (Heldman 2014)
+      score = 100;
+      if (ampMg > 300) score = 30;
+      else if (ampMg > 100) score = 50;
+      else if (ampMg > 30) score = 75;
+      score = Math.max(0, Math.min(100, score));
+    }
 
     this._showTremorResult({ amp: ampMg, freq, score });
   },
@@ -7597,21 +7813,48 @@ const App = {
   },
 
   _showReactionResult(r) {
-    let score = 100;
-    if (!r.error) {
-      if (r.avg > 500) score = 40;
-      else if (r.avg > 350) score = 60;
-      else if (r.avg > 280) score = 75;
-      else if (r.avg > 220) score = 88;
+    let score;
+    if (r.error) {
+      score = 50;
+    } else {
+      // ★ v15.3: 나이 보정 반응속도 (가장 변별력 큰 항목)
+      const profile = this._getUserProfile();
+      const { age } = profile;
+      if (age) {
+        const rtRef = this._refReactionTime(age);
+        // 작을수록 좋음
+        score = this._ageNormalizedScore(r.avg, rtRef, false);
+        console.log(`[Reaction Score] age=${age} avg=${r.avg.toFixed(0)}ms ref=${rtRef.mean}±${rtRef.sd} → ${score}`);
+      } else {
+        // Fallback
+        score = 100;
+        if (r.avg > 500) score = 40;
+        else if (r.avg > 350) score = 60;
+        else if (r.avg > 280) score = 75;
+        else if (r.avg > 220) score = 88;
+      }
     }
     const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D';
     let cmt;
     if (r.error) cmt = r.error;
-    else if (r.avg < 220) cmt = '매우 빠른 반응속도입니다. 운동선수 수준입니다.';
-    else if (r.avg < 280) cmt = '빠른 반응속도입니다.';
-    else if (r.avg < 350) cmt = '평균적인 반응속도입니다.';
-    else if (r.avg < 500) cmt = '반응속도가 다소 느립니다. 휴식을 취해보세요.';
-    else cmt = '반응속도가 느립니다. 피로/집중력 저하 가능성.';
+    else {
+      const profile = this._getUserProfile();
+      const ageInfo = profile.age;
+      if (ageInfo) {
+        const rtRef = this._refReactionTime(ageInfo);
+        if (score >= 85) cmt = `${ageInfo}세 또래보다 매우 빠른 반응속도입니다 (또래 평균 ${rtRef.mean}ms 대비 -${Math.round(rtRef.mean - r.avg)}ms).`;
+        else if (score >= 70) cmt = `${ageInfo}세 또래보다 빠른 반응속도입니다 (또래 평균 ${rtRef.mean}ms).`;
+        else if (score >= 50) cmt = `${ageInfo}세 또래 평균 수준입니다 (또래 평균 ${rtRef.mean}ms).`;
+        else if (score >= 30) cmt = `${ageInfo}세 또래보다 다소 느립니다. 피로/집중력 저하 가능성이 있어요.`;
+        else cmt = `${ageInfo}세 또래보다 반응이 느립니다. 충분한 수면을 취하세요.`;
+      } else {
+        if (r.avg < 220) cmt = '매우 빠른 반응속도입니다. 운동선수 수준입니다.';
+        else if (r.avg < 280) cmt = '빠른 반응속도입니다.';
+        else if (r.avg < 350) cmt = '평균적인 반응속도입니다.';
+        else if (r.avg < 500) cmt = '반응속도가 다소 느립니다. 휴식을 취해보세요.';
+        else cmt = '반응속도가 느립니다. 피로/집중력 저하 가능성.';
+      }
+    }
 
     document.getElementById('bt-reaction-running').style.display = 'none';
     const result = document.getElementById('bt-reaction-result');
