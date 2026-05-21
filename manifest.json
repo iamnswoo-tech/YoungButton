@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.4",
-  "short_name": "건강측정 v15.4",
-  "description": "v15.4 — Wake Lock (측정 중 화면 꺼짐 방지)",
+  "name": "건강 측정 v15.5",
+  "short_name": "건강측정 v15.5",
+  "description": "v15.5 — 손가락 PPG (임상급 HRV)",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

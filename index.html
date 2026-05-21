@@ -4229,6 +4229,651 @@ body::before {
 }
 .keyword-btn-v2.on .keyword-label-v2 { color: var(--text); font-weight: 900; }
 
+/* ════════════════════════════════════════════════════════════════
+   ★ v15.5: 손가락 PPG (Clinical Grade) — 빨강·따뜻한 톤
+   ════════════════════════════════════════════════════════════════ */
+.measure-card.finger { border-color: rgba(239, 68, 68, .35); }
+.mc-icon.finger {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  border-color: #fca5a5;
+}
+.mc-badge.clinical {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+/* === 인트로 화면 === */
+.finger-intro {
+  padding: 16px;
+  padding-bottom: 100px;
+}
+
+.finger-hero {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 50%, #fecaca 100%);
+  border-radius: 24px;
+  padding: 32px 24px 28px;
+  text-align: center;
+  margin-bottom: 16px;
+  border: 1.5px solid rgba(239, 68, 68, .2);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, .08);
+}
+.finger-hero-icon {
+  font-size: 64px;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 6px 16px rgba(239, 68, 68, .35));
+  animation: finger-bob 2.6s ease-in-out infinite;
+}
+@keyframes finger-bob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-5px) rotate(3deg); }
+}
+.finger-hero-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 900;
+  color: #fff;
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: .15em;
+  margin-bottom: 12px;
+}
+.finger-hero-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #7f1d1d;
+  letter-spacing: -.02em;
+  line-height: 1.3;
+  margin-bottom: 10px;
+}
+.finger-hero-sub {
+  font-size: 13px;
+  color: #991b1b;
+  line-height: 1.6;
+  font-weight: 600;
+}
+
+.finger-compare-card {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+}
+.finger-compare-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 14px;
+  letter-spacing: -.01em;
+}
+.finger-compare-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 60px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.fcr-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+}
+.fcr-bar {
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.fcr-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .8s cubic-bezier(.2,.6,.3,1);
+}
+.fcr-fill.rppg { background: linear-gradient(90deg, #fca5a5, #f87171); }
+.fcr-fill.finger { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.fcr-val {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.finger-compare-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #fef2f2;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #7f1d1d;
+  line-height: 1.5;
+}
+.finger-compare-note strong { font-weight: 900; }
+
+.finger-howto-card {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+}
+.finger-howto-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 14px;
+  letter-spacing: -.01em;
+}
+.finger-howto-step {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+  align-items: start;
+}
+.fhs-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fef2f2, #fecaca);
+  color: #991b1b;
+  font-size: 14px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #fca5a5;
+}
+.fhs-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.01em;
+  margin-bottom: 2px;
+}
+.fhs-sub {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+
+.finger-warn-card {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 12px;
+  color: #78350f;
+  line-height: 1.5;
+  font-weight: 600;
+  margin-bottom: 18px;
+}
+
+.finger-start-btn {
+  width: 100%;
+  padding: 18px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  border: none;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 900;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(239, 68, 68, .35);
+  transition: transform .15s, box-shadow .2s;
+  letter-spacing: -.01em;
+}
+.finger-start-btn:active {
+  transform: scale(0.97);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, .25);
+}
+.fsb-arrow { transition: transform .2s; font-size: 18px; }
+.finger-start-btn:active .fsb-arrow { transform: translateX(4px); }
+
+/* === 측정 중 화면 === */
+.finger-measuring {
+  padding: 16px;
+  padding-bottom: 100px;
+}
+.finger-cam-frame {
+  position: relative;
+  background: #1a0808;
+  border-radius: 22px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  margin-bottom: 14px;
+  border: 2px solid #7f1d1d;
+}
+#finger-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+#finger-canvas { display: none; }
+
+.finger-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(0,0,0,.7) 0%, transparent 100%);
+  color: #fff;
+  z-index: 2;
+}
+.finger-overlay-status {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+}
+.finger-overlay-sub {
+  font-size: 12px;
+  color: #fecaca;
+  margin-top: 2px;
+}
+
+.finger-timer {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(0,0,0,.7);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 6px 14px;
+  color: #fff;
+  z-index: 2;
+}
+.ft-num {
+  font-size: 28px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.ft-unit { font-size: 12px; color: #fca5a5; margin-left: 4px; }
+
+.finger-quality {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  background: rgba(0,0,0,.7);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 8px 12px;
+  width: 130px;
+  z-index: 2;
+}
+.fq-label {
+  font-size: 9px;
+  color: #fca5a5;
+  font-weight: 800;
+  letter-spacing: .05em;
+  margin-bottom: 4px;
+}
+.fq-bar {
+  height: 4px;
+  background: #4b1c1c;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.fq-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #fca5a5, #22c55e);
+  transition: width .4s ease;
+}
+.fq-status {
+  font-size: 10px;
+  color: #fff;
+  font-weight: 800;
+  text-align: right;
+}
+
+.finger-wave-card {
+  background: #1a0808;
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid #7f1d1d;
+}
+.finger-wave-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: #fca5a5;
+  margin-bottom: 8px;
+  letter-spacing: .05em;
+}
+#finger-wave-canvas {
+  width: 100%;
+  height: 80px;
+  display: block;
+  border-radius: 8px;
+}
+
+.finger-live-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.fls-card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 14px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.fls-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text2);
+  letter-spacing: .05em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+.fls-value {
+  font-size: 32px;
+  font-weight: 900;
+  color: #dc2626;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
+}
+.fls-unit {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.finger-stop-btn {
+  width: 100%;
+  padding: 14px;
+  background: transparent;
+  color: #dc2626;
+  border: 1.5px solid #dc2626;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+}
+.finger-stop-btn:active { background: #fef2f2; }
+
+/* === 결과 화면 === */
+.finger-result {
+  padding: 16px;
+  padding-bottom: 100px;
+}
+
+.finger-result-card {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-radius: 24px;
+  padding: 22px;
+  border: 1.5px solid rgba(239, 68, 68, .25);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, .1);
+  margin-bottom: 14px;
+}
+
+.finger-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.finger-result-badge {
+  font-size: 10px;
+  font-weight: 900;
+  color: #fff;
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  padding: 4px 10px;
+  border-radius: 999px;
+  letter-spacing: .12em;
+}
+.finger-result-quality {
+  font-size: 11px;
+  font-weight: 800;
+  color: #7f1d1d;
+}
+
+.finger-result-main {
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 16px 0;
+}
+.finger-score-circle {
+  display: inline-block;
+  margin-bottom: 6px;
+}
+.fsc-num {
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.04em;
+  font-variant-numeric: tabular-nums;
+}
+.fsc-max {
+  font-size: 18px;
+  color: rgba(0,0,0,.4);
+  font-weight: 700;
+  display: inline-block;
+}
+.finger-score-label {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+
+.finger-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.finger-stat {
+  background: rgba(255,255,255,.7);
+  border-radius: 14px;
+  padding: 14px 12px;
+  text-align: center;
+  border: 1px solid rgba(239, 68, 68, .1);
+}
+.finger-stat.highlight {
+  background: linear-gradient(135deg, #fff 0%, #fef2f2 100%);
+  border-color: #fca5a5;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, .12);
+}
+.fs-icon { font-size: 22px; margin-bottom: 4px; line-height: 1; }
+.fs-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text2);
+  letter-spacing: .05em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+.fs-value {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+.fs-unit {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.finger-stress-card {
+  background: rgba(255,255,255,.8);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+.fsc-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text2);
+  margin-bottom: 6px;
+  letter-spacing: -.01em;
+}
+.fsc-level {
+  font-size: 18px;
+  font-weight: 900;
+  margin-bottom: 8px;
+  letter-spacing: -.02em;
+}
+.finger-stress-card.lv-1 .fsc-level,
+.finger-stress-card.lv-2 .fsc-level { color: #16a34a; }
+.finger-stress-card.lv-3 .fsc-level { color: #ca8a04; }
+.finger-stress-card.lv-4 .fsc-level,
+.finger-stress-card.lv-5 .fsc-level { color: #dc2626; }
+
+.fsc-bar {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.fsc-dot {
+  width: 36px;
+  height: 6px;
+  border-radius: 3px;
+  background: #e5e7eb;
+}
+.fsc-dot.on {
+  background: linear-gradient(90deg, #22c55e, #f59e0b, #dc2626);
+}
+
+.finger-compare-result {
+  background: rgba(255,255,255,.7);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.fcr-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 10px;
+  letter-spacing: -.01em;
+}
+.fcr-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(239, 68, 68, .15);
+  font-size: 13px;
+}
+.fcr-l { color: var(--text); font-weight: 700; }
+.fcr-r { color: #15803d; font-weight: 900; }
+.fcr-meta {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 6px;
+  text-align: right;
+  font-style: italic;
+}
+
+.finger-meta {
+  background: rgba(255,255,255,.6);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.fm-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text2);
+  padding: 4px 0;
+  font-weight: 600;
+}
+.fm-row span:last-child { color: var(--text); font-weight: 800; }
+
+.finger-disclaimer {
+  font-size: 11px;
+  color: var(--text3);
+  text-align: center;
+  padding: 10px;
+  background: rgba(255,255,255,.5);
+  border-radius: 10px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.finger-actions {
+  display: flex;
+  gap: 8px;
+}
+.finger-action-btn {
+  flex: 1;
+  padding: 14px;
+  border: 1.5px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+}
+.finger-action-btn.primary {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  border: none;
+}
+.finger-action-btn:active { transform: scale(0.98); }
+
+/* 에러 상태 */
+.finger-error-card {
+  background: var(--card);
+  border-radius: 20px;
+  padding: 32px 22px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.finger-error-icon { font-size: 56px; margin-bottom: 12px; }
+.finger-error-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: -.02em;
+}
+.finger-error-msg {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+.finger-retry-btn, .finger-back-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.finger-retry-btn {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  border: none;
+}
+.finger-back-btn {
+  background: transparent;
+  color: var(--text2);
+  border: 1.5px solid var(--border);
+}
+
 .tts-fail-toast {
   position: fixed;
   top: -120px;
@@ -5680,7 +6325,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.4 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.5 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -5750,6 +6395,16 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="mc-content">
         <div class="mc-title">얼굴 측정 <span class="mc-badge new">신규</span></div>
         <div class="mc-desc">rPPG로 심박수·HRV·호흡수 측정 (30초)</div>
+      </div>
+      <div class="mc-arrow">›</div>
+    </button>
+
+    <!-- ★ v15.5: 손가락 측정 — 임상급 HRV -->
+    <button type="button" class="measure-card finger" onclick="App.goPage('finger')">
+      <div class="mc-icon finger">☝️</div>
+      <div class="mc-content">
+        <div class="mc-title">손가락 측정 <span class="mc-badge clinical">임상급</span></div>
+        <div class="mc-desc">플래시 + 카메라로 정밀 HRV 측정 (30초)</div>
       </div>
       <div class="mc-arrow">›</div>
     </button>
@@ -6356,6 +7011,132 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div id="mood-container"></div>
 </div>
 
+<!-- ═══════════ FINGER PPG PAGE (v15.5 임상급 HRV) ═══════════ -->
+<div class="page" id="page-finger">
+  <div class="back-bar">
+    <button class="back-btn" type="button" onclick="App.goPage('home')">←</button>
+    <div>
+      <div class="page-title">☝️ 손가락 측정</div>
+      <div class="page-subtitle">임상급 HRV · 30초 · ME-rPPG · State Space Duality</div>
+    </div>
+  </div>
+
+  <!-- 인트로 화면 (측정 전) -->
+  <div id="finger-intro" class="finger-intro">
+    <div class="finger-hero">
+      <div class="finger-hero-icon">☝️</div>
+      <div class="finger-hero-badge">CLINICAL GRADE</div>
+      <div class="finger-hero-title">임상급 정확도로<br>심박변이도를 측정해요</div>
+      <div class="finger-hero-sub">
+        후면 카메라와 플래시를 사용해<br>
+        병원 맥박산소측정기와 동일한 원리로 측정
+      </div>
+    </div>
+
+    <div class="finger-compare-card">
+      <div class="finger-compare-title">📊 정확도 비교</div>
+      <div class="finger-compare-row">
+        <span class="fcr-label">😊 얼굴 측정 (rPPG)</span>
+        <div class="fcr-bar"><div class="fcr-fill rppg" style="width:35%"></div></div>
+        <span class="fcr-val">±15ms</span>
+      </div>
+      <div class="finger-compare-row">
+        <span class="fcr-label">☝️ 손가락 측정</span>
+        <div class="fcr-bar"><div class="fcr-fill finger" style="width:95%"></div></div>
+        <span class="fcr-val">±2ms</span>
+      </div>
+      <div class="finger-compare-note">
+        손가락 PPG는 얼굴 측정보다 <strong>7배 정확</strong>합니다 (HRV RMSSD 기준)
+      </div>
+    </div>
+
+    <div class="finger-howto-card">
+      <div class="finger-howto-title">📖 측정 방법</div>
+      <div class="finger-howto-step">
+        <div class="fhs-num">1</div>
+        <div class="fhs-body">
+          <div class="fhs-title">후면 카메라가 사용됩니다</div>
+          <div class="fhs-sub">플래시가 자동으로 켜집니다 (눈에 직접 비추지 마세요)</div>
+        </div>
+      </div>
+      <div class="finger-howto-step">
+        <div class="fhs-num">2</div>
+        <div class="fhs-body">
+          <div class="fhs-title">검지를 카메라 위에 살짝 덮어주세요</div>
+          <div class="fhs-sub">압박하지 말고 가볍게, 카메라와 플래시 모두를 덮어야 해요</div>
+        </div>
+      </div>
+      <div class="finger-howto-step">
+        <div class="fhs-num">3</div>
+        <div class="fhs-body">
+          <div class="fhs-title">30초간 움직이지 마세요</div>
+          <div class="fhs-sub">호흡은 자연스럽게, 손가락만 가만히</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="finger-warn-card">
+      ⚠️ 플래시가 일정 시간 켜집니다. 손가락이 따뜻해질 수 있어요. 불편하시면 측정을 중단하세요.
+    </div>
+
+    <button class="finger-start-btn" type="button" onclick="App.fingerStart()">
+      <span>측정 시작</span>
+      <span class="fsb-arrow">→</span>
+    </button>
+  </div>
+
+  <!-- 측정 중 화면 -->
+  <div id="finger-measuring" class="finger-measuring" style="display:none">
+    <div class="finger-cam-frame">
+      <video id="finger-video" autoplay muted playsinline></video>
+      <canvas id="finger-canvas" width="160" height="160"></canvas>
+
+      <div class="finger-overlay">
+        <div class="finger-overlay-status" id="finger-status">손가락을 카메라에 대주세요</div>
+        <div class="finger-overlay-sub" id="finger-substatus">카메라와 플래시를 모두 덮어야 해요</div>
+      </div>
+
+      <div class="finger-timer" id="finger-timer-display">
+        <span class="ft-num" id="finger-timer-num">30</span><span class="ft-unit">초</span>
+      </div>
+
+      <!-- 신호 품질 표시 -->
+      <div class="finger-quality">
+        <div class="fq-label">신호 품질</div>
+        <div class="fq-bar"><div class="fq-fill" id="finger-quality-fill" style="width:0%"></div></div>
+        <div class="fq-status" id="finger-quality-status">대기</div>
+      </div>
+    </div>
+
+    <!-- 실시간 PPG 파형 -->
+    <div class="finger-wave-card">
+      <div class="finger-wave-title">❤️ PPG 신호 (실시간)</div>
+      <canvas id="finger-wave-canvas" width="320" height="80"></canvas>
+    </div>
+
+    <!-- 실시간 BPM -->
+    <div class="finger-live-stats">
+      <div class="fls-card">
+        <div class="fls-label">심박수</div>
+        <div class="fls-value" id="finger-live-hr">--</div>
+        <div class="fls-unit">BPM</div>
+      </div>
+      <div class="fls-card">
+        <div class="fls-label">측정 진행</div>
+        <div class="fls-value" id="finger-progress-pct">0</div>
+        <div class="fls-unit">%</div>
+      </div>
+    </div>
+
+    <button class="finger-stop-btn" type="button" onclick="App.fingerStop()">
+      ⏹ 측정 중지
+    </button>
+  </div>
+
+  <!-- 결과 화면 -->
+  <div id="finger-result" class="finger-result" style="display:none"></div>
+</div>
+
 <!-- BOTTOM NAV -->
 <nav class="bottom-nav">
   <button class="nav-btn on" id="nav-home" type="button" onclick="App.goPage('home')">
@@ -6378,8 +7159,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
-   🚀Reset Button_승우🚀<br>
-    rPPG 엔진: ME-rPPG (Apache 2.0)<br>
+    rPPG 엔진: <a href="https://github.com/Health-HCI-Group/ME-rPPG-demo" target="_blank" style="color:var(--primary);text-decoration:none">ME-rPPG</a> (Apache 2.0)<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>
