@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.5",
-  "short_name": "건강측정 v15.5",
-  "description": "v15.5 — 손가락 PPG (임상급 HRV)",
+  "name": "건강 측정 v15.6",
+  "short_name": "건강측정 v15.6",
+  "description": "v15.6 — 손가락 PPG 재작성 (단계별 UX + 토치 수동 제어 + 디버그 로그)",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

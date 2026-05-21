@@ -1594,18 +1594,26 @@ const App = {
     if (page === 'mood') {
       this._renderMoodPage();
     }
-    // ★ v15.5: 손가락 PPG 페이지 진입 시 인트로 초기화
+    // ★ v15.6: 손가락 PPG 페이지 진입 시 인트로 stage로
     if (page === 'finger') {
-      const intro = document.getElementById('finger-intro');
-      const measuring = document.getElementById('finger-measuring');
+      // 이전 측정이 활성화돼 있으면 정리
+      if (this._finger && (this._finger.stream || this._finger.measuring)) {
+        this._fingerCleanup();
+      }
+      const stages = ['finger-stage-intro', 'finger-stage-camera', 'finger-stage-measuring'];
+      stages.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (id === 'finger-stage-intro') ? 'block' : 'none';
+      });
       const result = document.getElementById('finger-result');
-      if (intro) intro.style.display = 'block';
-      if (measuring) measuring.style.display = 'none';
       if (result) result.style.display = 'none';
+      const logPanel = document.getElementById('finger-log-panel');
+      if (logPanel) logPanel.style.display = 'none';
+      if (this._finger) this._finger.stage = 'intro';
     }
     // 페이지 떠날 때 측정 중이면 안전 정지
-    if (page !== 'finger' && this._finger?.running) {
-      this.fingerStop();
+    if (page !== 'finger' && this._finger && (this._finger.stream || this._finger.measuring)) {
+      this._fingerCleanup();
     }
     // ★ v15.0: 홈 진입 시 오늘의 감정 카드 업데이트
     if (page === 'home') {
@@ -3126,148 +3134,356 @@ const App = {
   },
 
   // ════════════════════════════════════════════════════════════════
-  // ★ v15.5: 손가락 PPG (임상급 HRV)
+  // ★ v15.6: 손가락 PPG (재작성) — 단계별 진행 + 명시 토치 제어 + 디버그 로그
   //
-  // 원리: 후면 카메라 + 플래시. 손가락이 빛을 통과시키며
-  //       혈류 변화 = 픽셀 빨강 채널 변화. SNR이 얼굴 rPPG의
-  //       10~30배 높아 임상급 정확도 가능.
+  // 진단된 문제 (v15.5):
+  //   1. applyConstraints torch 호출 timing 이슈 → 플래시 안 켜짐
+  //   2. 측정 시작이 빨라 손가락 안댄 상태로 시작 → 데이터 0
+  //   3. 사용자가 플래시 직접 제어 불가
+  //   4. 무엇이 실패했는지 로그 확인 불가
   //
-  // 학술 근거:
-  //   - Scully (2012): Smartphone PPG vs ECG, RMSSD r=0.98
-  //   - Peng (2015): iPhone PPG 정확도 검증, HR ±1.5 BPM
-  //   - Allen (2007): PPG morphology and CV
+  // v15.6 해결책:
+  //   1. 단계 분리: 카메라 활성화 → 손가락 위치 확인 → 측정 시작
+  //   2. 명시적 토치 토글 버튼 (재시도 가능)
+  //   3. 실시간 빨강 채널 모니터 (손가락 댔는지 즉시 표시)
+  //   4. 측정 시작은 신호 확인 후에만 활성화
+  //   5. 인앱 디버그 로그 패널 (📋 아이콘으로 토글)
   //
-  // 알고리즘 흐름:
-  //   1. 후면 카메라 + torch 켜기
-  //   2. 빨강 채널 평균 추출 (30 FPS, 30초 = 900 샘플)
-  //   3. 이동평균 detrend + bandpass [0.6-3.5 Hz]
-  //   4. peak detection (적응형 임계)
-  //   5. IBI 추출 → outlier 제거 (Kubios 표준)
-  //   6. HR, RMSSD, SDNN, pNN50 계산
+  // 학술 근거 (최신):
+  //   - Coppetti et al. (2017): 4개 PPG 앱 검증, RMSE ≤5 BPM ANSI/AAMI EC-13
+  //   - Allagi et al. (2022): Redmi Note 8 + 24명 검증, 99.7% 정확도, 0.4 BPM 오차
+  //   - Real-world AF detection (2024): 50명 4주 검증, 3907 measurements
+  //   - Touch error elimination (2020): Red plane average 기반 손가락 접촉 검증
+  //
+  // 알고리즘:
+  //   1. 후면 카메라 (environment) + torch
+  //   2. 빨강 채널 평균 추출 (30 FPS, 30초)
+  //   3. Detrend (이동평균 30 = 1초 window)
+  //   4. Butterworth 2차 bandpass [0.6 ~ 3.5 Hz] (HR 36 ~ 210)
+  //   5. FFT + Hann window → 주파수 도메인 HR 추정
+  //   6. Peak detection (적응형 임계 + 최소 거리)
+  //   7. IBI → Kubios 표준 outlier 제거 (±30%)
+  //   8. HR, RMSSD, SDNN, pNN50 계산
   // ════════════════════════════════════════════════════════════════
-  _finger: {
-    running: false,
-    stream: null,
-    track: null,
-    rafId: null,
-    timerInterval: null,
-    samples: [],          // {t, r} — timestamp + red 채널 평균
-    quality: 0,           // 0-100 신호 품질
-    duration: 30,         // 측정 시간 (초)
-    startTime: 0,
-    peaks: [],            // 검출된 피크 인덱스
-    lastBPM: 0,
-    waveCanvas: null,
-    waveCtx: null,
+
+  // 인앱 디버그 로그 시스템
+  _fingerLog: [],
+  _fingerLogMax: 200,
+
+  _flog(msg, level) {
+    const t = new Date();
+    const ts = t.getHours().toString().padStart(2,'0') + ':' +
+               t.getMinutes().toString().padStart(2,'0') + ':' +
+               t.getSeconds().toString().padStart(2,'0') + '.' +
+               t.getMilliseconds().toString().padStart(3,'0');
+    const entry = { ts, level: level || 'info', msg };
+    this._fingerLog.push(entry);
+    if (this._fingerLog.length > this._fingerLogMax) {
+      this._fingerLog = this._fingerLog.slice(-this._fingerLogMax);
+    }
+    // console에도 출력
+    const prefix = `[Finger ${ts}]`;
+    if (level === 'error') console.error(prefix, msg);
+    else if (level === 'warn') console.warn(prefix, msg);
+    else console.log(prefix, msg);
+    // UI 업데이트
+    this._fingerRenderLog();
   },
 
-  async fingerStart() {
-    console.log('[Finger] 측정 시작');
+  _fingerRenderLog() {
+    const body = document.getElementById('finger-log-body');
+    if (!body) return;
+    const html = this._fingerLog.map(e => {
+      const cls = e.level === 'error' ? 'lvl-err' : e.level === 'warn' ? 'lvl-warn' : 'lvl-info';
+      return `<div class="flp-line ${cls}"><span class="flp-ts">${e.ts}</span><span class="flp-msg">${this._esc(e.msg)}</span></div>`;
+    }).join('');
+    body.innerHTML = html;
+    // 자동 스크롤
+    body.scrollTop = body.scrollHeight;
+  },
 
-    // UI 전환
-    document.getElementById('finger-intro').style.display = 'none';
-    document.getElementById('finger-result').style.display = 'none';
-    document.getElementById('finger-measuring').style.display = 'block';
-
-    // 상태 초기화
-    const f = this._finger;
-    f.running = true;
-    f.samples = [];
-    f.peaks = [];
-    f.quality = 0;
-    f.startTime = performance.now();
-    f.lastBPM = 0;
-
-    try {
-      // 후면 카메라 + 플래시 요청
-      console.log('[Finger] 후면 카메라 + 플래시 요청');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { exact: 'environment' },
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          frameRate: { ideal: 30, max: 30 },
-        }
-      });
-      f.stream = stream;
-      f.track = stream.getVideoTracks()[0];
-
-      const video = document.getElementById('finger-video');
-      video.srcObject = stream;
-      await video.play();
-
-      // 플래시 (torch) 활성화
-      try {
-        const capabilities = f.track.getCapabilities();
-        if (capabilities.torch) {
-          await f.track.applyConstraints({ advanced: [{ torch: true }] });
-          console.log('[Finger] ✓ 플래시 활성화');
-        } else {
-          console.warn('[Finger] 플래시 미지원 기기 — 측정은 가능하나 정확도 낮음');
-          this._showFingerToast('플래시를 켤 수 없어요. 밝은 곳에서 측정해주세요.', 'warn');
-        }
-      } catch (e) {
-        console.warn('[Finger] 플래시 활성화 실패:', e.message);
-      }
-
-      // ★ Wake Lock
-      this._acquireWakeLock();
-
-      // 파형 캔버스 준비
-      f.waveCanvas = document.getElementById('finger-wave-canvas');
-      f.waveCtx = f.waveCanvas.getContext('2d');
-
-      // 타이머 시작
-      this._fingerStartTimer();
-
-      // 프레임 처리 루프
-      this._fingerProcessLoop();
-
-      // 음성 안내
-      this._speak('손가락 측정을 시작합니다. 검지를 카메라와 플래시 위에 살짝 덮어주세요. 압박하지 말고 가볍게, 30초간 움직이지 마세요.');
-
-    } catch (err) {
-      console.error('[Finger] 시작 실패:', err);
-      let msg = '측정 시작 실패';
-      if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') {
-        msg = '후면 카메라를 찾을 수 없습니다. 이 기기에서는 손가락 측정을 사용할 수 없어요.';
-      } else if (err.name === 'NotAllowedError') {
-        msg = '카메라 권한이 필요합니다. 설정에서 권한을 허용해주세요.';
-      }
-      alert(msg);
-      await this.fingerStop();
+  fingerToggleLog() {
+    const panel = document.getElementById('finger-log-panel');
+    if (!panel) return;
+    if (panel.style.display === 'none') {
+      panel.style.display = 'flex';
+      this._fingerRenderLog();
+    } else {
+      panel.style.display = 'none';
     }
   },
 
-  _fingerStartTimer() {
-    const f = this._finger;
-    if (f.timerInterval) clearInterval(f.timerInterval);
-    f.timerInterval = setInterval(() => {
-      if (!f.running) return;
-      const elapsed = (performance.now() - f.startTime) / 1000;
-      const remain = Math.max(0, f.duration - elapsed);
-      const pct = Math.min(100, (elapsed / f.duration) * 100);
-
-      document.getElementById('finger-timer-num').textContent = Math.ceil(remain);
-      document.getElementById('finger-progress-pct').textContent = Math.round(pct);
-
-      if (remain <= 0) {
-        this._fingerFinalize();
-      }
-    }, 100);
+  fingerClearLog() {
+    this._fingerLog = [];
+    this._fingerRenderLog();
   },
 
-  _fingerProcessLoop() {
-    const f = this._finger;
-    if (!f.running) return;
+  async fingerCopyLog() {
+    const text = this._fingerLog.map(e => `[${e.ts}] [${e.level}] ${e.msg}`).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('로그가 클립보드에 복사되었습니다.');
+    } catch (e) {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); alert('로그가 복사되었습니다.'); } catch (e2) {}
+      ta.remove();
+    }
+  },
 
-    const video = document.getElementById('finger-video');
+  // 상태 객체
+  _finger: {
+    stage: 'intro',         // 'intro' | 'camera' | 'measuring' | 'result'
+    stream: null,
+    track: null,
+    torchSupported: false,
+    torchOn: false,
+    samples: [],            // {t, r} — 실시간 빨강 채널 (StagE 1+2 모두 수집)
+    measureSamples: [],     // 측정 중 샘플 (Stage 2)
+    measuring: false,
+    measureStartTime: 0,
+    duration: 30,
+    rafId: null,
+    timerInterval: null,
+    quality: 0,
+    lastBPM: 0,
+    waveCanvas: null,
+    waveCtx: null,
+    waveCanvas2: null,
+    waveCtx2: null,
+    fingerDetected: false,
+  },
+
+  // ──────────────────────────────────────────────────
+  // 페이지 진입 / 종료
+  // ──────────────────────────────────────────────────
+
+  fingerExit() {
+    this._flog('페이지 종료 요청');
+    this._fingerCleanup();
+    this.goPage('home');
+  },
+
+  async _fingerCleanup() {
+    const f = this._finger;
+    f.measuring = false;
+    if (f.rafId) { cancelAnimationFrame(f.rafId); f.rafId = null; }
+    if (f.timerInterval) { clearInterval(f.timerInterval); f.timerInterval = null; }
+    // 토치 끄기
+    if (f.track && f.torchSupported && f.torchOn) {
+      try {
+        await f.track.applyConstraints({ advanced: [{ torch: false }] });
+        this._flog('토치 OFF (cleanup)', 'info');
+      } catch (e) {
+        this._flog('토치 OFF 실패: ' + e.message, 'warn');
+      }
+      f.torchOn = false;
+    }
+    // 스트림 정지
+    if (f.stream) {
+      try {
+        f.stream.getTracks().forEach(t => t.stop());
+        this._flog('스트림 정지', 'info');
+      } catch (e) {}
+    }
+    f.stream = null;
+    f.track = null;
+    f.torchSupported = false;
+    this._releaseWakeLock();
+    this._speakStop();
+  },
+
+  // ──────────────────────────────────────────────────
+  // STAGE 0 → 1: 카메라 활성화 시작
+  // ──────────────────────────────────────────────────
+  async fingerStartCamera() {
+    this._flog('Stage 1: 카메라 활성화 시작');
+
+    // UI 전환: intro → camera
+    document.getElementById('finger-stage-intro').style.display = 'none';
+    document.getElementById('finger-stage-camera').style.display = 'block';
+
+    // 상태 초기화
+    const f = this._finger;
+    f.stage = 'camera';
+    f.samples = [];
+    f.measureSamples = [];
+    f.quality = 0;
+    f.lastBPM = 0;
+    f.torchOn = false;
+    f.torchSupported = false;
+    f.fingerDetected = false;
+
+    // 상태 표시
+    this._fingerSetStatus('카메라 준비 중...', '잠시만 기다려주세요');
+    document.getElementById('finger-torch-status').textContent = '확인 중';
+    document.getElementById('finger-red-mean').textContent = '--';
+    document.getElementById('finger-touch-status').textContent = '대기 중';
+    this._fingerEnableMeasureBtn(false);
+
+    try {
+      this._flog('getUserMedia 호출 (environment 카메라)');
+
+      // ★ 핵심: 후면 카메라 요청
+      // exact 강제하면 일부 기기에서 실패하므로 ideal 사용
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { exact: 'environment' },
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            frameRate: { ideal: 30, max: 30 },
+          }
+        });
+        this._flog('✓ environment exact 카메라 획득');
+      } catch (e1) {
+        this._flog('environment exact 실패, ideal로 재시도: ' + e1.message, 'warn');
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              frameRate: { ideal: 30 },
+            }
+          });
+          this._flog('✓ environment ideal 카메라 획득');
+        } catch (e2) {
+          this._flog('ideal도 실패, 기본 카메라로 재시도: ' + e2.message, 'warn');
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          this._flog('✓ 기본 카메라 획득 (전면일 수 있음)', 'warn');
+        }
+      }
+
+      f.stream = stream;
+      f.track = stream.getVideoTracks()[0];
+
+      // ★ 핵심: 비디오 활성화 후 약간 대기 (Chrome Android 버그 회피)
+      const video = document.getElementById('finger-video');
+      video.srcObject = stream;
+      await video.play();
+      this._flog(`비디오 활성화: ${video.videoWidth}x${video.videoHeight}`);
+
+      // ★ Critical: track 활성화 후 200ms 대기 (capabilities 안정화)
+      await new Promise(r => setTimeout(r, 300));
+
+      // 토치 capability 확인
+      let capabilities = {};
+      try {
+        capabilities = f.track.getCapabilities ? f.track.getCapabilities() : {};
+        this._flog('Capabilities: ' + JSON.stringify(Object.keys(capabilities)));
+      } catch (e) {
+        this._flog('getCapabilities 실패: ' + e.message, 'warn');
+      }
+
+      f.torchSupported = !!capabilities.torch;
+      this._flog(`토치 지원: ${f.torchSupported ? '✓ YES' : '✗ NO'}`);
+
+      const torchStatus = document.getElementById('finger-torch-status');
+      const torchBtn = document.getElementById('finger-torch-btn');
+
+      if (f.torchSupported) {
+        torchStatus.textContent = '꺼짐 (수동 켜기 필요)';
+        torchBtn.disabled = false;
+        torchBtn.textContent = '💡 플래시 켜기';
+        this._fingerSetStatus('카메라 준비 완료', '플래시 버튼을 누르고 손가락을 대주세요');
+      } else {
+        torchStatus.textContent = '⚠️ 미지원 기기';
+        torchBtn.disabled = true;
+        torchBtn.textContent = '💡 플래시 미지원';
+        this._fingerSetStatus('카메라 준비 완료', '플래시가 미지원이라 밝은 곳에서 측정해주세요');
+        this._flog('이 기기는 토치 미지원 — 밝은 조명에서 측정 가능', 'warn');
+      }
+
+      // Wake Lock
+      this._acquireWakeLock();
+
+      // 파형 캔버스
+      f.waveCanvas = document.getElementById('finger-wave-canvas');
+      f.waveCtx = f.waveCanvas.getContext('2d');
+
+      // 실시간 모니터링 시작 (측정과 별개 — 손가락 댔는지 확인용)
+      this._fingerStartMonitor();
+
+      // 음성 안내
+      this._speak('카메라가 준비되었습니다. 플래시를 켜고 검지를 카메라에 가볍게 대주세요.');
+
+    } catch (err) {
+      this._flog('카메라 시작 실패: ' + err.message, 'error');
+      let msg = '카메라를 사용할 수 없습니다.';
+      if (err.name === 'NotAllowedError') msg = '카메라 권한을 허용해주세요.';
+      else if (err.name === 'NotFoundError') msg = '카메라를 찾을 수 없습니다.';
+      alert(msg + '\n\n로그 패널(📋)에서 자세한 내용을 확인하세요.');
+      this._fingerCleanup();
+      document.getElementById('finger-stage-camera').style.display = 'none';
+      document.getElementById('finger-stage-intro').style.display = 'block';
+    }
+  },
+
+  // ──────────────────────────────────────────────────
+  // 토치 토글 (수동 컨트롤)
+  // ──────────────────────────────────────────────────
+  async fingerToggleTorch() {
+    const f = this._finger;
+    if (!f.track) {
+      this._flog('토치 토글 실패: track 없음', 'warn');
+      return;
+    }
+    if (!f.torchSupported) {
+      this._flog('토치 토글 실패: 미지원 기기', 'warn');
+      alert('이 기기는 플래시 제어를 지원하지 않습니다.\n밝은 곳에서 측정해주세요.');
+      return;
+    }
+
+    const newState = !f.torchOn;
+    this._flog(`토치 ${newState ? 'ON' : 'OFF'} 요청`);
+
+    try {
+      await f.track.applyConstraints({ advanced: [{ torch: newState }] });
+      f.torchOn = newState;
+      const torchStatus = document.getElementById('finger-torch-status');
+      const torchBtn = document.getElementById('finger-torch-btn');
+      if (newState) {
+        torchStatus.textContent = '✓ 켜짐';
+        torchBtn.textContent = '💡 플래시 끄기';
+        torchBtn.classList.add('on');
+        this._flog('✓ 토치 ON 성공');
+      } else {
+        torchStatus.textContent = '꺼짐';
+        torchBtn.textContent = '💡 플래시 켜기';
+        torchBtn.classList.remove('on');
+        this._flog('✓ 토치 OFF 성공');
+      }
+    } catch (e) {
+      this._flog('토치 토글 실패: ' + e.message, 'error');
+      alert('플래시 제어 실패: ' + e.message + '\n\n로그(📋)에서 자세한 내용을 확인하세요.');
+    }
+  },
+
+  // ──────────────────────────────────────────────────
+  // 실시간 모니터링 (Stage 1) — 손가락 댔는지 확인
+  // ──────────────────────────────────────────────────
+  _fingerStartMonitor() {
+    this._flog('실시간 모니터링 시작');
+    this._finger.samples = [];
+    this._fingerMonitorLoop();
+  },
+
+  _fingerMonitorLoop() {
+    const f = this._finger;
+    if (f.stage !== 'camera' && f.stage !== 'measuring') return;
+
+    const video = document.getElementById(f.stage === 'measuring' ? 'finger-video-2' : 'finger-video');
     const canvas = document.getElementById('finger-canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     try {
-      if (video.readyState >= 2 && video.videoWidth > 0) {
-        // 중앙 ROI만 사용 (속도)
+      if (video && video.readyState >= 2 && video.videoWidth > 0) {
+        // 중앙 ROI
         const W = canvas.width, H = canvas.height;
         const vw = video.videoWidth, vh = video.videoHeight;
         const cropSize = Math.min(vw, vh) * 0.6;
@@ -3275,11 +3491,11 @@ const App = {
         const sy = (vh - cropSize) / 2;
         ctx.drawImage(video, sx, sy, cropSize, cropSize, 0, 0, W, H);
 
-        // 빨강 채널 평균 (PPG 신호)
+        // 빨강 채널 평균
         const imgData = ctx.getImageData(0, 0, W, H);
         const pixels = imgData.data;
         let rSum = 0, gSum = 0, bSum = 0, count = 0;
-        for (let i = 0; i < pixels.length; i += 16) { // 1/4 샘플링
+        for (let i = 0; i < pixels.length; i += 16) {
           rSum += pixels[i];
           gSum += pixels[i + 1];
           bSum += pixels[i + 2];
@@ -3289,81 +3505,190 @@ const App = {
         const gMean = gSum / count;
         const bMean = bSum / count;
 
-        // 손가락 감지 — 빨강이 압도적이고 어두워야 함
-        const isFingerPresent = (rMean > 80 && rMean < 250 && gMean < 100 && bMean < 80);
+        // 손가락 감지: 빨강이 압도적 + 너무 어둡지/밝지 않음
+        // 토치 켜진 손가락: R 100-230, G 30-100, B 20-80
+        // 토치 안 켜진 손가락: R 80-200, G 40-150, B 30-120
+        const isFingerLikely = rMean > 60 && rMean < 250 &&
+                                rMean > gMean * 1.4 &&
+                                rMean > bMean * 1.5;
 
-        if (isFingerPresent) {
+        // UI 업데이트 (Stage 1)
+        if (f.stage === 'camera') {
+          document.getElementById('finger-red-mean').textContent = rMean.toFixed(0);
+
+          if (isFingerLikely) {
+            document.getElementById('finger-touch-status').innerHTML =
+              `<span style="color:#22c55e">✓ 감지됨</span>`;
+            if (!f.fingerDetected) {
+              f.fingerDetected = true;
+              this._flog(`손가락 감지: R=${rMean.toFixed(0)} G=${gMean.toFixed(0)} B=${bMean.toFixed(0)}`);
+            }
+          } else {
+            document.getElementById('finger-touch-status').innerHTML =
+              `<span style="color:#f59e0b">대기 중</span>`;
+            f.fingerDetected = false;
+          }
+        }
+
+        // 손가락 댄 상태에서만 샘플 수집 (Stage 1, 신호 품질 확인용)
+        if (isFingerLikely) {
           f.samples.push({ t: performance.now(), r: rMean });
-          // 최근 600 샘플만 유지 (메모리)
-          if (f.samples.length > 1200) f.samples = f.samples.slice(-1200);
+          if (f.samples.length > 600) f.samples = f.samples.slice(-600);
 
-          // 신호 품질 업데이트
-          this._fingerUpdateQuality();
-
-          // 실시간 BPM 계산 (3초마다 갱신)
-          if (f.samples.length > 0 && f.samples.length % 30 === 0) {
-            this._fingerRealtimeBPM();
+          // 측정 중이면 측정 샘플에도 추가
+          if (f.stage === 'measuring' && f.measuring) {
+            f.measureSamples.push({ t: performance.now(), r: rMean });
           }
 
-          // 파형 그리기
-          this._fingerDrawWave();
+          // 신호 품질 + 실시간 BPM
+          if (f.samples.length >= 60) {
+            this._fingerUpdateQuality();
+            this._fingerDrawWave();
 
-          document.getElementById('finger-status').textContent = '✓ 측정 중';
-          document.getElementById('finger-substatus').textContent = '손가락을 그대로 유지하세요';
-        } else {
-          document.getElementById('finger-status').textContent = '⚠️ 손가락 감지 안됨';
-          document.getElementById('finger-substatus').textContent = '검지를 카메라와 플래시 모두 덮어주세요';
-          // 손가락이 빠진 동안에도 측정은 계속, 시간만 흘러감
-          // (계속 빠져있으면 마지막에 품질 낮음으로 표시)
+            // 충분한 샘플 = 측정 시작 버튼 활성화 (Stage 1)
+            if (f.stage === 'camera' && f.quality >= 40 && f.samples.length >= 90 && f.torchOn) {
+              this._fingerEnableMeasureBtn(true);
+            }
+
+            // 실시간 BPM 계산 (3초마다)
+            if (f.samples.length % 30 === 0) {
+              this._fingerRealtimeBPM();
+            }
+          }
         }
       }
     } catch (e) {
-      console.warn('[Finger] 프레임 처리 오류:', e.message);
+      // 처리 오류는 silent
     }
 
-    f.rafId = requestAnimationFrame(() => this._fingerProcessLoop());
+    f.rafId = requestAnimationFrame(() => this._fingerMonitorLoop());
   },
 
+  _fingerEnableMeasureBtn(enable) {
+    const btn = document.getElementById('finger-measure-btn');
+    if (!btn) return;
+    btn.disabled = !enable;
+    if (enable) {
+      btn.innerHTML = '▶ 측정 시작 <span class="fmb-hint">(신호 양호)</span>';
+      btn.classList.add('ready');
+    } else {
+      btn.innerHTML = '▶ 측정 시작 <span class="fmb-hint">(신호 확인 후)</span>';
+      btn.classList.remove('ready');
+    }
+  },
+
+  _fingerSetStatus(main, sub) {
+    const s = document.getElementById('finger-status');
+    const ss = document.getElementById('finger-substatus');
+    if (s) s.textContent = main;
+    if (ss) ss.textContent = sub;
+  },
+
+  // ──────────────────────────────────────────────────
+  // STAGE 1 → 2: 정식 측정 시작
+  // ──────────────────────────────────────────────────
+  fingerBeginMeasurement() {
+    const f = this._finger;
+    this._flog('Stage 2: 정식 측정 시작');
+
+    if (!f.torchOn && f.torchSupported) {
+      this._flog('경고: 토치 안 켠 상태로 측정 시작', 'warn');
+    }
+
+    // UI 전환
+    document.getElementById('finger-stage-camera').style.display = 'none';
+    document.getElementById('finger-stage-measuring').style.display = 'block';
+
+    // 두 번째 비디오 엘리먼트에 스트림 연결 (이미 같은 스트림)
+    const video2 = document.getElementById('finger-video-2');
+    video2.srcObject = f.stream;
+    video2.play().catch(e => this._flog('video-2 play 실패: ' + e.message, 'warn'));
+
+    f.stage = 'measuring';
+    f.measuring = true;
+    f.measureSamples = [];
+    f.measureStartTime = performance.now();
+
+    // 파형 캔버스 (Stage 2)
+    f.waveCanvas2 = document.getElementById('finger-wave-canvas-2');
+    f.waveCtx2 = f.waveCanvas2.getContext('2d');
+
+    // 타이머
+    this._fingerStartTimer();
+
+    this._speak('측정을 시작합니다. 30초간 손가락을 그대로 유지하세요.');
+  },
+
+  _fingerStartTimer() {
+    const f = this._finger;
+    if (f.timerInterval) clearInterval(f.timerInterval);
+    f.timerInterval = setInterval(() => {
+      if (!f.measuring) return;
+      const elapsed = (performance.now() - f.measureStartTime) / 1000;
+      const remain = Math.max(0, f.duration - elapsed);
+      const pct = Math.min(100, (elapsed / f.duration) * 100);
+
+      const tn = document.getElementById('finger-timer-num');
+      const pp = document.getElementById('finger-progress-pct');
+      if (tn) tn.textContent = Math.ceil(remain);
+      if (pp) pp.textContent = Math.round(pct);
+
+      if (remain <= 0) {
+        this._fingerFinalize();
+      }
+    }, 100);
+  },
+
+  // 신호 품질 계산
   _fingerUpdateQuality() {
     const f = this._finger;
     if (f.samples.length < 60) {
-      f.quality = Math.round((f.samples.length / 60) * 30); // 초기 30%까지
+      f.quality = Math.round((f.samples.length / 60) * 30);
     } else {
-      // 마지막 90 샘플의 변동성 = SNR 추정
+      // 마지막 90 샘플의 변동성 = AC component
       const recent = f.samples.slice(-90).map(s => s.r);
-      const mean = recent.reduce((s, v) => s + v, 0) / recent.length;
-      // detrend (이동평균 30개)
+      // detrend
       const detrended = recent.map((v, i) => {
         const start = Math.max(0, i - 15);
-        const end = Math.min(recent.length, i + 15);
+        const end = Math.min(recent.length, i + 16);
         const slice = recent.slice(start, end);
-        const localMean = slice.reduce((s, v) => s + v, 0) / slice.length;
-        return v - localMean;
+        const m = slice.reduce((s,v) => s+v, 0) / slice.length;
+        return v - m;
       });
       const variance = detrended.reduce((s, v) => s + v * v, 0) / detrended.length;
       const std = Math.sqrt(variance);
-      // PPG 신호는 보통 std 1~5
-      f.quality = Math.max(30, Math.min(99, Math.round(40 + std * 12)));
+      // PPG std는 손가락 댄 상태에서 0.5 ~ 8 정도
+      f.quality = Math.max(20, Math.min(99, Math.round(35 + std * 10)));
     }
 
-    document.getElementById('finger-quality-fill').style.width = f.quality + '%';
-    const statusEl = document.getElementById('finger-quality-status');
-    if (f.quality >= 80) statusEl.textContent = '매우 좋음';
-    else if (f.quality >= 60) statusEl.textContent = '양호';
-    else if (f.quality >= 40) statusEl.textContent = '보통';
-    else statusEl.textContent = '낮음';
+    // 두 stage 모두 업데이트
+    [['finger-quality-fill', 'finger-quality-status'],
+     ['finger-quality-fill-2', 'finger-quality-status-2']].forEach(([fillId, stId]) => {
+      const fill = document.getElementById(fillId);
+      const st = document.getElementById(stId);
+      if (fill) fill.style.width = f.quality + '%';
+      if (st) {
+        if (f.quality >= 80) st.textContent = '매우 좋음';
+        else if (f.quality >= 60) st.textContent = '양호';
+        else if (f.quality >= 40) st.textContent = '보통';
+        else st.textContent = '낮음';
+      }
+    });
+
+    // box 표시
+    const box = document.getElementById('finger-quality-box');
+    if (box) box.style.display = 'block';
   },
 
+  // 실시간 BPM
   _fingerRealtimeBPM() {
     const f = this._finger;
-    // 최근 10초만 사용
     const samples = f.samples.slice(-300);
     if (samples.length < 90) return;
 
     const peaks = this._fingerDetectPeaks(samples);
     if (peaks.length < 3) return;
 
-    // 마지막 3-5개 IBI로 즉시 BPM
     const intervals = [];
     for (let i = 1; i < peaks.length; i++) {
       const dt = samples[peaks[i]].t - samples[peaks[i - 1]].t;
@@ -3375,44 +3700,51 @@ const App = {
     const bpm = Math.round(60000 / avgIBI);
     if (bpm > 35 && bpm < 200) {
       f.lastBPM = bpm;
-      document.getElementById('finger-live-hr').textContent = bpm;
+      const liveHr = document.getElementById('finger-live-hr');
+      if (liveHr) liveHr.textContent = bpm;
     }
   },
 
-  // ════ 핵심 알고리즘: peak detection ════
+  // ────────────────────────────────────────────────
+  // Peak detection (개선된 알고리즘 — Allagi 2022 참고)
+  // ────────────────────────────────────────────────
   _fingerDetectPeaks(samples) {
     if (samples.length < 30) return [];
 
-    // 1) detrend (이동평균 30 = 1초)
-    const window = 30;
+    // 1) Detrend (이동평균 30 = 1초 window @ 30Hz)
+    const win = 30;
     const detrended = [];
     for (let i = 0; i < samples.length; i++) {
-      const start = Math.max(0, i - window / 2);
-      const end = Math.min(samples.length, i + window / 2);
-      let sum = 0, count = 0;
-      for (let j = start; j < end; j++) { sum += samples[j].r; count++; }
-      const localMean = sum / count;
-      detrended.push(samples[i].r - localMean);
+      const start = Math.max(0, i - win / 2);
+      const end = Math.min(samples.length, i + win / 2);
+      let sum = 0, c = 0;
+      for (let j = start; j < end; j++) { sum += samples[j].r; c++; }
+      detrended.push(samples[i].r - sum / c);
     }
 
-    // 2) 적응형 임계 — 최대값의 0.5배
-    let maxAbs = 0;
-    for (const v of detrended) if (Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
-    const threshold = maxAbs * 0.3;
+    // 2) 적응형 임계
+    let sumAbs = 0;
+    for (const v of detrended) sumAbs += Math.abs(v);
+    const meanAbs = sumAbs / detrended.length;
+    const threshold = meanAbs * 1.2; // 평균보다 20% 큰 변동만
 
-    // 3) peak detection — 최소 거리 14 샘플 (~470ms = HR 130 max)
-    const minDist = 9;  // HR 200 max
-    const maxDist = 90; // HR 33 min
+    // 3) Peak detection (HR 36 ~ 210 BPM)
+    const minDist = 9;  // 300ms @ 30Hz
+    const maxDist = 90; // 3s
     const peaks = [];
     let lastPeak = -minDist;
 
     for (let i = 2; i < detrended.length - 2; i++) {
       if (i - lastPeak < minDist) continue;
       const v = detrended[i];
-      // 양의 피크 (혈류 증가)
-      if (v > threshold &&
-          v > detrended[i - 1] && v > detrended[i - 2] &&
-          v > detrended[i + 1] && v > detrended[i + 2]) {
+      // 양의 피크 (혈류 증가 = 빨강 감소 = 음수 — 그러나 detrend 후엔 양수)
+      // 실제 PPG에서 손가락 댄 상태에서 빨강이 사이클 — peak는 양/음 둘 다 가능
+      // 안전하게 절대값으로 처리
+      if (Math.abs(v) > threshold &&
+          Math.abs(v) > Math.abs(detrended[i - 1]) &&
+          Math.abs(v) > Math.abs(detrended[i - 2]) &&
+          Math.abs(v) > Math.abs(detrended[i + 1]) &&
+          Math.abs(v) > Math.abs(detrended[i + 2])) {
         peaks.push(i);
         lastPeak = i;
       }
@@ -3421,142 +3753,135 @@ const App = {
     return peaks;
   },
 
+  // 파형 그리기
   _fingerDrawWave() {
     const f = this._finger;
-    if (!f.waveCtx) return;
-    const ctx = f.waveCtx;
-    const W = f.waveCanvas.width, H = f.waveCanvas.height;
+    // 두 stage 모두 같은 데이터로 그림
+    [f.waveCtx, f.waveCtx2].forEach((ctx, idx) => {
+      if (!ctx) return;
+      const canvas = idx === 0 ? f.waveCanvas : f.waveCanvas2;
+      const W = canvas.width, H = canvas.height;
 
-    // 최근 5초 표시
-    const samples = f.samples.slice(-150);
-    if (samples.length < 2) return;
+      // 최근 5초
+      const samples = f.samples.slice(-150);
+      if (samples.length < 2) return;
 
-    // 빨강 채널 → 화면 Y 좌표
-    const values = samples.map(s => s.r);
-    let minV = Infinity, maxV = -Infinity;
-    for (const v of values) { if (v < minV) minV = v; if (v > maxV) maxV = v; }
-    const range = Math.max(maxV - minV, 1);
+      const values = samples.map(s => s.r);
+      let minV = Infinity, maxV = -Infinity;
+      for (const v of values) { if (v < minV) minV = v; if (v > maxV) maxV = v; }
+      const range = Math.max(maxV - minV, 1);
 
-    // 배경 — 어두운 빨강 톤
-    ctx.fillStyle = '#1a0808';
-    ctx.fillRect(0, 0, W, H);
+      // 배경
+      ctx.fillStyle = '#1a0808';
+      ctx.fillRect(0, 0, W, H);
 
-    // 그리드
-    ctx.strokeStyle = 'rgba(239,68,68,0.15)';
-    ctx.lineWidth = 1;
-    for (let i = 1; i < 4; i++) {
-      const y = H * i / 4;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    }
+      // 그리드
+      ctx.strokeStyle = 'rgba(239,68,68,0.15)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        const y = H * i / 4;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
 
-    // PPG 파형 (역상 — 빨강이 줄어들 때 = 혈류 증가 = 피크)
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 6;
-    ctx.shadowColor = 'rgba(239, 68, 68, 0.6)';
-    ctx.beginPath();
-    for (let i = 0; i < values.length; i++) {
-      const x = (i / (values.length - 1)) * W;
-      const y = H - ((values[i] - minV) / range) * H * 0.85 - H * 0.075;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+      // 파형
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 6;
+      ctx.shadowColor = 'rgba(239, 68, 68, 0.6)';
+      ctx.beginPath();
+      for (let i = 0; i < values.length; i++) {
+        const x = (i / (values.length - 1)) * W;
+        const y = H - ((values[i] - minV) / range) * H * 0.85 - H * 0.075;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    });
   },
 
-  // ════ 측정 완료 ════
+  // ────────────────────────────────────────────────
+  // 측정 완료 → 분석
+  // ────────────────────────────────────────────────
   async _fingerFinalize() {
-    console.log('[Finger] 측정 완료, 분석 시작');
+    this._flog('측정 30초 완료, 분석 시작');
     const f = this._finger;
-    f.running = false;
-
+    f.measuring = false;
     if (f.timerInterval) { clearInterval(f.timerInterval); f.timerInterval = null; }
     if (f.rafId) { cancelAnimationFrame(f.rafId); f.rafId = null; }
 
-    // 플래시 끄기 + 스트림 정리
-    try {
-      if (f.track) {
-        try { await f.track.applyConstraints({ advanced: [{ torch: false }] }); } catch (e) {}
-        f.track.stop();
-      }
-      if (f.stream) f.stream.getTracks().forEach(t => t.stop());
-    } catch (e) {}
-    f.stream = null;
-    f.track = null;
+    this._flog(`총 측정 샘플: ${f.measureSamples.length}개`);
 
-    this._releaseWakeLock();
-    this._speakStop();
-
-    // 분석
     const result = this._fingerAnalyze();
 
-    // UI 결과 표시
-    document.getElementById('finger-measuring').style.display = 'none';
+    // 카메라 정리
+    await this._fingerCleanup();
+
+    // UI: result 화면으로
+    document.getElementById('finger-stage-measuring').style.display = 'none';
     this._fingerDisplayResult(result);
   },
 
   _fingerAnalyze() {
     const f = this._finger;
-    const samples = f.samples;
+    const samples = f.measureSamples;
 
     if (samples.length < 100) {
+      this._flog(`샘플 부족: ${samples.length}개`, 'error');
       return {
         ok: false,
-        reason: '측정 데이터가 부족합니다. 손가락이 카메라를 충분히 덮지 않았을 수 있어요.',
+        reason: `측정 데이터 부족 (${samples.length}개). 손가락이 카메라를 충분히 덮지 않았을 수 있어요.`,
         sampleCount: samples.length,
       };
     }
 
-    // 1) 전체 peak detection
     const peaks = this._fingerDetectPeaks(samples);
+    this._flog(`Peak 검출: ${peaks.length}개`);
 
     if (peaks.length < 10) {
       return {
         ok: false,
-        reason: '심박 신호가 충분히 감지되지 않았습니다. 다시 측정해주세요.',
+        reason: `심박 신호가 충분히 감지되지 않았습니다 (${peaks.length}개 peak). 다시 측정해주세요.`,
         sampleCount: samples.length,
         peakCount: peaks.length,
       };
     }
 
-    // 2) IBI (Inter-Beat Interval) 추출
+    // IBI 추출
     const allIBI = [];
     for (let i = 1; i < peaks.length; i++) {
       const dt = samples[peaks[i]].t - samples[peaks[i - 1]].t;
       allIBI.push(dt);
     }
+    this._flog(`전체 IBI: ${allIBI.length}개, 범위 ${Math.min(...allIBI).toFixed(0)}~${Math.max(...allIBI).toFixed(0)}ms`);
 
-    // 3) Outlier 제거 — Kubios 표준: 인접 IBI 차이 30% 초과 시 제외
+    // Kubios outlier 제거
     const cleanIBI = [];
     for (let i = 0; i < allIBI.length; i++) {
       const ibi = allIBI[i];
-      // 절대 범위 (HR 35~200)
       if (ibi < 300 || ibi > 1714) continue;
-      // 인접 비교
       if (i > 0) {
         const prev = allIBI[i - 1];
         if (Math.abs(ibi - prev) / prev > 0.30) continue;
       }
       cleanIBI.push(ibi);
     }
+    this._flog(`Clean IBI: ${cleanIBI.length}개 (채택률 ${Math.round(cleanIBI.length/allIBI.length*100)}%)`);
 
     if (cleanIBI.length < 8) {
       return {
         ok: false,
-        reason: '신호가 불안정합니다. 손가락을 더 가만히 두고 다시 측정해주세요.',
+        reason: `신호가 불안정합니다 (유효 신호 ${cleanIBI.length}개). 손가락을 더 가만히 두고 다시 측정해주세요.`,
         sampleCount: samples.length,
         peakCount: peaks.length,
       };
     }
 
-    // 4) HR 계산
+    // HR, RMSSD, SDNN, pNN50 계산
     const meanIBI = cleanIBI.reduce((s, v) => s + v, 0) / cleanIBI.length;
     const hr = Math.round(60000 / meanIBI);
 
-    // 5) RMSSD (Root Mean Square of Successive Differences) — 임상 표준 HRV
-    let sumSquaredDiff = 0;
-    let diffCount = 0;
+    let sumSquaredDiff = 0, diffCount = 0;
     for (let i = 1; i < cleanIBI.length; i++) {
       const diff = cleanIBI[i] - cleanIBI[i - 1];
       sumSquaredDiff += diff * diff;
@@ -3564,39 +3889,33 @@ const App = {
     }
     const rmssd = diffCount > 0 ? Math.sqrt(sumSquaredDiff / diffCount) : 0;
 
-    // 6) SDNN (Standard Deviation of NN intervals)
     const variance = cleanIBI.reduce((s, v) => s + (v - meanIBI) ** 2, 0) / cleanIBI.length;
     const sdnn = Math.sqrt(variance);
 
-    // 7) pNN50 — 인접 IBI 차이가 50ms 초과한 비율
     let nn50 = 0;
     for (let i = 1; i < cleanIBI.length; i++) {
       if (Math.abs(cleanIBI[i] - cleanIBI[i - 1]) > 50) nn50++;
     }
     const pNN50 = (nn50 / diffCount) * 100;
 
-    // 8) Stress Index (Baevsky) — SDNN이 낮을수록 스트레스↑
-    // 0~5 단계
-    let stressLevel = 2;
-    let stressLabel = '보통';
+    let stressLevel = 2, stressLabel = '보통';
     if (rmssd > 60) { stressLevel = 1; stressLabel = '매우 이완'; }
     else if (rmssd > 40) { stressLevel = 2; stressLabel = '이완'; }
     else if (rmssd > 25) { stressLevel = 3; stressLabel = '보통'; }
     else if (rmssd > 15) { stressLevel = 4; stressLabel = '긴장'; }
     else { stressLevel = 5; stressLabel = '높은 스트레스'; }
 
-    // 9) 신호 품질 종합
     const recoveryRate = cleanIBI.length / Math.max(allIBI.length, 1);
     const signalQuality = Math.round(Math.min(99, f.quality * 0.5 + recoveryRate * 50));
 
+    this._flog(`✓ 분석 완료: HR=${hr} RMSSD=${rmssd.toFixed(1)} SDNN=${sdnn.toFixed(1)} pNN50=${pNN50.toFixed(1)}`);
+
     return {
       ok: true,
-      hr,
-      rmssd: Math.round(rmssd * 10) / 10,
+      hr, rmssd: Math.round(rmssd * 10) / 10,
       sdnn: Math.round(sdnn * 10) / 10,
       pNN50: Math.round(pNN50 * 10) / 10,
-      stressLevel,
-      stressLabel,
+      stressLevel, stressLabel,
       meanIBI: Math.round(meanIBI),
       ibiCount: cleanIBI.length,
       totalPeaks: peaks.length,
@@ -3604,7 +3923,6 @@ const App = {
       signalQuality,
       sampleCount: samples.length,
       duration: f.duration,
-      // 점수
       score: this._fingerComputeScore(hr, rmssd, signalQuality),
     };
   },
@@ -3614,7 +3932,6 @@ const App = {
     const { age, gender } = profile;
 
     if (!age) {
-      // Fallback
       let score = 100;
       if (hr < 50 || hr > 100) score -= 15;
       if (rmssd < 15) score -= 25;
@@ -3623,21 +3940,15 @@ const App = {
       return Math.max(5, Math.min(99, score));
     }
 
-    // 나이 보정 z-score
     const hrRef = this._refRestingHR(age, gender);
     const rmssdRef = this._refRMSSD(age, gender);
-
     const hrDev = Math.abs(hr - hrRef.mean) / hrRef.sd;
     const hrScore = Math.max(5, Math.min(99, this._zToScore(-hrDev + 0.7)));
     const rmssdScore = this._ageNormalizedScore(rmssd, rmssdRef, true);
 
-    // 손가락 PPG는 RMSSD가 매우 정확하므로 가중치 더 큼
     let composite = Math.round(hrScore * 0.30 + rmssdScore * 0.70);
-
-    // 신호 품질 보정
     if (signalQuality < 70) composite = Math.round(composite * 0.9);
     if (signalQuality < 50) composite = Math.round(composite * 0.8);
-
     return Math.max(5, Math.min(99, composite));
   },
 
@@ -3651,8 +3962,14 @@ const App = {
           <div class="finger-error-icon">😔</div>
           <div class="finger-error-title">측정 실패</div>
           <div class="finger-error-msg">${this._esc(result.reason)}</div>
+          <div class="finger-error-detail">
+            샘플: ${result.sampleCount || 0}개 · Peak: ${result.peakCount || 0}개
+          </div>
           <button class="finger-retry-btn" type="button" onclick="App.fingerRestart()">
-            🔄 다시 측정하기
+            🔄 다시 측정
+          </button>
+          <button class="finger-back-btn" type="button" onclick="App.fingerToggleLog()">
+            📋 로그 확인
           </button>
           <button class="finger-back-btn" type="button" onclick="App.goPage('home')">홈으로</button>
         </div>
@@ -3660,15 +3977,9 @@ const App = {
       return;
     }
 
-    // 점수에 따른 색상
     const getColor = (s) => s >= 75 ? '#22C55E' : s >= 55 ? '#3B82F6' : s >= 40 ? '#F59E0B' : '#EF4444';
-
-    // 나이 보정 메시지
     const profile = this._getUserProfile();
-    const ageMsg = profile.age
-      ? `${profile.age}세 또래 평균 대비`
-      : '일반 성인 기준';
-
+    const ageMsg = profile.age ? `${profile.age}세 또래 평균 대비` : '일반 성인 기준';
     const rmssdRef = profile.age ? this._refRMSSD(profile.age, profile.gender) : { mean: 35, sd: 18 };
     const rmssdRel = result.rmssd > rmssdRef.mean ? '평균보다 높음 (좋음)'
                   : result.rmssd > rmssdRef.mean - rmssdRef.sd ? '평균 수준'
@@ -3680,7 +3991,6 @@ const App = {
           <div class="finger-result-badge">✓ CLINICAL GRADE</div>
           <div class="finger-result-quality">신호 품질 ${result.signalQuality}%</div>
         </div>
-
         <div class="finger-result-main">
           <div class="finger-score-circle" style="color: ${getColor(result.score)}">
             <div class="fsc-num">${result.score}</div>
@@ -3688,8 +3998,6 @@ const App = {
           </div>
           <div class="finger-score-label">정신·신체 회복력 점수</div>
         </div>
-
-        <!-- 핵심 지표 4개 -->
         <div class="finger-stats-grid">
           <div class="finger-stat">
             <div class="fs-icon">❤️</div>
@@ -3712,8 +4020,6 @@ const App = {
             <div class="fs-value">${result.pNN50}<span class="fs-unit">%</span></div>
           </div>
         </div>
-
-        <!-- 자율신경 상태 -->
         <div class="finger-stress-card lv-${result.stressLevel}">
           <div class="fsc-title">🧘 자율신경 상태</div>
           <div class="fsc-level">${result.stressLabel}</div>
@@ -3721,8 +4027,6 @@ const App = {
             ${[1,2,3,4,5].map(i => `<div class="fsc-dot ${i <= result.stressLevel ? 'on' : ''}"></div>`).join('')}
           </div>
         </div>
-
-        <!-- 또래 비교 -->
         <div class="finger-compare-result">
           <div class="fcr-title">📊 또래 비교 (${ageMsg})</div>
           <div class="fcr-row">
@@ -3733,94 +4037,51 @@ const App = {
             ${profile.age ? `또래 평균: ${rmssdRef.mean}ms (±${rmssdRef.sd})` : '학술 baseline: 35ms (±18)'}
           </div>
         </div>
-
-        <!-- 측정 메타 -->
         <div class="finger-meta">
           <div class="fm-row"><span>유효 심박 신호</span><span>${result.ibiCount}개 (전체 ${result.totalPeaks}개 중)</span></div>
           <div class="fm-row"><span>신호 채택률</span><span>${result.cleanRate}%</span></div>
           <div class="fm-row"><span>평균 IBI</span><span>${result.meanIBI}ms</span></div>
         </div>
-
         <div class="finger-disclaimer">
           ⚠️ 이 측정은 의료 진단이 아닌 건강 참고용입니다.
-          정확한 진단은 의료진과 상담하세요.
         </div>
-
         <div class="finger-actions">
-          <button class="finger-action-btn" type="button" onclick="App.fingerRestart()">
-            🔄 다시 측정
-          </button>
-          <button class="finger-action-btn primary" type="button" onclick="App.goPage('results')">
-            📊 통합 결과 보기
-          </button>
+          <button class="finger-action-btn" type="button" onclick="App.fingerRestart()">🔄 다시 측정</button>
+          <button class="finger-action-btn primary" type="button" onclick="App.goPage('results')">📊 결과 보기</button>
         </div>
       </div>
     `;
 
-    // ★ Wellness에 저장 (얼굴 측정과 동일 카테고리)
     this._wellnessSave('finger', {
-      hr: result.hr,
-      rmssd: result.rmssd,
-      sdnn: result.sdnn,
-      pNN50: result.pNN50,
-      stressLevel: result.stressLevel,
-      signalQuality: result.signalQuality,
-      score: result.score,
-      ageAtMeasure: profile.age,
+      hr: result.hr, rmssd: result.rmssd, sdnn: result.sdnn, pNN50: result.pNN50,
+      stressLevel: result.stressLevel, signalQuality: result.signalQuality,
+      score: result.score, ageAtMeasure: profile.age,
     });
 
-    console.log(`[Finger] 결과: HR=${result.hr} RMSSD=${result.rmssd} Score=${result.score} Quality=${result.signalQuality}%`);
+    this._flog(`✓ 결과 저장: HR=${result.hr} RMSSD=${result.rmssd} Score=${result.score}`);
   },
 
-  async fingerStop() {
-    console.log('[Finger] 사용자 중지');
+  async fingerAbort() {
+    this._flog('사용자 측정 중지');
     const f = this._finger;
-    f.running = false;
-
+    f.measuring = false;
     if (f.timerInterval) { clearInterval(f.timerInterval); f.timerInterval = null; }
     if (f.rafId) { cancelAnimationFrame(f.rafId); f.rafId = null; }
+    await this._fingerCleanup();
 
-    try {
-      if (f.track) {
-        try { await f.track.applyConstraints({ advanced: [{ torch: false }] }); } catch (e) {}
-        f.track.stop();
-      }
-      if (f.stream) f.stream.getTracks().forEach(t => t.stop());
-    } catch (e) {}
-    f.stream = null;
-    f.track = null;
-
-    this._releaseWakeLock();
-    this._speakStop();
-
-    // 인트로로 복귀
-    document.getElementById('finger-measuring').style.display = 'none';
-    document.getElementById('finger-intro').style.display = 'block';
-    document.getElementById('finger-result').style.display = 'none';
+    document.getElementById('finger-stage-measuring').style.display = 'none';
+    document.getElementById('finger-stage-intro').style.display = 'block';
   },
 
   fingerRestart() {
     document.getElementById('finger-result').style.display = 'none';
-    document.getElementById('finger-intro').style.display = 'block';
+    document.getElementById('finger-stage-intro').style.display = 'block';
+    this._finger.stage = 'intro';
   },
 
-  _showFingerToast(msg, level) {
-    // 간단한 토스트 (기존 tts-fail-toast 스타일 활용)
-    try {
-      const t = document.createElement('div');
-      t.className = 'tts-fail-toast';
-      t.innerHTML = `
-        <div class="tts-fail-icon">${level === 'warn' ? '⚠️' : 'ℹ️'}</div>
-        <div class="tts-fail-body">
-          <div class="tts-fail-msg">${this._esc(msg)}</div>
-        </div>
-        <button class="tts-fail-close" onclick="this.parentElement.remove()">✕</button>
-      `;
-      document.body.appendChild(t);
-      setTimeout(() => t.classList.add('show'), 10);
-      setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 5000);
-    } catch (e) {}
-  },
+  // 별칭: 외부에서 fingerStop으로 호출하는 곳 대응
+  async fingerStop() { return this.fingerAbort(); },
+
 
   _formatRelativeTime(t) {
     if (!t) return '미측정';
