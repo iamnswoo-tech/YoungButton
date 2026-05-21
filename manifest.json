@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.3",
-  "short_name": "건강측정 v15.3",
-  "description": "v15.3 — 변별력 강화 (나이·성별 보정 점수)",
+  "name": "건강 측정 v15.4",
+  "short_name": "건강측정 v15.4",
+  "description": "v15.4 — Wake Lock (측정 중 화면 꺼짐 방지)",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

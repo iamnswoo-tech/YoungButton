@@ -2961,6 +2961,150 @@ const App = {
     return Math.max(5, Math.min(99, this._zToScore(adjustedZ)));
   },
 
+  // ════════════════════════════════════════════════════════════════
+  // ★ v15.4: Wake Lock — 측정 중 화면 꺼짐 방지
+  //
+  // 문제: 절전 시간이 짧게 설정된 폰에서 측정 중 화면이 꺼짐
+  // 해결: Screen Wake Lock API로 명시적 wake lock 요청
+  // 추가 안전망:
+  //   - visibilitychange 이벤트로 백그라운드 진입 감지
+  //   - 비디오 요소 재생으로 일부 구형 안드로이드 대응
+  //   - 사용자 안내 토스트
+  //
+  // 참고: Wake Lock API는 Chrome/Edge/Samsung Internet 84+ 지원
+  //       iOS Safari 16.4+ 지원, 구형 기기는 silent fallback
+  // ════════════════════════════════════════════════════════════════
+  _wakeLockSentinel: null,
+  _wakeLockSilentVideo: null,
+
+  async _acquireWakeLock() {
+    // 이미 활성화된 wake lock이 있으면 스킵
+    if (this._wakeLockSentinel) {
+      console.log('[WakeLock] 이미 활성화됨, 스킵');
+      return true;
+    }
+
+    let success = false;
+
+    // 1차: Wake Lock API (모던 브라우저)
+    if ('wakeLock' in navigator) {
+      try {
+        this._wakeLockSentinel = await navigator.wakeLock.request('screen');
+        success = true;
+        console.log('[WakeLock] ✓ 활성화 (Wake Lock API)');
+
+        // 페이지 복귀 시 자동 재획득 리스너
+        this._wakeLockSentinel.addEventListener('release', () => {
+          console.log('[WakeLock] release 이벤트 감지');
+          this._wakeLockSentinel = null;
+          // 측정 중이면 재획득 시도
+          if (this._isMeasuring()) {
+            console.log('[WakeLock] 측정 중 — 재획득 시도');
+            this._acquireWakeLock();
+          }
+        });
+      } catch (e) {
+        console.warn('[WakeLock] Wake Lock API 실패:', e.message);
+      }
+    }
+
+    // 2차 fallback: 무음 비디오 재생 (구형 안드로이드 대응)
+    // Wake Lock API 미지원 또는 실패 시
+    if (!success) {
+      try {
+        if (!this._wakeLockSilentVideo) {
+          const video = document.createElement('video');
+          video.setAttribute('playsinline', '');
+          video.setAttribute('muted', '');
+          video.setAttribute('loop', '');
+          video.muted = true;
+          video.loop = true;
+          video.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;';
+          // 1초짜리 무음 비디오 데이터 URI (검은 화면)
+          // Tiny MP4 (76 bytes base64, 약 1초 검정 비디오)
+          video.src = 'data:video/mp4;base64,AAAAHGZ0eXBpc29tAAACAGlzb21pc28ybXA0MQAAAAhmcmVlAAAALm1kYXQhEAUgxFwAAEABAhAFGYQRGYRGZjgUEYRBGYwQzARDIAyJBOMRgZAJRgQARxAAAAj8bW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAACWAAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAH3HRyYWsAAABcdGtoZAAAAAMAAAAAAAAAAAAAAAEAAAAAAAAJYAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAACgAAAAUAAAAAACRlZHRzAAAAHGVsc3QAAAAAAAAAAQAACWAAAQAAAAEAAAAAB1RtZGlhAAAAIG1kaGQAAAAAAAAAAAAAAAAAAfQAAA9AVcQAAAAAAC1oZGxyAAAAAAAAAAB2aWRlAAAAAAAAAAAAAAAAVmlkZW9IYW5kbGVyAAAABwBtaW5mAAAAFHZtaGQAAAABAAAAAAAAAAAAAAAkZGluZgAAABxkcmVmAAAAAAAAAAEAAAAMdXJsIAAAAAEAAAa+c3RibAAAALpzdHNkAAAAAAAAAAEAAACqYXZjMQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAACgAFAEgAAABIAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAYP//AAAANGF2Y0MBZAAK/+EAHGdkAAqs2WCgD0/eAQAAAwABAAADADIPCJZYAQAGaOvjyyLAAAAAGHN0dHMAAAAAAAAAAQAAAAEAAA9AAAAAHHN0c2MAAAAAAAAAAQAAAAEAAAABAAAAAQAAABRzdHN6AAAAAAAAAJAAAAABAAAAFHN0Y28AAAAAAAAAAQAAACw=';
+          document.body.appendChild(video);
+          this._wakeLockSilentVideo = video;
+        }
+        await this._wakeLockSilentVideo.play();
+        success = true;
+        console.log('[WakeLock] ✓ 활성화 (무음 비디오 fallback)');
+      } catch (e) {
+        console.warn('[WakeLock] 비디오 fallback 실패:', e.message);
+      }
+    }
+
+    // 3차 보조: visibilitychange 이벤트로 백그라운드 진입 감지
+    if (!this._visibilityListenerInstalled) {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this._isMeasuring() && !this._wakeLockSentinel) {
+          console.log('[WakeLock] 화면 복귀 — wake lock 재획득');
+          this._acquireWakeLock();
+        }
+      });
+      this._visibilityListenerInstalled = true;
+    }
+
+    if (!success) {
+      console.warn('[WakeLock] 모든 방법 실패 — 사용자에게 안내');
+      this._showWakeLockToast();
+    }
+
+    return success;
+  },
+
+  async _releaseWakeLock() {
+    // Wake Lock API release
+    if (this._wakeLockSentinel) {
+      try {
+        await this._wakeLockSentinel.release();
+        console.log('[WakeLock] 해제 (Wake Lock API)');
+      } catch (e) {
+        console.warn('[WakeLock] 해제 실패:', e.message);
+      }
+      this._wakeLockSentinel = null;
+    }
+
+    // 무음 비디오 정지
+    if (this._wakeLockSilentVideo) {
+      try {
+        this._wakeLockSilentVideo.pause();
+      } catch (e) {}
+    }
+  },
+
+  // 측정 중인지 확인 (wake lock 자동 재획득 판단용)
+  _isMeasuring() {
+    if (this.state.face && this.state.face.running) return true;
+    if (this.state.body && this.state.body.running) return true;
+    return false;
+  },
+
+  // Wake Lock 실패 시 사용자 안내 토스트
+  _showWakeLockToast() {
+    try {
+      const existing = document.getElementById('wake-lock-toast');
+      if (existing) return;
+      const toast = document.createElement('div');
+      toast.id = 'wake-lock-toast';
+      toast.className = 'tts-fail-toast'; // 기존 토스트 스타일 재사용
+      toast.innerHTML = `
+        <div class="tts-fail-icon">🔆</div>
+        <div class="tts-fail-body">
+          <div class="tts-fail-title">측정 중 화면이 꺼지면</div>
+          <div class="tts-fail-msg">설정 → 디스플레이 → 화면 자동 꺼짐 시간을 늘려주세요</div>
+        </div>
+        <button class="tts-fail-close" onclick="document.getElementById('wake-lock-toast')?.remove()">✕</button>
+      `;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.classList.add('show'), 10);
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400);
+      }, 7000);
+    } catch (e) {}
+  },
+
   _formatRelativeTime(t) {
     if (!t) return '미측정';
     const diff = Date.now() - t;
@@ -5235,6 +5379,9 @@ const App = {
       // ★ v13.4: 얼굴 측정 음성 안내 추가
       this._speak('얼굴 측정을 시작합니다. 화면 가운데에 얼굴을 맞추고 30초간 가만히 계세요. 자연스럽게 호흡하시면 됩니다.');
 
+      // ★ v15.4: 측정 중 화면 꺼짐 방지 (Wake Lock)
+      this._acquireWakeLock();
+
       // === STEP 4: 타이머 + 프레임 루프 ===
       this._faceStartTimer();
       this._faceProcessFrame();
@@ -5448,6 +5595,9 @@ const App = {
     console.log('[Face] 측정 중지');
     const f = this.state.face;
     f.running = false;
+
+    // ★ v15.4: wake lock 해제
+    this._releaseWakeLock();
 
     if (f.timerInterval) { clearInterval(f.timerInterval); f.timerInterval = null; }
     if (f.rafId) { cancelAnimationFrame(f.rafId); f.rafId = null; }
@@ -7154,6 +7304,9 @@ const App = {
     b.running = true;
     b.startMs = performance.now();
 
+    // ★ v15.4: 측정 중 화면 꺼짐 방지
+    this._acquireWakeLock();
+
     document.getElementById(`bt-${test}-stage`).style.display = 'none';
     document.getElementById(`bt-${test}-running`).style.display = 'block';
 
@@ -7169,6 +7322,9 @@ const App = {
     // ★ v13.9: 측정 완료 시 음성 끊지 않음
     if (!preserveSpeech) this._speakStop();
     const b = this.state.body;
+
+    // ★ v15.4: wake lock 해제
+    this._releaseWakeLock();
     b.running = false;
     if (b.timerInterval) { clearInterval(b.timerInterval); b.timerInterval = null; }
     if (b.reaction.waitTimer) { clearTimeout(b.reaction.waitTimer); b.reaction.waitTimer = null; }
