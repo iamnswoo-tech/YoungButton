@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.7",
-  "short_name": "건강측정 v15.7",
-  "description": "v15.7 — 토치 capability 우회 + 측정 조건 완화 + 로그 floating 버튼",
+  "name": "건강 측정 v15.8",
+  "short_name": "건강측정 v15.8",
+  "description": "v15.8 — 3중 토치 전략 + 스트림 재사용 + Butterworth 필터",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
