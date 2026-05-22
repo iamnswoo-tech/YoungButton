@@ -4407,7 +4407,33 @@ body::before {
   color: #78350f;
   line-height: 1.5;
   font-weight: 600;
+  margin-bottom: 12px;
+}
+
+/* ★ v15.8: 토치 미동작 기기 안내 카드 */
+.finger-tip-card {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid #93c5fd;
+  border-radius: 14px;
+  padding: 14px 16px;
   margin-bottom: 18px;
+}
+.finger-tip-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #1e40af;
+  margin-bottom: 6px;
+  letter-spacing: -.01em;
+}
+.finger-tip-body {
+  font-size: 12px;
+  color: #1e3a8a;
+  line-height: 1.6;
+  font-weight: 600;
+}
+.finger-tip-body strong {
+  color: #1e40af;
+  font-weight: 900;
 }
 
 .finger-start-btn {
@@ -6573,7 +6599,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.7 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.8 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -7264,7 +7290,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v15.7</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v15.8</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>
@@ -7323,6 +7349,16 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <div class="finger-warn-card">
       ⚠️ 플래시가 켜진 동안 손가락이 따뜻해질 수 있어요.
       불편하시면 언제든 중단 가능합니다.
+    </div>
+
+    <!-- ★ v15.8: 토치 안 켜지는 기기를 위한 안내 -->
+    <div class="finger-tip-card">
+      <div class="finger-tip-title">💡 플래시가 안 켜진다면</div>
+      <div class="finger-tip-body">
+        일부 기기는 브라우저에서 플래시 제어가 안 됩니다.<br>
+        <strong>화면 상단을 아래로 쓸어내려 ⚡손전등 아이콘을 직접 켜두세요.</strong><br>
+        그 상태에서 측정하면 정상 작동합니다.
+      </div>
     </div>
 
     <button class="finger-primary-btn" type="button" onclick="App.fingerStartCamera()">

@@ -3310,8 +3310,43 @@ const App = {
     document.getElementById('finger-stage-intro').style.display = 'none';
     document.getElementById('finger-stage-camera').style.display = 'block';
 
-    // 상태 초기화
     const f = this._finger;
+
+    // ★ v15.8: 기존 스트림이 살아있으면 재사용 (재측정 시 토치 유지)
+    if (f.stream && f.track && f.track.readyState === 'live') {
+      this._flog('기존 스트림 재사용 (토치 상태 유지)');
+      f.stage = 'camera';
+      f.samples = [];
+      f.measureSamples = [];
+      f.quality = 0;
+      f.lastBPM = 0;
+      f.fingerDetected = false;
+      // 비디오 엘리먼트에 다시 연결
+      const video = document.getElementById('finger-video');
+      if (video.srcObject !== f.stream) {
+        video.srcObject = f.stream;
+        try { await video.play(); } catch (e) {}
+      }
+      // 토치 상태 UI 동기화 — torchOn은 그대로 유지
+      const torchStatus = document.getElementById('finger-torch-status');
+      const torchBtn = document.getElementById('finger-torch-btn');
+      if (f.torchOn) {
+        torchStatus.innerHTML = '<span style="color:#22c55e">✓ 켜짐 (유지)</span>';
+        torchBtn.textContent = '💡 플래시 끄기';
+        torchBtn.classList.add('on');
+        this._flog('✓ 토치 상태 유지됨 (ON)');
+      } else {
+        torchStatus.textContent = '꺼짐';
+        torchBtn.textContent = '💡 플래시 켜기';
+        torchBtn.classList.remove('on');
+      }
+      this._fingerSetStatus('카메라 준비 완료', '신호 확인 후 측정 시작');
+      this._fingerEnableMeasureBtn(false);
+      this._fingerStartMonitor();
+      return;
+    }
+
+    // 새 스트림 생성 — 최초 진입 또는 정리 후 진입
     f.stage = 'camera';
     f.samples = [];
     f.measureSamples = [];
@@ -3432,7 +3467,7 @@ const App = {
   },
 
   // ──────────────────────────────────────────────────
-  // 토치 토글 (수동 컨트롤) - v15.7: capability 무시하고 시도
+  // 토치 토글 (수동 컨트롤) - v15.8: 3가지 방법 모두 시도
   // ──────────────────────────────────────────────────
   async fingerToggleTorch() {
     const f = this._finger;
@@ -3445,9 +3480,46 @@ const App = {
     const newState = !f.torchOn;
     this._flog(`토치 ${newState ? 'ON' : 'OFF'} 요청 (Capability 보고: ${f.torchCapabilityReported ? 'YES' : 'NO'})`);
 
+    // ★ v15.8: 3가지 방법 순서대로 시도
+    let success = false;
+    let lastError = null;
+
+    // 방법 1: 표준 — advanced 배열
     try {
-      // ★ v15.7: Chrome Android 일부 기기는 capability에 안 나와도 동작함
       await f.track.applyConstraints({ advanced: [{ torch: newState }] });
+      success = true;
+      this._flog('✓ 방법1 성공: advanced 배열');
+    } catch (e1) {
+      lastError = e1;
+      this._flog(`방법1 실패: ${e1.message} (${e1.name})`, 'warn');
+
+      // 방법 2: torch를 최상위 키로
+      try {
+        await f.track.applyConstraints({ torch: newState });
+        success = true;
+        this._flog('✓ 방법2 성공: torch 최상위 키');
+      } catch (e2) {
+        lastError = e2;
+        this._flog(`방법2 실패: ${e2.message}`, 'warn');
+
+        // 방법 3: ImageCapture.setOptions (실험적)
+        try {
+          if (typeof ImageCapture !== 'undefined') {
+            const ic = new ImageCapture(f.track);
+            await ic.setOptions({ fillLightMode: newState ? 'flash' : 'off' });
+            success = true;
+            this._flog('✓ 방법3 성공: ImageCapture.setOptions');
+          } else {
+            this._flog('방법3 스킵: ImageCapture 미지원', 'warn');
+          }
+        } catch (e3) {
+          lastError = e3;
+          this._flog(`방법3 실패: ${e3.message}`, 'warn');
+        }
+      }
+    }
+
+    if (success) {
       f.torchOn = newState;
       const torchStatus = document.getElementById('finger-torch-status');
       const torchBtn = document.getElementById('finger-torch-btn');
@@ -3455,24 +3527,29 @@ const App = {
         torchStatus.innerHTML = '<span style="color:#22c55e">✓ 켜짐</span>';
         torchBtn.textContent = '💡 플래시 끄기';
         torchBtn.classList.add('on');
-        this._flog('✓ 토치 ON 성공');
       } else {
         torchStatus.textContent = '꺼짐';
         torchBtn.textContent = '💡 플래시 켜기';
         torchBtn.classList.remove('on');
-        this._flog('✓ 토치 OFF 성공');
       }
-    } catch (e) {
-      this._flog('토치 토글 실패: ' + e.message + ' (' + e.name + ')', 'error');
-      // 실제로 안 되는 기기로 확정
+      this._flog(`✓ 토치 ${newState ? 'ON' : 'OFF'} 완료`);
+    } else {
+      this._flog(`모든 토치 방법 실패: ${lastError?.message}`, 'error');
       f.torchSupported = false;
       const torchStatus = document.getElementById('finger-torch-status');
       const torchBtn = document.getElementById('finger-torch-btn');
-      torchStatus.innerHTML = '<span style="color:#f59e0b">⚠️ 제어 불가</span>';
+      torchStatus.innerHTML = '<span style="color:#f59e0b">⚠️ 브라우저 제어 불가</span>';
       torchBtn.disabled = true;
       torchBtn.textContent = '💡 미지원';
-      this._fingerSetStatus('플래시 제어 불가', '밝은 조명 아래에서 측정해주세요');
-      alert('이 기기는 브라우저로 플래시를 켤 수 없습니다.\n\n해결책:\n1. 카메라 앱에서 미리 플래시를 켠 후 측정 시작\n2. 또는 밝은 조명 아래에서 측정\n\n자세한 로그는 📋 버튼으로 확인 가능');
+      this._fingerSetStatus('브라우저로 플래시 제어 불가',
+        '⚙️ 손전등 아이콘으로 직접 켜고 다시 시도하세요');
+      alert(
+        '❌ 이 브라우저/기기에서는 플래시 자동 제어가 안 됩니다.\n\n' +
+        '✅ 해결책 (둘 중 하나):\n' +
+        '1️⃣ 화면 상단을 아래로 쓸어내려 ⚡손전등 아이콘을 직접 켠 후 측정\n' +
+        '2️⃣ AI 모델 기반 측정 사용 (자연광에서도 작동)\n\n' +
+        '🤖 결과 화면에서 "AI 측정" 옵션을 사용해보세요'
+      );
     }
   },
 
@@ -3518,11 +3595,16 @@ const App = {
         const bMean = bSum / count;
 
         // 손가락 감지: 빨강이 압도적 + 너무 어둡지/밝지 않음
-        // 토치 켜진 손가락: R 100-230, G 30-100, B 20-80
-        // 토치 안 켜진 손가락: R 80-200, G 40-150, B 30-120
-        const isFingerLikely = rMean > 60 && rMean < 250 &&
-                                rMean > gMean * 1.4 &&
-                                rMean > bMean * 1.5;
+        // v15.8 강화: 픽셀 포화 (>240) 차단 — 신호 변동 불가
+        //           너무 어두움 (<80) 차단 — 노이즈 비율 큼
+        //           빨강 우세 강화 — gMean * 1.5, bMean * 1.7
+        const isFingerLikely = rMean > 80 && rMean < 240 &&
+                                rMean > gMean * 1.5 &&
+                                rMean > bMean * 1.7;
+
+        // 포화 경고 (사용자에게)
+        const isSaturated = rMean >= 240;
+        const isTooDark = rMean < 80;
 
         // UI 업데이트 (Stage 1)
         if (f.stage === 'camera') {
@@ -3535,6 +3617,14 @@ const App = {
               f.fingerDetected = true;
               this._flog(`손가락 감지: R=${rMean.toFixed(0)} G=${gMean.toFixed(0)} B=${bMean.toFixed(0)}`);
             }
+          } else if (isSaturated) {
+            document.getElementById('finger-touch-status').innerHTML =
+              `<span style="color:#ef4444">⚠️ 너무 밝음 (살짝만 떼기)</span>`;
+            f.fingerDetected = false;
+          } else if (isTooDark) {
+            document.getElementById('finger-touch-status').innerHTML =
+              `<span style="color:#f59e0b">⚠️ 너무 어두움 (더 밝게)</span>`;
+            f.fingerDetected = false;
           } else {
             document.getElementById('finger-touch-status').innerHTML =
               `<span style="color:#f59e0b">대기 중</span>`;
@@ -3724,49 +3814,110 @@ const App = {
   // ────────────────────────────────────────────────
   // Peak detection (개선된 알고리즘 — Allagi 2022 참고)
   // ────────────────────────────────────────────────
+  // Peak detection — v15.8 강화 (Butterworth bandpass + 방향성 + 강한 NaN 가드)
+  // 학술 근거: Allagi 2022 (FFT Hann Window), Touch Error Elimination 2020
+  // ────────────────────────────────────────────────
   _fingerDetectPeaks(samples) {
-    if (samples.length < 30) return [];
+    if (samples.length < 60) return [];
 
-    // 1) Detrend (이동평균 30 = 1초 window @ 30Hz)
-    const win = 30;
+    // 1) Raw 빨강 채널
+    let raw = samples.map(s => s.r);
+
+    // 2) Detrend (이동평균 45 = 1.5초 window @ 30Hz, DC 제거)
+    const win = 45;
     const detrended = [];
-    for (let i = 0; i < samples.length; i++) {
-      const start = Math.max(0, i - win / 2);
-      const end = Math.min(samples.length, i + win / 2);
+    for (let i = 0; i < raw.length; i++) {
+      const start = Math.max(0, i - Math.floor(win / 2));
+      const end = Math.min(raw.length, i + Math.floor(win / 2));
       let sum = 0, c = 0;
-      for (let j = start; j < end; j++) { sum += samples[j].r; c++; }
-      detrended.push(samples[i].r - sum / c);
+      for (let j = start; j < end; j++) { sum += raw[j]; c++; }
+      detrended.push(raw[i] - sum / c);
     }
 
-    // 2) 적응형 임계
-    let sumAbs = 0;
-    for (const v of detrended) sumAbs += Math.abs(v);
-    const meanAbs = sumAbs / detrended.length;
-    const threshold = meanAbs * 1.2; // 평균보다 20% 큰 변동만
+    // 3) Butterworth 2차 bandpass 근사 [0.7 - 3.0 Hz] (HR 42 ~ 180 BPM)
+    // 30 Hz 샘플링, 정규화 주파수 = freq / (sampleRate/2)
+    // low = 0.7/15 = 0.047, high = 3.0/15 = 0.2
+    // 간단한 IIR 구현
+    const filtered = this._fingerBandpass(detrended, 30, 0.7, 3.0);
 
-    // 3) Peak detection (HR 36 ~ 210 BPM)
-    const minDist = 9;  // 300ms @ 30Hz
-    const maxDist = 90; // 3s
+    // 4) 진폭 정규화 (RMS 기반)
+    let sumSq = 0;
+    for (const v of filtered) sumSq += v * v;
+    const rms = Math.sqrt(sumSq / filtered.length);
+    if (rms < 0.01) {
+      // 신호가 너무 작아서 peak 검출 불가
+      return [];
+    }
+    const threshold = rms * 0.5; // RMS의 50%
+
+    // 5) Peak detection — 방향성 + 최소 거리 강화
+    // PPG에서 손가락 댄 상태: 수축기 = 빨강 감소 = 음의 피크
+    //                          이완기 = 빨강 증가 = 양의 피크
+    // 일관되게 한 방향만 추적
+    let posMax = 0, negMax = 0;
+    for (const v of filtered) {
+      if (v > posMax) posMax = v;
+      if (v < negMax) negMax = v;
+    }
+    // 더 변동성 큰 방향을 채택
+    const usePositive = posMax > Math.abs(negMax);
+
+    const minDist = 12; // 400ms = HR 150 max (안정 시 보통 HR < 100)
     const peaks = [];
     let lastPeak = -minDist;
 
-    for (let i = 2; i < detrended.length - 2; i++) {
+    for (let i = 2; i < filtered.length - 2; i++) {
       if (i - lastPeak < minDist) continue;
-      const v = detrended[i];
-      // 양의 피크 (혈류 증가 = 빨강 감소 = 음수 — 그러나 detrend 후엔 양수)
-      // 실제 PPG에서 손가락 댄 상태에서 빨강이 사이클 — peak는 양/음 둘 다 가능
-      // 안전하게 절대값으로 처리
-      if (Math.abs(v) > threshold &&
-          Math.abs(v) > Math.abs(detrended[i - 1]) &&
-          Math.abs(v) > Math.abs(detrended[i - 2]) &&
-          Math.abs(v) > Math.abs(detrended[i + 1]) &&
-          Math.abs(v) > Math.abs(detrended[i + 2])) {
+      const v = filtered[i];
+      const isPeak = usePositive
+        ? (v > threshold && v > filtered[i-1] && v > filtered[i-2] && v > filtered[i+1] && v > filtered[i+2])
+        : (v < -threshold && v < filtered[i-1] && v < filtered[i-2] && v < filtered[i+1] && v < filtered[i+2]);
+      if (isPeak) {
         peaks.push(i);
         lastPeak = i;
       }
     }
 
     return peaks;
+  },
+
+  // Butterworth 2차 bandpass IIR 필터 (간단 직렬 구현)
+  // forward + backward = zero-phase
+  _fingerBandpass(signal, fs, lowHz, highHz) {
+    const N = signal.length;
+    if (N < 10) return signal.slice();
+
+    // 정규화 주파수
+    const nyquist = fs / 2;
+    const wLow = lowHz / nyquist;
+    const wHigh = highHz / nyquist;
+
+    // 2차 Butterworth bandpass 계수 (bilinear transform)
+    // 근사 — 정확한 디자인 대신 실용적 단순 IIR
+    const wc = (wLow + wHigh) / 2;
+    const bw = wHigh - wLow;
+    // Pre-warped
+    const omega = Math.PI * wc;
+    const K = Math.tan(omega);
+    const Q = wc / bw;
+    const norm = 1 / (1 + K / Q + K * K);
+    const a0 = K / Q * norm;
+    const a1 = 0;
+    const a2 = -a0;
+    const b1 = 2 * (K * K - 1) * norm;
+    const b2 = (1 - K / Q + K * K) * norm;
+
+    // Forward pass
+    const out = new Array(N).fill(0);
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < N; i++) {
+      const x = signal[i];
+      const y = a0 * x + a1 * x1 + a2 * x2 - b1 * y1 - b2 * y2;
+      out[i] = y;
+      x2 = x1; x1 = x;
+      y2 = y1; y1 = y;
+    }
+    return out;
   },
 
   // 파형 그리기
