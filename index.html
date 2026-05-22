@@ -5020,12 +5020,35 @@ body::before {
 }
 .finger-log-toggle:active { background: var(--bg); }
 
+/* ★ v15.7: 로그 floating button — 페이지 어디서나 접근 가능 */
+.finger-log-fab {
+  position: fixed;
+  top: 70px;
+  right: 12px;
+  z-index: 9100;
+  background: linear-gradient(135deg, #1f2937, #111827);
+  color: #fbbf24;
+  border: 1.5px solid #374151;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: -.01em;
+}
+.finger-log-fab:active { transform: scale(0.95); }
+
 .finger-log-panel {
   position: fixed;
   bottom: 80px;
   left: 12px;
   right: 12px;
-  z-index: 9000;
+  z-index: 9999;
   background: #0a0a0a;
   border: 1px solid #333;
   border-radius: 14px;
@@ -6550,7 +6573,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.6 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.7 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -7241,11 +7264,15 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v15.6</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v15.7</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
-    <button class="finger-log-toggle" type="button" onclick="App.fingerToggleLog()" title="디버그 로그">📋</button>
   </div>
+
+  <!-- ★ v15.7: 로그 토글 floating button (어디서나 접근) -->
+  <button class="finger-log-fab" type="button" onclick="App.fingerToggleLog()" title="디버그 로그 열기">
+    📋 로그
+  </button>
 
   <!-- ──────────────────────────────────────────────────
        STAGE 0 — 인트로 (측정 전 안내)
@@ -7454,7 +7481,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
-    🚀Reset Button_승우🚀<br>
+    🚀 Reset Button - 승우 ‍🚀<br>
     rPPG 엔진: ME-rPPG (Apache 2.0)<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>

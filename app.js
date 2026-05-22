@@ -3193,6 +3193,10 @@ const App = {
   _fingerRenderLog() {
     const body = document.getElementById('finger-log-body');
     if (!body) return;
+    if (this._fingerLog.length === 0) {
+      body.innerHTML = '<div class="flp-line lvl-info"><span class="flp-msg">로그가 비어있습니다. 카메라를 활성화하면 로그가 쌓입니다.</span></div>';
+      return;
+    }
     const html = this._fingerLog.map(e => {
       const cls = e.level === 'error' ? 'lvl-err' : e.level === 'warn' ? 'lvl-warn' : 'lvl-info';
       return `<div class="flp-line ${cls}"><span class="flp-ts">${e.ts}</span><span class="flp-msg">${this._esc(e.msg)}</span></div>`;
@@ -3380,23 +3384,26 @@ const App = {
         this._flog('getCapabilities 실패: ' + e.message, 'warn');
       }
 
-      f.torchSupported = !!capabilities.torch;
-      this._flog(`토치 지원: ${f.torchSupported ? '✓ YES' : '✗ NO'}`);
+      // ★ v15.7: Chrome Android 버그 회피 — capabilities에 torch가 없어도 무조건 시도
+      // 갤럭시 S23 등에서 getCapabilities()가 torch를 보고하지 않는 경우가 많음
+      // 실제로는 applyConstraints({torch:true})가 동작함
+      const torchInCapabilities = !!capabilities.torch;
+      this._flog(`Capabilities.torch: ${torchInCapabilities ? '✓' : '✗ (무시하고 시도)'}`);
+
+      // 토치 가능성 일단 true로 가정 (실제 토글 시 확인)
+      f.torchSupported = true;
+      f.torchCapabilityReported = torchInCapabilities;
 
       const torchStatus = document.getElementById('finger-torch-status');
       const torchBtn = document.getElementById('finger-torch-btn');
 
-      if (f.torchSupported) {
-        torchStatus.textContent = '꺼짐 (수동 켜기 필요)';
-        torchBtn.disabled = false;
-        torchBtn.textContent = '💡 플래시 켜기';
-        this._fingerSetStatus('카메라 준비 완료', '플래시 버튼을 누르고 손가락을 대주세요');
-      } else {
-        torchStatus.textContent = '⚠️ 미지원 기기';
-        torchBtn.disabled = true;
-        torchBtn.textContent = '💡 플래시 미지원';
-        this._fingerSetStatus('카메라 준비 완료', '플래시가 미지원이라 밝은 곳에서 측정해주세요');
-        this._flog('이 기기는 토치 미지원 — 밝은 조명에서 측정 가능', 'warn');
+      torchStatus.textContent = '꺼짐 (수동 켜기 필요)';
+      torchBtn.disabled = false;
+      torchBtn.textContent = '💡 플래시 켜기';
+      this._fingerSetStatus('카메라 준비 완료', '플래시 버튼을 누르고 손가락을 대주세요');
+
+      if (!torchInCapabilities) {
+        this._flog('Capabilities는 미지원이지만 일단 시도해봅니다 (Chrome 버그 회피)', 'warn');
       }
 
       // Wake Lock
@@ -3425,30 +3432,27 @@ const App = {
   },
 
   // ──────────────────────────────────────────────────
-  // 토치 토글 (수동 컨트롤)
+  // 토치 토글 (수동 컨트롤) - v15.7: capability 무시하고 시도
   // ──────────────────────────────────────────────────
   async fingerToggleTorch() {
     const f = this._finger;
     if (!f.track) {
       this._flog('토치 토글 실패: track 없음', 'warn');
-      return;
-    }
-    if (!f.torchSupported) {
-      this._flog('토치 토글 실패: 미지원 기기', 'warn');
-      alert('이 기기는 플래시 제어를 지원하지 않습니다.\n밝은 곳에서 측정해주세요.');
+      alert('카메라가 활성화되지 않았습니다.');
       return;
     }
 
     const newState = !f.torchOn;
-    this._flog(`토치 ${newState ? 'ON' : 'OFF'} 요청`);
+    this._flog(`토치 ${newState ? 'ON' : 'OFF'} 요청 (Capability 보고: ${f.torchCapabilityReported ? 'YES' : 'NO'})`);
 
     try {
+      // ★ v15.7: Chrome Android 일부 기기는 capability에 안 나와도 동작함
       await f.track.applyConstraints({ advanced: [{ torch: newState }] });
       f.torchOn = newState;
       const torchStatus = document.getElementById('finger-torch-status');
       const torchBtn = document.getElementById('finger-torch-btn');
       if (newState) {
-        torchStatus.textContent = '✓ 켜짐';
+        torchStatus.innerHTML = '<span style="color:#22c55e">✓ 켜짐</span>';
         torchBtn.textContent = '💡 플래시 끄기';
         torchBtn.classList.add('on');
         this._flog('✓ 토치 ON 성공');
@@ -3459,8 +3463,16 @@ const App = {
         this._flog('✓ 토치 OFF 성공');
       }
     } catch (e) {
-      this._flog('토치 토글 실패: ' + e.message, 'error');
-      alert('플래시 제어 실패: ' + e.message + '\n\n로그(📋)에서 자세한 내용을 확인하세요.');
+      this._flog('토치 토글 실패: ' + e.message + ' (' + e.name + ')', 'error');
+      // 실제로 안 되는 기기로 확정
+      f.torchSupported = false;
+      const torchStatus = document.getElementById('finger-torch-status');
+      const torchBtn = document.getElementById('finger-torch-btn');
+      torchStatus.innerHTML = '<span style="color:#f59e0b">⚠️ 제어 불가</span>';
+      torchBtn.disabled = true;
+      torchBtn.textContent = '💡 미지원';
+      this._fingerSetStatus('플래시 제어 불가', '밝은 조명 아래에서 측정해주세요');
+      alert('이 기기는 브라우저로 플래시를 켤 수 없습니다.\n\n해결책:\n1. 카메라 앱에서 미리 플래시를 켠 후 측정 시작\n2. 또는 밝은 조명 아래에서 측정\n\n자세한 로그는 📋 버튼으로 확인 가능');
     }
   },
 
@@ -3545,8 +3557,9 @@ const App = {
             this._fingerUpdateQuality();
             this._fingerDrawWave();
 
-            // 충분한 샘플 = 측정 시작 버튼 활성화 (Stage 1)
-            if (f.stage === 'camera' && f.quality >= 40 && f.samples.length >= 90 && f.torchOn) {
+            // ★ v15.7: 측정 시작 조건 완화 — 토치 OFF여도 신호 품질이 충분하면 가능
+            // 토치 안 켜지는 기기도 밝은 곳에서 측정 가능해야 함
+            if (f.stage === 'camera' && f.quality >= 40 && f.samples.length >= 90) {
               this._fingerEnableMeasureBtn(true);
             }
 
@@ -3569,10 +3582,13 @@ const App = {
     if (!btn) return;
     btn.disabled = !enable;
     if (enable) {
-      btn.innerHTML = '▶ 측정 시작 <span class="fmb-hint">(신호 양호)</span>';
+      // ★ v15.7: 토치 여부 안내
+      const f = this._finger;
+      const hint = f.torchOn ? '(신호 양호)' : '(토치 없이 측정 — 정확도 낮음)';
+      btn.innerHTML = `▶ 측정 시작 <span class="fmb-hint">${hint}</span>`;
       btn.classList.add('ready');
     } else {
-      btn.innerHTML = '▶ 측정 시작 <span class="fmb-hint">(신호 확인 후)</span>';
+      btn.innerHTML = '▶ 측정 시작 <span class="fmb-hint">(손가락 대고 신호 확인 중)</span>';
       btn.classList.remove('ready');
     }
   },
