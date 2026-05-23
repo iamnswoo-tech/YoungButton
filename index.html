@@ -5243,6 +5243,25 @@ body::before {
   50% { box-shadow: 0 8px 24px rgba(245, 158, 11, 0.65); }
 }
 
+/* ★ v16.1: 결과 검증 경고 배너 */
+.finger-warning-banner {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border: 1.5px solid #f59e0b;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: #78350f;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: -.01em;
+}
+.finger-warning-banner small {
+  font-weight: 600;
+  opacity: 0.85;
+  font-size: 11px;
+}
+
 .finger-log-panel {
   position: fixed;
   bottom: 80px;
@@ -6773,7 +6792,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.0 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.1 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -7464,7 +7483,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.0</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.1</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>
@@ -7525,26 +7544,26 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       불편하시면 언제든 중단 가능합니다.
     </div>
 
-    <!-- ★ v15.8: 토치 안 켜지는 기기를 위한 안내 -->
+    <!-- ★ v16.1: 외부 조명 측정 권장 (사용자 발견) -->
     <div class="finger-tip-card">
-      <div class="finger-tip-title">💡 플래시가 안 켜진다면</div>
+      <div class="finger-tip-title">💡 가장 정확한 측정 방법</div>
       <div class="finger-tip-body">
-        일부 기기는 브라우저에서 플래시 제어가 안 됩니다.<br>
-        <strong>화면 상단을 아래로 쓸어내려 ⚡손전등 아이콘을 직접 켜두세요.</strong><br>
-        그 상태에서 측정하면 정상 작동합니다.
+        <strong>플래시 OFF + 외부 조명 (자연광/실내등)</strong>이 가장 정확합니다.<br>
+        <small style="opacity: 0.85">학술 근거: G(녹색) 채널이 RGB 모두 활용 가능해 노이즈 감소 (Verkruysse 2008)</small><br>
+        밝은 곳에서 손가락을 카메라에 가볍게 대고 측정하세요.
       </div>
     </div>
 
-    <!-- ★ v16.0: AI + 신호 안정화 기술 안내 -->
+    <!-- v16.0: AI + 신호 안정화 기술 안내 -->
     <div class="finger-ai-card">
-      <div class="finger-ai-badge">🤖 v16.0 · 신호 안정화</div>
-      <div class="finger-ai-title">4가지 학술 기법으로 신호 품질 향상</div>
+      <div class="finger-ai-badge">🤖 v16.1 · 다채널 + AI</div>
+      <div class="finger-ai-title">3개 채널 자동 분석 + AI 검증</div>
       <div class="finger-ai-body">
-        ✓ 카메라 매개변수 고정 (Allagi 2022)<br>
-        ✓ 다중 ROI 평균화 (3×3 격자)<br>
-        ✓ 주파수 도메인 SQI (Karlen 2012)<br>
-        ✓ ME-rPPG AI 신경망 보강<br>
-        <small style="opacity: 0.85">환경 변동에 강한 안정적 측정</small>
+        ✓ R/G/AI 3개 채널 동시 분석<br>
+        ✓ 토치 ON/OFF 자동 최적 채널 선택<br>
+        ✓ 비정상치 자동 거부 (이상치 검증)<br>
+        ✓ 놓친 peak 자동 보강 (인접 IBI 일관성)<br>
+        <small style="opacity: 0.85">신뢰도 등급 표시 (높음/보통/낮음)</small>
       </div>
     </div>
 
@@ -7713,7 +7732,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
-    🚀 Reset Button - 승우 ‍🚀<br>
+    🚀 Reset Button - 승우 <br>
     rPPG 엔진: ME-rPPG (Apache 2.0)<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>

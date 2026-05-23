@@ -3718,12 +3718,15 @@ const App = {
 
         // 손가락 댄 상태에서만 샘플 수집 (Stage 1, 신호 품질 확인용)
         if (isFingerLikely) {
-          f.samples.push({ t: performance.now(), r: rMean });
+          // ★ v16.1: RGB 모두 저장 (r은 호환성, g,b는 외부조명 모드용)
+          //   - 플래시 ON: R 채널이 주요 신호원 (헤모글로빈 흡수)
+          //   - 플래시 OFF (외부조명): G 채널이 더 깨끗 (Verkruysse 2008 표준)
+          f.samples.push({ t: performance.now(), r: rMean, g: gMean, b: bMean });
           if (f.samples.length > 600) f.samples = f.samples.slice(-600);
 
           // 측정 중이면 측정 샘플에도 추가
           if (f.stage === 'measuring' && f.measuring) {
-            f.measureSamples.push({ t: performance.now(), r: rMean });
+            f.measureSamples.push({ t: performance.now(), r: rMean, g: gMean, b: bMean });
             // ★ v15.9: 측정 중 AI 워커에도 프레임 전송 (15 FPS 정도로 충분)
             if (f.measureSamples.length % 2 === 0) {
               this._fingerSendToAI(video, video.videoWidth, video.videoHeight);
@@ -4262,6 +4265,56 @@ const App = {
       }
     }
 
+    // ★ v16.1: 인접 IBI 일관성 검증 — 놓친 peak 보강 시도
+    // 인접 peak 거리가 평균의 1.8배 이상이면 중간에 peak를 놓친 것
+    // → 두 peak 사이에서 가장 큰 변동점을 추가 peak로 인식
+    if (peaks.length >= 4) {
+      const intervals = [];
+      for (let i = 1; i < peaks.length; i++) {
+        intervals.push(peaks[i] - peaks[i-1]);
+      }
+      // 중간값 계산
+      const sorted = [...intervals].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+
+      const refinedPeaks = [peaks[0]];
+      for (let i = 1; i < peaks.length; i++) {
+        const gap = peaks[i] - peaks[i-1];
+        // 평균보다 1.8배 이상 큰 gap = 1개 peak 놓침
+        // 2.7배 이상 = 2개 놓침 (드물지만)
+        if (gap > median * 1.8 && gap < median * 4) {
+          const numMissed = Math.round(gap / median) - 1;
+          if (numMissed >= 1 && numMissed <= 3) {
+            // 균등 분할로 보간 peak 위치 추정
+            const step = gap / (numMissed + 1);
+            for (let k = 1; k <= numMissed; k++) {
+              const candidatePos = Math.round(peaks[i-1] + step * k);
+              // 후보 위치 ±5 샘플 내에서 가장 큰 진폭의 점을 찾음
+              let bestPos = candidatePos, bestVal = -Infinity;
+              for (let j = Math.max(0, candidatePos - 5); j <= Math.min(filtered.length - 1, candidatePos + 5); j++) {
+                const v = usePositive ? filtered[j] : -filtered[j];
+                if (v > bestVal) { bestVal = v; bestPos = j; }
+              }
+              // 임계값 50%까지만 인정 (너무 약하면 추가 안 함)
+              if (bestVal > threshold * 0.5) {
+                refinedPeaks.push(bestPos);
+              }
+            }
+          }
+        }
+        refinedPeaks.push(peaks[i]);
+      }
+      // 정렬 + 중복 제거
+      refinedPeaks.sort((a, b) => a - b);
+      const cleaned = [refinedPeaks[0]];
+      for (let i = 1; i < refinedPeaks.length; i++) {
+        if (refinedPeaks[i] - cleaned[cleaned.length - 1] >= minDist) {
+          cleaned.push(refinedPeaks[i]);
+        }
+      }
+      return cleaned;
+    }
+
     return peaks;
   },
 
@@ -4387,50 +4440,140 @@ const App = {
       };
     }
 
-    // ★ v15.9: AI 신호와 고전 신호 모두 분석 후 더 좋은 것 채택
+    // ★ v16.1: 3개 채널 모두 분석 후 최적 채택
+    //   - R (빨강): 플래시 ON에서 표준, 헤모글로빈 흡수
+    //   - G (녹색): 플래시 OFF (외부조명)에서 표준 (Verkruysse 2008)
+    //   - AI: ME-rPPG 신경망 출력
     const aiAvailable = f.aiSamples && f.aiSamples.length >= 100;
-    this._flog(`AI 신호 사용 가능: ${aiAvailable ? '✓ (' + f.aiSamples.length + '개)' : '✗'}`);
+    this._flog(`v16.1: 다채널 분석 시작 (R/G${aiAvailable ? '/AI' : ''})`);
+    this._flog(`측정 모드: ${f.torchOn ? '플래시 ON (R채널 우선)' : '외부 조명 (G채널 우선)'}`);
 
-    // 1) 고전 분석
-    const classical = this._fingerAnalyzeFromSignal(samples, 'r', 'classical');
+    // 1) R 채널 분석 (기존)
+    const resultR = this._fingerAnalyzeFromSignal(samples, 'r', 'R-channel');
 
-    // 2) AI 분석 (있으면)
-    let aiResult = null;
+    // 2) G 채널 분석 (v16.1 신규 — 외부조명에서 더 좋을 수 있음)
+    const hasG = samples.length > 0 && samples[0].g !== undefined;
+    let resultG = null;
+    if (hasG) {
+      // G 채널 데이터를 r 키로 매핑해서 같은 분석 함수 사용
+      const gSamples = samples.map(s => ({ t: s.t, r: s.g }));
+      resultG = this._fingerAnalyzeFromSignal(gSamples, 'r', 'G-channel');
+    }
+
+    // 3) AI 분석
+    let resultAI = null;
     if (aiAvailable) {
-      // AI 출력을 samples 형식으로 변환 (음수→양수 부호 처리, 정규화)
-      const aiNorm = f.aiSamples.map(s => ({ t: s.t, r: s.v * 100 + 128 })); // 시각 일관성용 변환
-      aiResult = this._fingerAnalyzeFromSignal(aiNorm, 'r', 'ai');
-      if (aiResult.ok) {
-        this._flog(`✓ AI 분석: HR=${aiResult.hr} clean=${aiResult.ibiCount}/${aiResult.totalPeaks} (${aiResult.cleanRate}%)`);
+      const aiNorm = f.aiSamples.map(s => ({ t: s.t, r: s.v * 100 + 128 }));
+      resultAI = this._fingerAnalyzeFromSignal(aiNorm, 'r', 'AI-channel');
+    }
+
+    // 4) 각 결과 점수 계산 — 신뢰도 우선
+    const scoreOf = (r) => {
+      if (!r || !r.ok) return 0;
+      // 학술적으로 비정상적 RMSSD/SDNN은 신호 오류
+      if (r.rmssd > 100 && r.sdnn > 150) return 0; // 비정상치 패널티
+      // 점수: 채택률 × IBI 수
+      let s = r.ibiCount * (r.cleanRate / 100);
+      // RMSSD가 너무 높으면 감점 (정상 0-80ms)
+      if (r.rmssd > 80) s *= 0.5;
+      if (r.rmssd > 150) s *= 0.3;
+      return s;
+    };
+
+    const sR = scoreOf(resultR);
+    const sG = scoreOf(resultG);
+    const sAI = scoreOf(resultAI);
+    this._flog(`채널 점수: R=${sR.toFixed(1)} G=${sG.toFixed(1)} AI=${sAI.toFixed(1)}`);
+
+    // 5) 최적 채널 선택 — 토치 상태에 따라 선호도 조정
+    let chosen, signalSource;
+    if (f.torchOn) {
+      // 플래시 ON: R 우선, G가 30% 이상 좋으면 G, AI는 50% 이상 좋아야
+      if (sG > sR * 1.3 && resultG) {
+        chosen = resultG; signalSource = 'G-channel';
+      } else if (sAI > sR * 1.5 && resultAI) {
+        chosen = resultAI; signalSource = 'AI';
+      } else if (resultR && resultR.ok) {
+        chosen = resultR; signalSource = 'R-channel';
       } else {
-        this._flog(`AI 분석 실패: ${aiResult.reason}`, 'warn');
+        chosen = resultG || resultAI || resultR;
+        signalSource = chosen === resultG ? 'G-channel' : chosen === resultAI ? 'AI' : 'R-channel';
+      }
+    } else {
+      // 플래시 OFF: G 우선 (Verkruysse 2008), R이 50%+ 좋아야 R 사용
+      if (sR > sG * 1.5 && resultR) {
+        chosen = resultR; signalSource = 'R-channel';
+      } else if (sAI > sG * 1.5 && resultAI) {
+        chosen = resultAI; signalSource = 'AI';
+      } else if (resultG && resultG.ok) {
+        chosen = resultG; signalSource = 'G-channel';
+      } else {
+        chosen = resultR || resultAI || resultG;
+        signalSource = chosen === resultR ? 'R-channel' : chosen === resultAI ? 'AI' : 'G-channel';
       }
     }
 
-    // 3) 더 좋은 결과 채택 (clean rate + ibiCount 종합)
-    let chosen = classical;
-    let signalSource = 'classical';
-    if (aiResult && aiResult.ok) {
-      const classicalScore = classical.ok ? (classical.ibiCount * (classical.cleanRate / 100)) : 0;
-      const aiScore = aiResult.ibiCount * (aiResult.cleanRate / 100);
-      if (aiScore > classicalScore * 1.2) {
-        // AI가 명확히 더 좋을 때만 (20% 이상 개선)
-        chosen = aiResult;
-        signalSource = 'ai';
-        this._flog(`✓ AI 분석 채택 (점수: ${aiScore.toFixed(1)} vs 고전 ${classicalScore.toFixed(1)})`);
-      } else if (classical.ok) {
-        this._flog(`고전 분석 유지 (점수: 고전 ${classicalScore.toFixed(1)} vs AI ${aiScore.toFixed(1)})`);
-      } else {
-        chosen = aiResult;
-        signalSource = 'ai';
-        this._flog('고전 분석 실패 → AI 분석 채택');
-      }
+    if (!chosen || !chosen.ok) {
+      this._flog('모든 채널 분석 실패', 'error');
+      return chosen || {
+        ok: false,
+        reason: '모든 신호 채널에서 심박을 추출할 수 없었습니다. 다시 측정해주세요.',
+        sampleCount: samples.length,
+      };
     }
 
-    if (chosen.ok) {
-      chosen.signalSource = signalSource;
+    this._flog(`✓ 최종 채택: ${signalSource} HR=${chosen.hr} RMSSD=${chosen.rmssd}`);
+
+    // ★ v16.1: 최종 결과 유효성 검증 (이상치 거부)
+    const validation = this._fingerValidateResult(chosen);
+    if (!validation.valid) {
+      this._flog(`⚠️ 결과 검증 실패: ${validation.reason}`, 'warn');
+      chosen.validationWarning = validation.reason;
+      chosen.confidence = 'low';
+    } else {
+      chosen.confidence = validation.confidence;
     }
+
+    chosen.signalSource = signalSource;
     return chosen;
+  },
+
+  // ★ v16.1: 결과 유효성 검증 — 비정상치 거부
+  _fingerValidateResult(result) {
+    if (!result || !result.ok) return { valid: false, reason: '분석 결과 없음' };
+
+    // HR 범위 검증
+    if (result.hr < 30 || result.hr > 200) {
+      return { valid: false, reason: `HR ${result.hr} BPM은 비현실적입니다` };
+    }
+
+    // RMSSD 비정상치 — 정상인 20-60ms, 운동선수 60-80ms, >100ms는 측정 오류
+    if (result.rmssd > 150) {
+      return {
+        valid: false,
+        reason: `RMSSD ${result.rmssd}ms는 비정상적으로 높습니다 (정상 20-80ms). 측정 신호에 noise가 섞였을 가능성이 높습니다.`
+      };
+    }
+
+    // SDNN 비정상치 — 정상 30-100ms, >200ms는 거의 측정 오류
+    if (result.sdnn > 200) {
+      return {
+        valid: false,
+        reason: `SDNN ${result.sdnn}ms는 비정상적으로 높습니다 (정상 30-100ms).`
+      };
+    }
+
+    // 채택률 너무 낮음
+    if (result.cleanRate < 50) {
+      return { valid: false, reason: `신호 채택률 ${result.cleanRate}%로 신뢰도 낮음` };
+    }
+
+    // 신뢰도 레벨
+    let confidence = 'high';
+    if (result.cleanRate < 75 || result.rmssd > 80) confidence = 'medium';
+    if (result.signalQuality < 60) confidence = confidence === 'high' ? 'medium' : 'low';
+
+    return { valid: true, confidence };
   },
 
   // ★ v15.9: 신호 → HR/HRV 계산 (재사용 가능)
@@ -4667,11 +4810,32 @@ const App = {
                         result.score >= 35 ? '회복이 필요한 상태입니다. 휴식과 스트레스 관리에 신경 써주세요.' :
                                               '자율신경이 많이 지쳐있어요. 충분한 휴식이 필요합니다.';
 
+    // ★ v16.1: 신뢰도 뱃지
+    const confidence = result.confidence || 'medium';
+    const confBadge = confidence === 'high' ? '🟢 신뢰도 높음' :
+                     confidence === 'medium' ? '🟡 신뢰도 보통' : '🔴 신뢰도 낮음';
+    const confColor = confidence === 'high' ? '#16a34a' :
+                     confidence === 'medium' ? '#ca8a04' : '#dc2626';
+
+    // 신호 소스 뱃지
+    const sourceBadge = result.signalSource === 'AI' || result.signalSource === 'ai' ? '🤖 AI ENHANCED' :
+                        result.signalSource === 'G-channel' ? '🟢 G-CHANNEL (외부조명)' :
+                        '✓ CLINICAL GRADE';
+
     container.innerHTML = `
       <div class="finger-result-card">
+        ${result.validationWarning ? `
+          <div class="finger-warning-banner">
+            ⚠️ ${this._esc(result.validationWarning)}<br>
+            <small>참고용으로만 사용하세요. 신뢰할 수 있는 측정을 위해 다시 측정하시는 것을 추천합니다.</small>
+          </div>
+        ` : ''}
         <div class="finger-result-header">
-          <div class="finger-result-badge">${result.signalSource === 'ai' ? '🤖 AI ENHANCED' : '✓ CLINICAL GRADE'}</div>
-          <div class="finger-result-quality">신호 품질 ${result.signalQuality}%</div>
+          <div class="finger-result-badge">${sourceBadge}</div>
+          <div class="finger-result-quality">
+            <span style="color:${confColor}; font-weight: 900">${confBadge}</span>
+            · 신호 품질 ${result.signalQuality}%
+          </div>
         </div>
 
         <div class="finger-result-main">

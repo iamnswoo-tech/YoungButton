@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v16.0",
-  "short_name": "건강측정 v16.0",
-  "description": "v16.0 — 카메라 매개변수 고정 + 다중 ROI + SQI + 라이브 적응",
+  "name": "건강 측정 v16.1",
+  "short_name": "건강측정 v16.1",
+  "description": "v16.1 — R/G/AI 다채널 분석 + 이상치 거부 + Peak 보강 + 신뢰도",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
