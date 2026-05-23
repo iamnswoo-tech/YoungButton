@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.9",
-  "short_name": "건강측정 v15.9",
-  "description": "v15.9 — 스트레스 지수 + AI 보강 + 결과 멘트 + 뒤로가기 수정",
+  "name": "건강 측정 v16.0",
+  "short_name": "건강측정 v16.0",
+  "description": "v16.0 — 카메라 매개변수 고정 + 다중 ROI + SQI + 라이브 적응",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

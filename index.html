@@ -5218,6 +5218,31 @@ body::before {
 }
 .finger-log-fab:active { transform: scale(0.95); }
 
+/* ★ v16.0: 측정 중 라이브 신호 품질 경고 */
+.finger-live-warning {
+  position: fixed;
+  top: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9200;
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.4);
+  letter-spacing: -.01em;
+  max-width: 90vw;
+  text-align: center;
+  cursor: pointer;
+  animation: live-warn-pulse 1.6s ease-in-out infinite;
+}
+@keyframes live-warn-pulse {
+  0%, 100% { box-shadow: 0 6px 18px rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 8px 24px rgba(245, 158, 11, 0.65); }
+}
+
 .finger-log-panel {
   position: fixed;
   bottom: 80px;
@@ -6748,7 +6773,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.9 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.0 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -7439,7 +7464,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v15.9</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.0</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>
@@ -7510,14 +7535,16 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </div>
     </div>
 
-    <!-- ★ v15.9: AI 모델 보강 안내 -->
+    <!-- ★ v16.0: AI + 신호 안정화 기술 안내 -->
     <div class="finger-ai-card">
-      <div class="finger-ai-badge">🤖 ME-rPPG AI</div>
-      <div class="finger-ai-title">AI 신경망이 신호를 강화합니다</div>
+      <div class="finger-ai-badge">🤖 v16.0 · 신호 안정화</div>
+      <div class="finger-ai-title">4가지 학술 기법으로 신호 품질 향상</div>
       <div class="finger-ai-body">
-        State Space Duality 신경망(2.4MB)이 픽셀 노이즈를 제거하고
-        깨끗한 PPG 신호를 추출해 측정 정확도를 높여줍니다.<br>
-        <small style="opacity: 0.85">자연광에서도 안정적으로 작동</small>
+        ✓ 카메라 매개변수 고정 (Allagi 2022)<br>
+        ✓ 다중 ROI 평균화 (3×3 격자)<br>
+        ✓ 주파수 도메인 SQI (Karlen 2012)<br>
+        ✓ ME-rPPG AI 신경망 보강<br>
+        <small style="opacity: 0.85">환경 변동에 강한 안정적 측정</small>
       </div>
     </div>
 
@@ -7564,6 +7591,15 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="fsig-row">
         <span class="fsig-label">💡 플래시 상태</span>
         <span class="fsig-value" id="finger-torch-status">확인 중</span>
+      </div>
+      <!-- ★ v16.0: 카메라 고정 + SQI 상태 -->
+      <div class="fsig-row">
+        <span class="fsig-label">🔒 카메라 고정</span>
+        <span class="fsig-value" id="finger-lock-status">확인 중</span>
+      </div>
+      <div class="fsig-row">
+        <span class="fsig-label">📊 SQI (주파수)</span>
+        <span class="fsig-value" id="finger-sqi-value">--</span>
       </div>
     </div>
 

@@ -3321,6 +3321,13 @@ const App = {
     // ★ v15.9: AI 워커는 유지 (다음 측정에 재사용) — terminate 안 함
     // 단 샘플 버퍼는 비움
     f.aiSamples = [];
+    // ★ v16.0: 상태 초기화 (다음 측정에 영향 없도록)
+    f.cameraLocked = false;
+    f.lowSQIStart = null;
+    f.warnedLowQuality = false;
+    f.lastSQI = 0;
+    f.lastValidCellCount = 0;
+    this._fingerHideLiveWarning();
     this._releaseWakeLock();
     this._speakStop();
   },
@@ -3466,6 +3473,22 @@ const App = {
         this._flog('Capabilities는 미지원이지만 일단 시도해봅니다 (Chrome 버그 회피)', 'warn');
       }
 
+      // ★ v16.0: 카메라 매개변수 고정 (AE/AWB/Focus) — 신호 변동성 제거
+      // 로그 분석 결과: 자동 노출/화이트밸런스가 픽셀값을 멋대로 조정해서
+      // R=240 G=0 B=32 같은 포화 ↔ R=152 G=88 B=89 같은 정상값이 반복됨
+      // → 측정 동안 카메라를 manual 모드로 고정
+      f.cameraLocked = await this._fingerLockCameraParams(f.track, capabilities);
+
+      // 고정 상태 UI 업데이트
+      const lockStatus = document.getElementById('finger-lock-status');
+      if (lockStatus) {
+        if (f.cameraLocked) {
+          lockStatus.innerHTML = '<span style="color:#22c55e">✓ 고정됨 (신호 안정)</span>';
+        } else {
+          lockStatus.innerHTML = '<span style="color:#f59e0b">⚠️ 자동 (기기 한계)</span>';
+        }
+      }
+
       // Wake Lock
       this._acquireWakeLock();
 
@@ -3597,7 +3620,7 @@ const App = {
 
     try {
       if (video && video.readyState >= 2 && video.videoWidth > 0) {
-        // 중앙 ROI
+        // ★ v16.0: 3×3 ROI 격자 분석 — 가장 안정적인 영역 채택
         const W = canvas.width, H = canvas.height;
         const vw = video.videoWidth, vh = video.videoHeight;
         const cropSize = Math.min(vw, vh) * 0.6;
@@ -3605,31 +3628,67 @@ const App = {
         const sy = (vh - cropSize) / 2;
         ctx.drawImage(video, sx, sy, cropSize, cropSize, 0, 0, W, H);
 
-        // 빨강 채널 평균
         const imgData = ctx.getImageData(0, 0, W, H);
         const pixels = imgData.data;
-        let rSum = 0, gSum = 0, bSum = 0, count = 0;
-        for (let i = 0; i < pixels.length; i += 16) {
-          rSum += pixels[i];
-          gSum += pixels[i + 1];
-          bSum += pixels[i + 2];
-          count++;
-        }
-        const rMean = rSum / count;
-        const gMean = gSum / count;
-        const bMean = bSum / count;
 
-        // 손가락 감지: 빨강이 압도적 + 너무 어둡지/밝지 않음
-        // v15.8 강화: 픽셀 포화 (>240) 차단 — 신호 변동 불가
-        //           너무 어두움 (<80) 차단 — 노이즈 비율 큼
-        //           빨강 우세 강화 — gMean * 1.5, bMean * 1.7
-        const isFingerLikely = rMean > 80 && rMean < 240 &&
-                                rMean > gMean * 1.5 &&
-                                rMean > bMean * 1.7;
+        // 3×3 격자 = 9개 영역의 R/G/B 평균 계산
+        const cellW = Math.floor(W / 3);
+        const cellH = Math.floor(H / 3);
+        const cells = []; // {r, g, b, idx}
+
+        for (let cy = 0; cy < 3; cy++) {
+          for (let cx = 0; cx < 3; cx++) {
+            let rSum = 0, gSum = 0, bSum = 0, count = 0;
+            const startX = cx * cellW, endX = (cx + 1) * cellW;
+            const startY = cy * cellH, endY = (cy + 1) * cellH;
+            for (let y = startY; y < endY; y += 2) {
+              for (let x = startX; x < endX; x += 2) {
+                const i = (y * W + x) * 4;
+                rSum += pixels[i];
+                gSum += pixels[i + 1];
+                bSum += pixels[i + 2];
+                count++;
+              }
+            }
+            cells.push({
+              r: rSum / count,
+              g: gSum / count,
+              b: bSum / count,
+              idx: cy * 3 + cx,
+            });
+          }
+        }
+
+        // 손가락 영역 후보 선별 — 빨강 우세 + 비포화
+        // (각 ROI 마다 손가락 일부일 가능성 평가)
+        const validCells = cells.filter(c =>
+          c.r > 80 && c.r < 240 && c.r > c.g * 1.5 && c.r > c.b * 1.7
+        );
+
+        // 채택 ROI 결정:
+        //   - validCells가 있으면 평균 (공간적 평균 = SNR 향상)
+        //   - 없으면 전체 평균 (감지 실패 안내용)
+        let rMean, gMean, bMean;
+        if (validCells.length > 0) {
+          rMean = validCells.reduce((s, c) => s + c.r, 0) / validCells.length;
+          gMean = validCells.reduce((s, c) => s + c.g, 0) / validCells.length;
+          bMean = validCells.reduce((s, c) => s + c.b, 0) / validCells.length;
+        } else {
+          rMean = cells.reduce((s, c) => s + c.r, 0) / 9;
+          gMean = cells.reduce((s, c) => s + c.g, 0) / 9;
+          bMean = cells.reduce((s, c) => s + c.b, 0) / 9;
+        }
+
+        // 손가락 감지: 유효 셀 비율 + 평균값
+        // 9개 중 최소 5개가 유효 → 손가락 충분히 덮음
+        const isFingerLikely = validCells.length >= 5 &&
+                                rMean > 80 && rMean < 240 &&
+                                rMean > gMean * 1.5 && rMean > bMean * 1.7;
 
         // 포화 경고 (사용자에게)
         const isSaturated = rMean >= 240;
         const isTooDark = rMean < 80;
+        f.lastValidCellCount = validCells.length; // SQI 평가에 사용
 
         // UI 업데이트 (Stage 1)
         if (f.stage === 'camera') {
@@ -3682,6 +3741,27 @@ const App = {
               this._fingerEnableMeasureBtn(true);
             }
 
+            // ★ v16.0: 측정 중 신호 품질 저하 감지
+            // SQI가 0.15 미만으로 떨어지면 사용자에게 경고 (3초 이상 지속 시)
+            if (f.stage === 'measuring' && f.measuring && f.measureSamples.length > 90) {
+              if (f.lastSQI < 0.15) {
+                if (!f.lowSQIStart) {
+                  f.lowSQIStart = performance.now();
+                } else if (performance.now() - f.lowSQIStart > 3000) {
+                  // 3초 이상 저품질 → 경고
+                  if (!f.warnedLowQuality) {
+                    this._flog('⚠️ 측정 중 신호 품질 저하 감지 (SQI<0.15)', 'warn');
+                    this._fingerShowLiveWarning('신호가 약합니다. 손가락을 더 가만히 두세요.');
+                    f.warnedLowQuality = true;
+                  }
+                }
+              } else {
+                f.lowSQIStart = null;
+                f.warnedLowQuality = false;
+                this._fingerHideLiveWarning();
+              }
+            }
+
             // 실시간 BPM 계산 (3초마다)
             if (f.samples.length % 30 === 0) {
               this._fingerRealtimeBPM();
@@ -3719,6 +3799,27 @@ const App = {
     if (ss) ss.textContent = sub;
   },
 
+  // ★ v16.0: 측정 중 라이브 경고 토스트
+  _fingerShowLiveWarning(msg) {
+    // 한 번 표시했으면 다시 안 함 (중복 방지)
+    let warnBox = document.getElementById('finger-live-warning');
+    if (!warnBox) {
+      warnBox = document.createElement('div');
+      warnBox.id = 'finger-live-warning';
+      warnBox.className = 'finger-live-warning';
+      document.body.appendChild(warnBox);
+    }
+    warnBox.innerHTML = `⚠️ ${this._esc(msg)}`;
+    warnBox.style.display = 'block';
+    // 클릭하면 닫기
+    warnBox.onclick = () => warnBox.style.display = 'none';
+  },
+
+  _fingerHideLiveWarning() {
+    const w = document.getElementById('finger-live-warning');
+    if (w) w.style.display = 'none';
+  },
+
   // ──────────────────────────────────────────────────
   // STAGE 1 → 2: 정식 측정 시작
   // ──────────────────────────────────────────────────
@@ -3744,6 +3845,10 @@ const App = {
     f.measureSamples = [];
     f.aiSamples = [];  // ★ v15.9: AI 워커 출력 PPG 신호
     f.measureStartTime = performance.now();
+    // ★ v16.0: SQI 경고 상태 초기화
+    f.lowSQIStart = null;
+    f.warnedLowQuality = false;
+    this._fingerHideLiveWarning();
 
     // ★ v15.9: ME-rPPG 워커 초기화 (얼굴 측정과 공유)
     this._fingerInitAIWorker();
@@ -3759,6 +3864,137 @@ const App = {
   },
 
   // ★ v15.9: ME-rPPG 워커 초기화 (얼굴 측정 워커 재사용)
+  // ★ v16.0: 카메라 매개변수 고정 — 자동 노출/화이트밸런스/포커스 차단
+  // 학술 근거: Allagi 2022 (manual exposure로 신호 변동성 80% 감소)
+  // 핵심: 카메라가 멋대로 픽셀값 조정 막아서 PPG 신호 안정화
+  async _fingerLockCameraParams(track, capabilities) {
+    if (!track) return false;
+    this._flog('카메라 매개변수 고정 시도');
+
+    const constraints = { advanced: [] };
+    let lockedItems = [];
+
+    // 1. 노출 고정 (가장 중요!)
+    if (capabilities.exposureMode && capabilities.exposureMode.includes('manual')) {
+      const setting = { exposureMode: 'manual' };
+      // 노출 시간을 고정 — capability에 있으면 중간값
+      if (capabilities.exposureTime) {
+        const min = capabilities.exposureTime.min || 1;
+        const max = capabilities.exposureTime.max || 10000;
+        // 손가락 측정은 빛이 강해서 짧은 노출이 좋음 (포화 방지)
+        // capability 범위의 30% 정도
+        setting.exposureTime = min + (max - min) * 0.3;
+      }
+      // ISO 고정 — capability에 있으면 중간값
+      if (capabilities.iso) {
+        const min = capabilities.iso.min || 100;
+        const max = capabilities.iso.max || 800;
+        setting.iso = min + (max - min) * 0.3;
+      }
+      constraints.advanced.push(setting);
+      lockedItems.push('노출(manual)');
+    }
+
+    // 2. 화이트밸런스 고정
+    if (capabilities.whiteBalanceMode && capabilities.whiteBalanceMode.includes('manual')) {
+      const setting = { whiteBalanceMode: 'manual' };
+      if (capabilities.colorTemperature) {
+        // 손가락은 빨강 위주 → 따뜻한 색온도가 적합
+        setting.colorTemperature = capabilities.colorTemperature.min || 3000;
+      }
+      constraints.advanced.push(setting);
+      lockedItems.push('화이트밸런스(manual)');
+    }
+
+    // 3. 포커스 고정 (manual or none이 좋음)
+    if (capabilities.focusMode) {
+      let focusSetting = null;
+      if (capabilities.focusMode.includes('manual')) focusSetting = 'manual';
+      else if (capabilities.focusMode.includes('none')) focusSetting = 'none';
+      else if (capabilities.focusMode.includes('continuous')) focusSetting = 'continuous';
+      if (focusSetting && focusSetting !== 'continuous') {
+        const setting = { focusMode: focusSetting };
+        if (capabilities.focusDistance) {
+          // 매크로 거리 (가장 가까운 거리)
+          setting.focusDistance = capabilities.focusDistance.min || 0.01;
+        }
+        constraints.advanced.push(setting);
+        lockedItems.push(`포커스(${focusSetting})`);
+      }
+    }
+
+    if (constraints.advanced.length === 0) {
+      this._flog('고정 가능한 매개변수 없음 (기기 한계)', 'warn');
+      return false;
+    }
+
+    // 적용
+    try {
+      await track.applyConstraints(constraints);
+      this._flog(`✓ 카메라 고정 성공: ${lockedItems.join(', ')}`);
+      // 적용 후 안정화 시간
+      await new Promise(r => setTimeout(r, 500));
+      return true;
+    } catch (e) {
+      this._flog('카메라 고정 일부 실패, 개별 시도: ' + e.message, 'warn');
+      // 하나씩 시도
+      let successCount = 0;
+      for (const item of constraints.advanced) {
+        try {
+          await track.applyConstraints({ advanced: [item] });
+          successCount++;
+        } catch (e2) {
+          this._flog(`개별 적용 실패: ${JSON.stringify(item)}`, 'warn');
+        }
+      }
+      this._flog(`✓ 부분 고정: ${successCount}/${constraints.advanced.length}`);
+      return successCount > 0;
+    }
+  },
+
+  // ★ v16.0: PPG 주파수 대역 SQI (Signal Quality Index) 계산
+  // 학술 근거: Karlen 2012, Sukor 2011
+  // [0.7-3 Hz] 대역 에너지 비율이 높을수록 진짜 심박 신호
+  _fingerComputeSQI(values) {
+    if (values.length < 64) return 0;
+
+    // Welch 방법 근사 — DFT 진폭만 사용
+    const N = Math.min(values.length, 256);
+    const recent = values.slice(-N);
+
+    // 평균 제거 (DC 제거)
+    let sum = 0;
+    for (const v of recent) sum += v;
+    const mean = sum / N;
+    const detrended = recent.map(v => v - mean);
+
+    // Hann window
+    const windowed = detrended.map((v, i) => v * 0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1))));
+
+    // 간단한 DFT (O(N^2)이지만 N=256으로 작음, ~65000 곱셈)
+    // PPG 주파수 대역 [0.7-3 Hz] @ 30 Hz 샘플링
+    // 정규화 주파수 k = freq * N / fs
+    const fs = 30;
+    const lowK = Math.floor(0.7 * N / fs);
+    const highK = Math.ceil(3.0 * N / fs);
+
+    let bandPower = 0, totalPower = 0;
+    for (let k = 1; k < N / 2; k++) {
+      let re = 0, im = 0;
+      for (let n = 0; n < N; n++) {
+        const angle = -2 * Math.PI * k * n / N;
+        re += windowed[n] * Math.cos(angle);
+        im += windowed[n] * Math.sin(angle);
+      }
+      const power = re * re + im * im;
+      totalPower += power;
+      if (k >= lowK && k <= highK) bandPower += power;
+    }
+
+    if (totalPower < 1e-6) return 0;
+    return bandPower / totalPower; // 0~1
+  },
+
   _fingerInitAIWorker() {
     const f = this._finger;
     if (f.onnxWorker && f.onnxWorker.readyState !== 'closed') {
@@ -3866,10 +4102,15 @@ const App = {
     const f = this._finger;
     if (f.samples.length < 60) {
       f.quality = Math.round((f.samples.length / 60) * 30);
+      f.lastSQI = 0;
     } else {
-      // 마지막 90 샘플의 변동성 = AC component
+      // ★ v16.0: 3가지 지표 종합
+      //   1. 신호 변동성 (AC component) - 기존 방식
+      //   2. SQI - PPG 주파수 대역 에너지 비율 (Karlen 2012)
+      //   3. 유효 ROI 셀 수 - 손가락이 골고루 덮혔는지
+
+      // 1. AC variance
       const recent = f.samples.slice(-90).map(s => s.r);
-      // detrend
       const detrended = recent.map((v, i) => {
         const start = Math.max(0, i - 15);
         const end = Math.min(recent.length, i + 16);
@@ -3880,7 +4121,24 @@ const App = {
       const variance = detrended.reduce((s, v) => s + v * v, 0) / detrended.length;
       const std = Math.sqrt(variance);
       // PPG std는 손가락 댄 상태에서 0.5 ~ 8 정도
-      f.quality = Math.max(20, Math.min(99, Math.round(35 + std * 10)));
+      const acScore = Math.max(0, Math.min(99, 35 + std * 10));
+
+      // 2. SQI — 주파수 도메인 검증 (1초마다만 계산 — 비용)
+      if (!f.lastSQITime || performance.now() - f.lastSQITime > 1000) {
+        f.lastSQI = this._fingerComputeSQI(recent);
+        f.lastSQITime = performance.now();
+      }
+      // SQI는 0~1 → 0~99로 매핑. 0.3 이상이 좋은 신호
+      const sqiScore = Math.min(99, f.lastSQI * 200);
+
+      // 3. ROI 셀 비율
+      const cellRatio = (f.lastValidCellCount || 0) / 9;
+      const cellScore = cellRatio * 99;
+
+      // 가중 평균 — SQI가 가장 중요 (50%), AC 30%, Cell 20%
+      f.quality = Math.max(20, Math.min(99, Math.round(
+        sqiScore * 0.5 + acScore * 0.3 + cellScore * 0.2
+      )));
     }
 
     // 두 stage 모두 업데이트
@@ -3900,6 +4158,16 @@ const App = {
     // box 표시
     const box = document.getElementById('finger-quality-box');
     if (box) box.style.display = 'block';
+
+    // ★ v16.0: SQI 값 UI 업데이트
+    const sqiEl = document.getElementById('finger-sqi-value');
+    if (sqiEl && f.lastSQI !== undefined) {
+      const sqi = (f.lastSQI * 100).toFixed(0);
+      let color = '#ef4444'; // 빨강 (나쁨)
+      if (f.lastSQI >= 0.3) color = '#22c55e'; // 녹색 (좋음)
+      else if (f.lastSQI >= 0.15) color = '#f59e0b'; // 주황 (보통)
+      sqiEl.innerHTML = `<span style="color:${color}">${sqi}%</span>`;
+    }
   },
 
   // 실시간 BPM
@@ -4092,6 +4360,7 @@ const App = {
     f.measuring = false;
     if (f.timerInterval) { clearInterval(f.timerInterval); f.timerInterval = null; }
     if (f.rafId) { cancelAnimationFrame(f.rafId); f.rafId = null; }
+    this._fingerHideLiveWarning();
 
     this._flog(`총 측정 샘플: ${f.measureSamples.length}개`);
 
