@@ -1512,32 +1512,50 @@ const App = {
   },
 
   // === 뒤로가기 버튼 처리 (앱 종료 방지) ===
+  // ★ v15.9: 첫 진입 시 history 초기화 + 두 번 누르기 정확한 로직
   _setupBackButton() {
+    // 진입 시 home state를 history에 두 번 push (1번째: anchor, 2번째: 현재 페이지)
+    // 이렇게 하면 첫 뒤로가기에서 anchor로 가고, 두 번째에서만 떠남
+    if (!history.state) {
+      history.replaceState({ page: 'home', anchor: true }, '', '');
+      history.pushState({ page: 'home' }, '', '');
+    }
+
+    this._exitWarnUntil = 0; // 종료 경고 만료 시각
+
     window.addEventListener('popstate', (e) => {
       const state = e.state;
-      console.log('[Nav] popstate:', state);
-      if (!state || state.page === 'home') {
-        // 홈에서 뒤로 가면 종료 확인
-        if (this.state.page === 'home') {
-          // 다시 push (한 번 더 눌러야 종료)
-          history.pushState({ page: 'home' }, '', '');
-          this._toast('한 번 더 누르면 종료됩니다');
-          this._exitWarn = true;
-          setTimeout(() => { this._exitWarn = false; }, 2000);
-          if (this._exitWarn) {
-            // 이미 경고 후 다시 누름 → 그냥 두기 (브라우저가 떠남)
-          }
-        } else {
-          // 측정 페이지에서 뒤로 → 홈으로
-          this._goPageInternal('home');
+      console.log('[Nav] popstate:', state, 'current:', this.state.page);
+
+      // anchor 상태로 떨어졌으면 = 홈에서 뒤로 누른 상황
+      if (!state || state.anchor) {
+        const now = Date.now();
+        if (now < this._exitWarnUntil) {
+          // 2초 내 두 번째 누름 → 종료 허용
+          return;
         }
-      } else if (state.page === 'body' && this.state.page.startsWith('test-')) {
-        // 신체 측정 중 뒤로 → 신체 메뉴로
-        this.bodyStop();
-        this._goPageInternal('body');
-      } else {
-        this._goPageInternal(state.page);
+        // 첫 번째 누름 → 다시 push해서 막고 토스트 표시
+        history.pushState({ page: 'home' }, '', '');
+        this._toast('한 번 더 누르면 종료됩니다');
+        this._exitWarnUntil = now + 2000;
+        return;
       }
+
+      // 신체 측정 중이면 정지
+      if (this.state.body && this.state.body.running) {
+        this.bodyStop();
+      }
+      // 얼굴 측정 중이면 정지
+      if (this.state.face && this.state.face.running) {
+        this.faceStop();
+      }
+      // 손가락 측정 중이면 정지
+      if (this._finger && (this._finger.stream || this._finger.measuring)) {
+        this._fingerCleanup();
+      }
+
+      // state.page로 이동
+      this._goPageInternal(state.page || 'home');
     });
   },
 
@@ -1566,8 +1584,12 @@ const App = {
       this.bodyStop();
     }
     this._goPageInternal(page);
-    // 새 페이지를 history에 push (뒤로가기 시 이전 페이지로)
-    history.pushState({ page }, '', '');
+    // ★ v15.9: 새 페이지를 history에 push (현재 state가 다를 때만)
+    // 중복 push 방지 — 같은 페이지 연속 이동 시 history 폭증 막음
+    const cur = history.state;
+    if (!cur || cur.page !== page || cur.anchor) {
+      history.pushState({ page }, '', '');
+    }
   },
 
   _goPageInternal(page) {
@@ -3296,6 +3318,9 @@ const App = {
     f.stream = null;
     f.track = null;
     f.torchSupported = false;
+    // ★ v15.9: AI 워커는 유지 (다음 측정에 재사용) — terminate 안 함
+    // 단 샘플 버퍼는 비움
+    f.aiSamples = [];
     this._releaseWakeLock();
     this._speakStop();
   },
@@ -3640,6 +3665,10 @@ const App = {
           // 측정 중이면 측정 샘플에도 추가
           if (f.stage === 'measuring' && f.measuring) {
             f.measureSamples.push({ t: performance.now(), r: rMean });
+            // ★ v15.9: 측정 중 AI 워커에도 프레임 전송 (15 FPS 정도로 충분)
+            if (f.measureSamples.length % 2 === 0) {
+              this._fingerSendToAI(video, video.videoWidth, video.videoHeight);
+            }
           }
 
           // 신호 품질 + 실시간 BPM
@@ -3713,7 +3742,11 @@ const App = {
     f.stage = 'measuring';
     f.measuring = true;
     f.measureSamples = [];
+    f.aiSamples = [];  // ★ v15.9: AI 워커 출력 PPG 신호
     f.measureStartTime = performance.now();
+
+    // ★ v15.9: ME-rPPG 워커 초기화 (얼굴 측정과 공유)
+    this._fingerInitAIWorker();
 
     // 파형 캔버스 (Stage 2)
     f.waveCanvas2 = document.getElementById('finger-wave-canvas-2');
@@ -3723,6 +3756,89 @@ const App = {
     this._fingerStartTimer();
 
     this._speak('측정을 시작합니다. 30초간 손가락을 그대로 유지하세요.');
+  },
+
+  // ★ v15.9: ME-rPPG 워커 초기화 (얼굴 측정 워커 재사용)
+  _fingerInitAIWorker() {
+    const f = this._finger;
+    if (f.onnxWorker && f.onnxWorker.readyState !== 'closed') {
+      // 기존 워커 재사용
+      this._flog('AI 워커 재사용');
+      return;
+    }
+    try {
+      this._flog('ME-rPPG AI 워커 생성');
+      f.onnxWorker = new Worker('me-rppg/onnxWorker.js');
+      f.aiModelReady = false;
+      f.aiStateReady = false;
+      f.aiSamples = [];
+
+      f.onnxWorker.onmessage = (e) => {
+        const msg = e.data;
+        if (msg.type === 'ready') {
+          if (msg.which === 'model') {
+            f.aiModelReady = true;
+            this._flog('✓ AI 모델 준비 완료');
+          } else if (msg.which === 'state') {
+            f.aiStateReady = true;
+            this._flog('✓ AI 상태 준비 완료');
+          }
+        } else if (msg.type === 'data') {
+          // PPG 신호 1개 값 — AI 출력 누적
+          if (typeof msg.output === 'number' && isFinite(msg.output)) {
+            f.aiSamples.push({ t: msg.timestamp || performance.now(), v: msg.output });
+            if (f.aiSamples.length > 2400) f.aiSamples = f.aiSamples.slice(-2400);
+          }
+        } else if (msg.type === 'error') {
+          this._flog(`AI 워커 오류 (${msg.which}): ${msg.error}`, 'error');
+        }
+      };
+
+      f.onnxWorker.onerror = (e) => {
+        this._flog('AI 워커 에러: ' + e.message, 'error');
+        f.aiWorkerFailed = true;
+      };
+    } catch (e) {
+      this._flog('AI 워커 초기화 실패: ' + e.message, 'error');
+      f.aiWorkerFailed = true;
+    }
+  },
+
+  // ★ v15.9: 손가락 ROI를 36x36 RGB Float32로 변환 후 AI 워커에 전송
+  _fingerSendToAI(video, vw, vh) {
+    const f = this._finger;
+    if (!f.onnxWorker || !f.aiModelReady || !f.aiStateReady || f.aiWorkerFailed) return;
+
+    try {
+      // 중앙 ROI 추출 후 36x36으로 리사이즈
+      if (!f._aiCanvas) {
+        f._aiCanvas = document.createElement('canvas');
+        f._aiCanvas.width = 36;
+        f._aiCanvas.height = 36;
+        f._aiCtx = f._aiCanvas.getContext('2d');
+      }
+      const cropSize = Math.min(vw, vh) * 0.5;
+      const sx = (vw - cropSize) / 2;
+      const sy = (vh - cropSize) / 2;
+      f._aiCtx.drawImage(video, sx, sy, cropSize, cropSize, 0, 0, 36, 36);
+
+      const data = f._aiCtx.getImageData(0, 0, 36, 36).data;
+      const input = new Float32Array(36 * 36 * 3);
+      for (let i = 0; i < data.length; i += 4) {
+        const idx = i / 4;
+        input[idx * 3]     = data[i]   / 255;
+        input[idx * 3 + 1] = data[i+1] / 255;
+        input[idx * 3 + 2] = data[i+2] / 255;
+      }
+
+      f.onnxWorker.postMessage({
+        input,
+        timestamp: performance.now(),
+        lambda: 1,
+      });
+    } catch (e) {
+      this._flog('AI 입력 전송 오류: ' + e.message, 'warn');
+    }
   },
 
   _fingerStartTimer() {
@@ -4002,8 +4118,61 @@ const App = {
       };
     }
 
+    // ★ v15.9: AI 신호와 고전 신호 모두 분석 후 더 좋은 것 채택
+    const aiAvailable = f.aiSamples && f.aiSamples.length >= 100;
+    this._flog(`AI 신호 사용 가능: ${aiAvailable ? '✓ (' + f.aiSamples.length + '개)' : '✗'}`);
+
+    // 1) 고전 분석
+    const classical = this._fingerAnalyzeFromSignal(samples, 'r', 'classical');
+
+    // 2) AI 분석 (있으면)
+    let aiResult = null;
+    if (aiAvailable) {
+      // AI 출력을 samples 형식으로 변환 (음수→양수 부호 처리, 정규화)
+      const aiNorm = f.aiSamples.map(s => ({ t: s.t, r: s.v * 100 + 128 })); // 시각 일관성용 변환
+      aiResult = this._fingerAnalyzeFromSignal(aiNorm, 'r', 'ai');
+      if (aiResult.ok) {
+        this._flog(`✓ AI 분석: HR=${aiResult.hr} clean=${aiResult.ibiCount}/${aiResult.totalPeaks} (${aiResult.cleanRate}%)`);
+      } else {
+        this._flog(`AI 분석 실패: ${aiResult.reason}`, 'warn');
+      }
+    }
+
+    // 3) 더 좋은 결과 채택 (clean rate + ibiCount 종합)
+    let chosen = classical;
+    let signalSource = 'classical';
+    if (aiResult && aiResult.ok) {
+      const classicalScore = classical.ok ? (classical.ibiCount * (classical.cleanRate / 100)) : 0;
+      const aiScore = aiResult.ibiCount * (aiResult.cleanRate / 100);
+      if (aiScore > classicalScore * 1.2) {
+        // AI가 명확히 더 좋을 때만 (20% 이상 개선)
+        chosen = aiResult;
+        signalSource = 'ai';
+        this._flog(`✓ AI 분석 채택 (점수: ${aiScore.toFixed(1)} vs 고전 ${classicalScore.toFixed(1)})`);
+      } else if (classical.ok) {
+        this._flog(`고전 분석 유지 (점수: 고전 ${classicalScore.toFixed(1)} vs AI ${aiScore.toFixed(1)})`);
+      } else {
+        chosen = aiResult;
+        signalSource = 'ai';
+        this._flog('고전 분석 실패 → AI 분석 채택');
+      }
+    }
+
+    if (chosen.ok) {
+      chosen.signalSource = signalSource;
+    }
+    return chosen;
+  },
+
+  // ★ v15.9: 신호 → HR/HRV 계산 (재사용 가능)
+  _fingerAnalyzeFromSignal(samples, key, sourceLabel) {
+    const f = this._finger;
+
+    if (samples.length < 100) {
+      return { ok: false, reason: `샘플 부족 (${samples.length}개)`, sampleCount: samples.length };
+    }
+
     const peaks = this._fingerDetectPeaks(samples);
-    this._flog(`Peak 검출: ${peaks.length}개`);
 
     if (peaks.length < 10) {
       return {
@@ -4020,7 +4189,6 @@ const App = {
       const dt = samples[peaks[i]].t - samples[peaks[i - 1]].t;
       allIBI.push(dt);
     }
-    this._flog(`전체 IBI: ${allIBI.length}개, 범위 ${Math.min(...allIBI).toFixed(0)}~${Math.max(...allIBI).toFixed(0)}ms`);
 
     // Kubios outlier 제거
     const cleanIBI = [];
@@ -4033,7 +4201,6 @@ const App = {
       }
       cleanIBI.push(ibi);
     }
-    this._flog(`Clean IBI: ${cleanIBI.length}개 (채택률 ${Math.round(cleanIBI.length/allIBI.length*100)}%)`);
 
     if (cleanIBI.length < 8) {
       return {
@@ -4072,10 +4239,52 @@ const App = {
     else if (rmssd > 15) { stressLevel = 4; stressLabel = '긴장'; }
     else { stressLevel = 5; stressLabel = '높은 스트레스'; }
 
+    // ★ v15.9: Baevsky Stress Index 추가 (학술 표준)
+    // SI = AMo / (2 × Mo × MxDMn)
+    // Mo = 가장 빈번한 IBI 구간 (mode)
+    // AMo = Mo 빈도 (%) — 50ms bin
+    // MxDMn = IBI 최대값 - 최소값 (변동성)
+    //
+    // 일반적 해석 (Baevsky 1997):
+    //   < 50    : 매우 낮음 (이상적 자율신경 균형)
+    //   50-150  : 정상 범위
+    //   150-500 : 가벼운 스트레스 (긴장 상태)
+    //   500-900 : 중등도 스트레스 (교감신경 우세)
+    //   > 900   : 심한 스트레스 (만성 긴장)
+    let stressIndex = 0;
+    let stressIndexLabel = '정상';
+    try {
+      // Mode 계산 (50ms bin)
+      const histogram = {};
+      for (const ibi of cleanIBI) {
+        const bin = Math.round(ibi / 50) * 50;
+        histogram[bin] = (histogram[bin] || 0) + 1;
+      }
+      let modeBin = 0, modeCount = 0;
+      for (const [bin, cnt] of Object.entries(histogram)) {
+        if (cnt > modeCount) { modeCount = cnt; modeBin = +bin; }
+      }
+      const mo = modeBin / 1000; // seconds
+      const amo = (modeCount / cleanIBI.length) * 100;
+      const mxdmn = (Math.max(...cleanIBI) - Math.min(...cleanIBI)) / 1000; // s
+      if (mo > 0 && mxdmn > 0) {
+        stressIndex = Math.round(amo / (2 * mo * mxdmn));
+      }
+      stressIndex = Math.max(0, Math.min(2000, stressIndex));
+
+      if (stressIndex < 50) stressIndexLabel = '매우 낮음 (이상적)';
+      else if (stressIndex < 150) stressIndexLabel = '정상 범위';
+      else if (stressIndex < 500) stressIndexLabel = '가벼운 긴장';
+      else if (stressIndex < 900) stressIndexLabel = '중등도 스트레스';
+      else stressIndexLabel = '심한 스트레스';
+    } catch (e) {
+      this._flog('Stress Index 계산 실패: ' + e.message, 'warn');
+    }
+
     const recoveryRate = cleanIBI.length / Math.max(allIBI.length, 1);
     const signalQuality = Math.round(Math.min(99, f.quality * 0.5 + recoveryRate * 50));
 
-    this._flog(`✓ 분석 완료: HR=${hr} RMSSD=${rmssd.toFixed(1)} SDNN=${sdnn.toFixed(1)} pNN50=${pNN50.toFixed(1)}`);
+    this._flog(`✓ [${sourceLabel}] 분석: HR=${hr} RMSSD=${rmssd.toFixed(1)} SDNN=${sdnn.toFixed(1)} pNN50=${pNN50.toFixed(1)} SI=${stressIndex} clean=${cleanIBI.length}/${allIBI.length}`);
 
     return {
       ok: true,
@@ -4083,6 +4292,7 @@ const App = {
       sdnn: Math.round(sdnn * 10) / 10,
       pNN50: Math.round(pNN50 * 10) / 10,
       stressLevel, stressLabel,
+      stressIndex, stressIndexLabel, // ★ v15.9
       meanIBI: Math.round(meanIBI),
       ibiCount: cleanIBI.length,
       totalPeaks: peaks.length,
@@ -4152,48 +4362,125 @@ const App = {
                   : result.rmssd > rmssdRef.mean - rmssdRef.sd ? '평균 수준'
                   : '평균보다 낮음';
 
+    // ★ v15.9: 각 수치별 의미 해석 멘트
+    const hrInterp = result.hr < 50 ? '서맥 - 운동선수이거나 미주신경 우세' :
+                     result.hr <= 70 ? '안정적인 휴식기 심박수' :
+                     result.hr <= 85 ? '정상 범위 (평소 수준)' :
+                     result.hr <= 100 ? '약간 빠름 - 카페인·긴장 가능' :
+                                       '빠름 - 휴식이 필요해요';
+
+    const rmssdInterp = result.rmssd < 15 ? '낮음 - 스트레스 또는 피로 신호' :
+                        result.rmssd < 25 ? '평균 이하 - 회복이 필요해요' :
+                        result.rmssd < 40 ? '정상 범위' :
+                        result.rmssd < 60 ? '양호 - 자율신경 건강' :
+                                            '매우 높음 - 깊은 이완 상태';
+
+    const sdnnInterp = result.sdnn < 30 ? '낮음 - 자율신경 활동 둔화' :
+                       result.sdnn < 50 ? '평균 - 일반적 수준' :
+                       result.sdnn < 100 ? '양호 - 균형잡힌 신경계' :
+                                           '높음 - 강한 자율신경 적응력';
+
+    const pNN50Interp = result.pNN50 < 3 ? '낮음 - 부교감신경 활동 부족' :
+                        result.pNN50 < 10 ? '평균 - 보통 수준' :
+                        result.pNN50 < 25 ? '양호 - 좋은 회복력' :
+                                            '높음 - 매우 좋은 부교감 활성';
+
+    // 스트레스 지수 색상
+    const siColor = result.stressIndex < 50 ? '#22c55e' :
+                    result.stressIndex < 150 ? '#3b82f6' :
+                    result.stressIndex < 500 ? '#f59e0b' :
+                    result.stressIndex < 900 ? '#ef4444' : '#991b1b';
+
+    // 종합 회복력 점수 멘트
+    const scoreInterp = result.score >= 80 ? '훌륭한 자율신경 회복력입니다. 현재 컨디션이 매우 좋습니다.' :
+                        result.score >= 65 ? '양호한 회복 상태입니다. 자율신경 균형이 잘 잡혀있어요.' :
+                        result.score >= 50 ? '평균 수준입니다. 충분한 수면과 가벼운 운동을 추천해요.' :
+                        result.score >= 35 ? '회복이 필요한 상태입니다. 휴식과 스트레스 관리에 신경 써주세요.' :
+                                              '자율신경이 많이 지쳐있어요. 충분한 휴식이 필요합니다.';
+
     container.innerHTML = `
       <div class="finger-result-card">
         <div class="finger-result-header">
-          <div class="finger-result-badge">✓ CLINICAL GRADE</div>
+          <div class="finger-result-badge">${result.signalSource === 'ai' ? '🤖 AI ENHANCED' : '✓ CLINICAL GRADE'}</div>
           <div class="finger-result-quality">신호 품질 ${result.signalQuality}%</div>
         </div>
+
         <div class="finger-result-main">
           <div class="finger-score-circle" style="color: ${getColor(result.score)}">
             <div class="fsc-num">${result.score}</div>
             <div class="fsc-max">/100</div>
           </div>
           <div class="finger-score-label">정신·신체 회복력 점수</div>
+          <!-- v15.9: 종합 점수 멘트 -->
+          <div class="finger-score-msg">${scoreInterp}</div>
         </div>
+
+        <!-- v15.9: 4가지 핵심 수치 + 각각 의미 멘트 -->
         <div class="finger-stats-grid">
           <div class="finger-stat">
             <div class="fs-icon">❤️</div>
             <div class="fs-label">심박수</div>
             <div class="fs-value">${result.hr}<span class="fs-unit">BPM</span></div>
+            <div class="fs-msg">${hrInterp}</div>
           </div>
           <div class="finger-stat highlight">
             <div class="fs-icon">📊</div>
             <div class="fs-label">RMSSD (HRV)</div>
             <div class="fs-value">${result.rmssd}<span class="fs-unit">ms</span></div>
+            <div class="fs-msg">${rmssdInterp}</div>
           </div>
           <div class="finger-stat">
             <div class="fs-icon">📈</div>
             <div class="fs-label">SDNN</div>
             <div class="fs-value">${result.sdnn}<span class="fs-unit">ms</span></div>
+            <div class="fs-msg">${sdnnInterp}</div>
           </div>
           <div class="finger-stat">
             <div class="fs-icon">⚡</div>
             <div class="fs-label">pNN50</div>
             <div class="fs-value">${result.pNN50}<span class="fs-unit">%</span></div>
+            <div class="fs-msg">${pNN50Interp}</div>
           </div>
         </div>
+
+        <!-- v15.9: 스트레스 지수 (Baevsky SI) — 핵심 신규 카드 -->
+        <div class="finger-si-card">
+          <div class="fsi-header">
+            <span class="fsi-icon">🌡️</span>
+            <span class="fsi-title">스트레스 지수 (Baevsky SI)</span>
+            <span class="fsi-info" title="러시아 우주의학에서 유래한 자율신경 균형 표준 지표">ℹ️</span>
+          </div>
+          <div class="fsi-main">
+            <div class="fsi-value" style="color: ${siColor}">${result.stressIndex}</div>
+            <div class="fsi-label" style="color: ${siColor}">${result.stressIndexLabel}</div>
+          </div>
+          <!-- 5단계 시각화 -->
+          <div class="fsi-scale">
+            <div class="fsi-track">
+              <div class="fsi-marker" style="left: ${Math.min(98, Math.max(2, (Math.log10(result.stressIndex + 10) / Math.log10(2010)) * 100))}%; background: ${siColor}"></div>
+            </div>
+            <div class="fsi-labels">
+              <span>50</span><span>150</span><span>500</span><span>900</span><span>2000</span>
+            </div>
+          </div>
+          <div class="fsi-desc">
+            ${result.stressIndex < 50 ? '🌿 매우 이완된 상태로 자율신경이 이상적으로 균형잡혀 있어요.' :
+              result.stressIndex < 150 ? '✨ 정상 범위입니다. 자율신경이 잘 작동하고 있어요.' :
+              result.stressIndex < 500 ? '⚠️ 가벼운 긴장 상태예요. 잠시 휴식이나 호흡을 권장합니다.' :
+              result.stressIndex < 900 ? '🔥 중등도 스트레스입니다. 충분한 휴식과 명상을 권합니다.' :
+                                          '🚨 심한 스트레스 상태예요. 깊은 휴식이 꼭 필요합니다.'}
+          </div>
+        </div>
+
+        <!-- 자율신경 톤 (기존) -->
         <div class="finger-stress-card lv-${result.stressLevel}">
-          <div class="fsc-title">🧘 자율신경 상태</div>
+          <div class="fsc-title">🧘 자율신경 톤 (RMSSD 기반)</div>
           <div class="fsc-level">${result.stressLabel}</div>
           <div class="fsc-bar">
             ${[1,2,3,4,5].map(i => `<div class="fsc-dot ${i <= result.stressLevel ? 'on' : ''}"></div>`).join('')}
           </div>
         </div>
+
         <div class="finger-compare-result">
           <div class="fcr-title">📊 또래 비교 (${ageMsg})</div>
           <div class="fcr-row">
@@ -4204,11 +4491,13 @@ const App = {
             ${profile.age ? `또래 평균: ${rmssdRef.mean}ms (±${rmssdRef.sd})` : '학술 baseline: 35ms (±18)'}
           </div>
         </div>
+
         <div class="finger-meta">
           <div class="fm-row"><span>유효 심박 신호</span><span>${result.ibiCount}개 (전체 ${result.totalPeaks}개 중)</span></div>
           <div class="fm-row"><span>신호 채택률</span><span>${result.cleanRate}%</span></div>
           <div class="fm-row"><span>평균 IBI</span><span>${result.meanIBI}ms</span></div>
         </div>
+
         <div class="finger-disclaimer">
           ⚠️ 이 측정은 의료 진단이 아닌 건강 참고용입니다.
         </div>
@@ -4222,6 +4511,8 @@ const App = {
     this._wellnessSave('finger', {
       hr: result.hr, rmssd: result.rmssd, sdnn: result.sdnn, pNN50: result.pNN50,
       stressLevel: result.stressLevel, signalQuality: result.signalQuality,
+      stressIndex: result.stressIndex, // ★ v15.9
+      stressIndexLabel: result.stressIndexLabel,
       score: result.score, ageAtMeasure: profile.age,
     });
 

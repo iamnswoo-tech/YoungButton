@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v15.8",
-  "short_name": "건강측정 v15.8",
-  "description": "v15.8 — 3중 토치 전략 + 스트림 재사용 + Butterworth 필터",
+  "name": "건강 측정 v15.9",
+  "short_name": "건강측정 v15.9",
+  "description": "v15.9 — 스트레스 지수 + AI 보강 + 결과 멘트 + 뒤로가기 수정",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

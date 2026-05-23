@@ -4436,6 +4436,40 @@ body::before {
   font-weight: 900;
 }
 
+/* ★ v15.9: AI 모델 안내 카드 */
+.finger-ai-card {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  border: 1px solid #c4b5fd;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  position: relative;
+}
+.finger-ai-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 3px 9px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+  letter-spacing: .03em;
+}
+.finger-ai-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #5b21b6;
+  margin-bottom: 6px;
+  letter-spacing: -.01em;
+}
+.finger-ai-body {
+  font-size: 12px;
+  color: #6d28d9;
+  line-height: 1.6;
+  font-weight: 600;
+}
+
 .finger-start-btn {
   width: 100%;
   padding: 18px;
@@ -4734,6 +4768,121 @@ body::before {
   color: var(--text3);
   font-weight: 700;
   margin-left: 2px;
+}
+
+/* ★ v15.9: 각 수치 밑에 의미 멘트 */
+.fs-msg {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text2);
+  margin-top: 6px;
+  line-height: 1.4;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(239, 68, 68, .15);
+}
+.finger-stat.highlight .fs-msg {
+  color: #991b1b;
+  border-top-color: rgba(239, 68, 68, .25);
+}
+
+/* ★ v15.9: 종합 점수 멘트 */
+.finger-score-msg {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.6;
+  padding: 12px 16px;
+  margin-top: 12px;
+  background: rgba(255, 255, 255, .65);
+  border-radius: 12px;
+  border-left: 3px solid #ef4444;
+  text-align: left;
+}
+
+/* ★ v15.9: 스트레스 지수 카드 (Baevsky SI) */
+.finger-si-card {
+  background: linear-gradient(135deg, #fff 0%, #fef9f3 100%);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1.5px solid rgba(239, 68, 68, .15);
+  box-shadow: 0 2px 10px rgba(239, 68, 68, .08);
+}
+.fsi-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+}
+.fsi-icon { font-size: 18px; }
+.fsi-title { flex: 1; letter-spacing: -.01em; }
+.fsi-info {
+  font-size: 12px;
+  color: var(--text3);
+  cursor: help;
+}
+
+.fsi-main {
+  text-align: center;
+  margin-bottom: 14px;
+}
+.fsi-value {
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
+}
+.fsi-label {
+  font-size: 13px;
+  font-weight: 800;
+  margin-top: 4px;
+  letter-spacing: -.01em;
+}
+
+.fsi-scale {
+  margin-bottom: 12px;
+}
+.fsi-track {
+  position: relative;
+  height: 8px;
+  background: linear-gradient(90deg, #22c55e 0%, #3b82f6 7.5%, #f59e0b 25%, #ef4444 45%, #991b1b 100%);
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+.fsi-marker {
+  position: absolute;
+  top: -3px;
+  width: 4px;
+  height: 14px;
+  background: #fff;
+  border: 2px solid;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  transition: left .8s cubic-bezier(.2,.6,.3,1);
+}
+.fsi-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text3);
+  font-variant-numeric: tabular-nums;
+}
+
+.fsi-desc {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.5;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, .6);
+  border-radius: 10px;
+  letter-spacing: -.01em;
 }
 
 .finger-stress-card {
@@ -6599,7 +6748,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.8 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v15.9 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -7290,7 +7439,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v15.8</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v15.9</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>
@@ -7358,6 +7507,17 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
         일부 기기는 브라우저에서 플래시 제어가 안 됩니다.<br>
         <strong>화면 상단을 아래로 쓸어내려 ⚡손전등 아이콘을 직접 켜두세요.</strong><br>
         그 상태에서 측정하면 정상 작동합니다.
+      </div>
+    </div>
+
+    <!-- ★ v15.9: AI 모델 보강 안내 -->
+    <div class="finger-ai-card">
+      <div class="finger-ai-badge">🤖 ME-rPPG AI</div>
+      <div class="finger-ai-title">AI 신경망이 신호를 강화합니다</div>
+      <div class="finger-ai-body">
+        State Space Duality 신경망(2.4MB)이 픽셀 노이즈를 제거하고
+        깨끗한 PPG 신호를 추출해 측정 정확도를 높여줍니다.<br>
+        <small style="opacity: 0.85">자연광에서도 안정적으로 작동</small>
       </div>
     </div>
 
