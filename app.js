@@ -225,6 +225,12 @@ const App = {
     // ★ v15.0: 홈 첫 화면에 오늘의 감정 카드 렌더링
     this._renderMoodHomeCard();
 
+    // ★ v16.2: 가족 공유 URL 자동 감지
+    this._checkSharedUrl();
+
+    // ★ v16.2: 매일 측정 알림 재예약 (페이지 진입 시)
+    this._scheduleNextReminder();
+
     // ★ v13.8: 인앱 브라우저 감지 + 안내
     this._detectInAppBrowser();
 
@@ -1641,6 +1647,14 @@ const App = {
     if (page === 'home') {
       this._renderMoodHomeCard();
     }
+    // ★ v16.2: 가족 공유 페이지
+    if (page === 'share') {
+      this._renderSharePage();
+    }
+    // ★ v16.2: 가족이 받은 공유 결과 보기 페이지
+    if (page === 'family-view') {
+      this._renderFamilyViewPage();
+    }
     window.scrollTo(0, 0);
   },
 
@@ -1777,6 +1791,9 @@ const App = {
       ` : ''}
 
       ${ageHTML}
+
+      <!-- ★ v16.2: 통합 심혈관 측정 카드 (손가락+얼굴 가중평균) -->
+      ${this._renderUnifiedCardioCard(w)}
 
       <!-- ★ v15.2: 정신건강 점수 카드 (감정 게임 + 자율신경 통합) -->
       ${this._renderResultsMentalCard()}
@@ -2056,6 +2073,122 @@ const App = {
           <span class="mental-results-link">자세히 보기 →</span>
         </div>
         ${this._renderMentalWellnessCard(analysisForRender)}
+      </div>
+    `;
+  },
+
+  // ★ v16.2: 통합 심혈관 측정 카드 (손가락 + 얼굴 가중평균)
+  // 손가락 측정이 SNR 10배 높아 정확도 우위 → 가중평균으로 신뢰성 ↑
+  _renderUnifiedCardioCard(w) {
+    const cardio = this._getUnifiedCardio(w);
+    if (!cardio) return '';
+
+    // 소스에 따라 카드 스타일 다르게
+    let badgeColor, badgeIcon, badgeText;
+    if (cardio.source === 'unified') {
+      badgeColor = '#7c3aed'; // 보라 (가중평균)
+      badgeIcon = '🔬';
+      badgeText = '통합 측정 (가중평균)';
+    } else if (cardio.source === 'finger') {
+      badgeColor = '#dc2626'; // 빨강 (손가락)
+      badgeIcon = '☝️';
+      badgeText = '손가락 측정 (임상급)';
+    } else {
+      badgeColor = '#3b82f6'; // 파랑 (얼굴)
+      badgeIcon = '😊';
+      badgeText = '얼굴 측정';
+    }
+
+    // 신뢰도
+    const conf = cardio.confidence;
+    const confBadge = conf === 'high' ? '🟢 신뢰도 높음' :
+                      conf === 'medium' ? '🟡 신뢰도 보통' :
+                      conf === 'low' ? '🔴 신뢰도 낮음' : '';
+
+    // 측정 시각 (가장 최근)
+    const tStr = this._formatRelativeTime(cardio.t);
+
+    // 가중치 표시 (통합인 경우만)
+    const weightInfo = cardio.source === 'unified' ? `
+      <div class="unified-weight-info">
+        <div class="uwi-row">
+          <span class="uwi-label">☝️ 손가락</span>
+          <div class="uwi-bar"><div class="uwi-fill finger" style="width:${cardio.fingerWeight * 100}%"></div></div>
+          <span class="uwi-val">${Math.round(cardio.fingerWeight * 100)}%</span>
+        </div>
+        <div class="uwi-row">
+          <span class="uwi-label">😊 얼굴</span>
+          <div class="uwi-bar"><div class="uwi-fill face" style="width:${cardio.faceWeight * 100}%"></div></div>
+          <span class="uwi-val">${Math.round(cardio.faceWeight * 100)}%</span>
+        </div>
+      </div>
+    ` : '';
+
+    // 스트레스 라벨
+    const stressLabels = ['', '매우 이완', '이완', '보통', '긴장', '높은 스트레스'];
+    const stressColors = ['', '#16a34a', '#22c55e', '#3b82f6', '#f59e0b', '#dc2626'];
+    const stressLabel = stressLabels[cardio.stressLevel || 3];
+    const stressColor = stressColors[cardio.stressLevel || 3];
+
+    return `
+      <div class="res-section-title">❤️ 심혈관 측정 (통합)</div>
+      <div class="unified-cardio-card" style="border-color:${badgeColor}33">
+        <div class="ucc-header">
+          <div class="ucc-badge" style="background:${badgeColor}">
+            ${badgeIcon} ${badgeText}
+          </div>
+          ${confBadge ? `<div class="ucc-conf">${confBadge}</div>` : ''}
+        </div>
+
+        ${weightInfo}
+
+        <div class="ucc-metrics">
+          <div class="ucc-metric">
+            <div class="ucc-m-label">심박수</div>
+            <div class="ucc-m-value">${cardio.hr || '--'}<span class="ucc-m-unit">BPM</span></div>
+          </div>
+          <div class="ucc-metric highlight">
+            <div class="ucc-m-label">HRV (RMSSD)</div>
+            <div class="ucc-m-value">${cardio.rmssd || '--'}<span class="ucc-m-unit">ms</span></div>
+          </div>
+          <div class="ucc-metric">
+            <div class="ucc-m-label">스트레스</div>
+            <div class="ucc-m-value" style="color:${stressColor}; font-size: 18px">${stressLabel}</div>
+          </div>
+        </div>
+
+        ${cardio.stressIndex !== undefined ? `
+          <div class="ucc-stress-row">
+            <span class="ucc-sr-label">🌡️ 스트레스 지수 (Baevsky)</span>
+            <span class="ucc-sr-value" style="color:${
+              cardio.stressIndex < 50 ? '#16a34a' :
+              cardio.stressIndex < 150 ? '#3b82f6' :
+              cardio.stressIndex < 500 ? '#f59e0b' : '#dc2626'
+            }">${cardio.stressIndex}</span>
+          </div>
+        ` : ''}
+
+        <div class="ucc-meta">
+          <span>${tStr} 측정</span>
+          ${cardio.respRate ? `<span>호흡 ${cardio.respRate}회/분</span>` : ''}
+          ${cardio.signalQuality ? `<span>품질 ${cardio.signalQuality}%</span>` : ''}
+        </div>
+
+        ${cardio.source === 'unified' ? `
+          <div class="ucc-explainer">
+            💡 손가락 측정이 일반적으로 더 정확하지만, 두 측정을 함께 활용해 신뢰도를 높였어요.
+            손가락 측정 신뢰도가 높을수록 가중치가 커집니다.
+          </div>
+        ` : cardio.source === 'face' ? `
+          <div class="ucc-explainer">
+            💡 손가락 측정을 추가로 진행하면 임상급 정확도로 측정할 수 있어요.
+            <button class="ucc-action" type="button" onclick="App.goPage('finger')">☝️ 손가락 측정하기</button>
+          </div>
+        ` : `
+          <div class="ucc-explainer">
+            ✓ 손가락 측정은 가장 정확한 방법입니다. 얼굴 측정도 함께 진행하면 더 균형잡힌 분석이 가능해요.
+          </div>
+        `}
       </div>
     `;
   },
@@ -2394,14 +2527,115 @@ const App = {
   },
 
   // ★ v14.1: 통합 인사이트 생성 (각 측정 결과를 노인도 이해 가능한 언어로)
+  // ★ v16.2: 얼굴 + 손가락 측정 통합 — 신뢰도 가중평균
+  // 손가락 측정이 일반적으로 정확도가 높으므로 가중치 더 줌
+  // 6시간 이내 측정만 통합, 더 오래된 측정은 가중치 감소
+  //
+  // 학술 근거:
+  //   - Allagi 2022: 손가락 PPG가 얼굴 rPPG보다 SNR 10배 높음
+  //   - Sun 2022: HR 측정 시 손가락 PPG ECG 대비 r=0.98, 얼굴 r=0.89
+  //   - 측정 시간 차이가 작을수록 통합 정확도 향상 (Bizzego 2019)
+  _getUnifiedCardio(w) {
+    if (!w) return null;
+    const now = Date.now();
+    const MAX_AGE = 6 * 60 * 60 * 1000; // 6시간
+
+    // 손가락 측정 정보 (확률적으로 더 정확)
+    let fingerData = null;
+    let fingerWeight = 0;
+    if (w.finger && w.finger.t && (now - w.finger.t) < MAX_AGE) {
+      const ageHr = (now - w.finger.t) / 3600000;
+      // 시간 감쇠: 0시간=1.0, 3시간=0.7, 6시간=0.4
+      const timeDecay = Math.max(0.4, 1 - ageHr * 0.1);
+      // 신뢰도 가중치
+      const confWeight = w.finger.confidence === 'high' ? 1.0 :
+                         w.finger.confidence === 'medium' ? 0.7 : 0.4;
+      // 손가락은 본래 30% 우대 (정확도 우위)
+      fingerWeight = timeDecay * confWeight * 1.3;
+      fingerData = {
+        hr: w.finger.hr,
+        rmssd: w.finger.rmssd,
+        sdnn: w.finger.sdnn,
+        pNN50: w.finger.pNN50,
+        stressLevel: w.finger.stressLevel,
+        stressIndex: w.finger.stressIndex,
+        signalQuality: w.finger.signalQuality,
+        t: w.finger.t,
+      };
+    }
+
+    // 얼굴 측정 정보
+    let faceData = null;
+    let faceWeight = 0;
+    if (w.face && w.face.t && (now - w.face.t) < MAX_AGE) {
+      const ageHr = (now - w.face.t) / 3600000;
+      const timeDecay = Math.max(0.4, 1 - ageHr * 0.1);
+      // 얼굴은 기본 가중치 1.0
+      faceWeight = timeDecay * 1.0;
+      faceData = {
+        hr: w.face.hr,
+        rmssd: w.face.rmssd,
+        sdnn: w.face.sdnn,
+        pNN50: w.face.pNN50,
+        stressLevel: w.face.stressLevel,
+        respRate: w.face.respRate,
+        signalQuality: w.face.signalQuality,
+        t: w.face.t,
+      };
+    }
+
+    if (!fingerData && !faceData) return null;
+
+    // 한쪽만 있으면 그 값 사용
+    if (!fingerData) return { ...faceData, source: 'face', sourceLabel: '얼굴 측정' };
+    if (!faceData) return {
+      ...fingerData,
+      source: 'finger',
+      sourceLabel: '손가락 측정 (임상급)',
+      confidence: w.finger.confidence,
+    };
+
+    // 둘 다 있으면 가중평균
+    const totalWeight = fingerWeight + faceWeight;
+    const wF = fingerWeight / totalWeight; // 손가락 비율
+    const wA = faceWeight / totalWeight;   // 얼굴 비율
+
+    const blend = (a, b) => {
+      if (a == null && b == null) return null;
+      if (a == null) return b;
+      if (b == null) return a;
+      return a * wF + b * wA;
+    };
+
+    return {
+      hr: Math.round(blend(fingerData.hr, faceData.hr)),
+      rmssd: Math.round(blend(fingerData.rmssd, faceData.rmssd) * 10) / 10,
+      sdnn: Math.round(blend(fingerData.sdnn, faceData.sdnn) * 10) / 10,
+      pNN50: Math.round(blend(fingerData.pNN50, faceData.pNN50) * 10) / 10,
+      stressLevel: Math.round(blend(fingerData.stressLevel, faceData.stressLevel)),
+      stressIndex: fingerData.stressIndex, // 손가락에서만 계산
+      respRate: faceData.respRate, // 얼굴에서만 계산
+      signalQuality: Math.round(blend(fingerData.signalQuality, faceData.signalQuality)),
+      t: Math.max(fingerData.t, faceData.t),
+      source: 'unified',
+      sourceLabel: `통합 측정 (손가락 ${Math.round(wF*100)}% + 얼굴 ${Math.round(wA*100)}%)`,
+      fingerWeight: wF,
+      faceWeight: wA,
+      confidence: w.finger.confidence,
+    };
+  },
+
   _generateHealthInsights(w) {
     const insights = [];
 
-    // 1. 심혈관 (얼굴 측정)
-    if (w.face) {
-      const hr = w.face.hr;
-      const rmssd = w.face.rmssd;
-      const stress = w.face.stressLevel || 3;
+    // ★ v16.2: 얼굴 + 손가락 측정 통합 데이터 사용
+    const cardio = this._getUnifiedCardio(w);
+
+    // 1. 심혈관 (통합 측정)
+    if (cardio) {
+      const hr = cardio.hr;
+      const rmssd = cardio.rmssd;
+      const stress = cardio.stressLevel || 3;
       let cls = 'good', icon = '💗', title, label, body, tip;
       if (hr) {
         if (hr < 60) {
@@ -2570,9 +2804,12 @@ const App = {
   _generateExerciseRecommendations(w) {
     const recommendations = [];
 
+    // ★ v16.2: 통합 심혈관 데이터 (손가락+얼굴 가중평균)
+    const cardio = this._getUnifiedCardio(w);
+
     // 1. 심혈관 (HR/RMSSD 기반)
-    const stressLevel = w.face?.stressLevel || 3;
-    if (stressLevel >= 4 || (w.face?.hr && w.face.hr >= 80)) {
+    const stressLevel = cardio?.stressLevel || 3;
+    if (stressLevel >= 4 || (cardio?.hr && cardio.hr >= 80)) {
       // 스트레스 높거나 심박수 빠름 - 호흡 우선
       recommendations.push({
         priority: 'high',
@@ -2724,8 +2961,10 @@ const App = {
   _generateDietRecommendations(w) {
     const bmi = w.bodycomp?.bmi || 22;
     const whtr = w.bodycomp?.whtr || 0.45;
-    const stressLevel = w.face?.stressLevel || 3;
-    const hr = w.face?.hr || 70;
+    // ★ v16.2: 통합 심혈관 데이터 사용
+    const cardio = this._getUnifiedCardio(w);
+    const stressLevel = cardio?.stressLevel || 3;
+    const hr = cardio?.hr || 70;
 
     // 헤드라인 결정
     let headline, summary;
@@ -5480,6 +5719,557 @@ const App = {
       }).length;
       return todayCount > 0;
     } catch (e) { return false; }
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // ★ v16.2: 가족 건강 정보 공유 시스템
+  //
+  // 목적: 부모가 건강 측정 결과를 자녀에게 공유 → "오늘 측정하셨어요" 안부 신호
+  //
+  // 구현 방식 (백엔드 없이 PWA로):
+  //   1. 부모: "공유하기" → 측정 데이터를 base64로 인코딩한 URL 생성
+  //   2. Web Share API로 카카오톡/문자로 전송
+  //   3. 자녀: URL 클릭 → URL 파라미터 디코딩 → 결과 화면 표시
+  //   4. 부가: 정기 측정 알림 (부모 폰 로컬 알림으로 측정 권장)
+  //
+  // 개인정보 보호:
+  //   - 측정값만 공유 (이름은 부모가 직접 입력)
+  //   - 서버 저장 없음 (URL 자체가 데이터)
+  //   - 자녀가 받은 데이터도 자녀 폰에 저장 안 함 (페이지 새로고침 시 소실)
+  // ════════════════════════════════════════════════════════════════
+
+  // 가족 공유 페이지 렌더링
+  _renderSharePage() {
+    const container = document.getElementById('share-container');
+    if (!container) return;
+
+    const profile = this._getUserProfile();
+    const w = this.state.wellness || {};
+    const cardio = this._getUnifiedCardio(w);
+    const result = this._wellnessComputeScore();
+
+    // 공유 가능한 최근 측정이 있는지 확인
+    const hasMeasurement = cardio || result.score > 0;
+
+    if (!hasMeasurement) {
+      container.innerHTML = `
+        <div class="share-empty-card">
+          <div class="share-empty-icon">📊</div>
+          <div class="share-empty-title">공유할 측정 결과가 없어요</div>
+          <div class="share-empty-msg">먼저 손가락 측정이나 얼굴 측정을 진행한 후, 자녀에게 결과를 공유할 수 있어요.</div>
+          <button class="share-action-btn" type="button" onclick="App.goPage('finger')">
+            ☝️ 손가락 측정하기
+          </button>
+          <button class="share-action-btn secondary" type="button" onclick="App.goPage('face')">
+            😊 얼굴 측정하기
+          </button>
+        </div>
+      `;
+      return;
+    }
+
+    // 이름 저장 시 사용
+    const sharedName = localStorage.getItem('shareSenderName') || '';
+
+    container.innerHTML = `
+      <div class="share-intro-card">
+        <div class="share-intro-icon">💌</div>
+        <div class="share-intro-title">자녀에게 안부와 함께 전해요</div>
+        <div class="share-intro-body">
+          측정 결과를 카카오톡이나 문자로 자녀에게 보낼 수 있어요.<br>
+          자녀는 받은 링크를 눌러 부모님 건강 상태를 확인하고, 안부를 확인할 수 있습니다.
+        </div>
+      </div>
+
+      <!-- 발신자 이름 입력 -->
+      <div class="share-name-card">
+        <div class="share-name-label">📝 어떻게 표시할까요?</div>
+        <input type="text"
+               class="share-name-input"
+               id="share-sender-name"
+               placeholder="예: 엄마, 아빠, 어머니, 아버지"
+               value="${this._esc(sharedName)}"
+               maxlength="20"
+               oninput="App._saveShareName(this.value)">
+        <div class="share-name-hint">자녀가 받았을 때 화면에 표시될 호칭입니다.</div>
+      </div>
+
+      <!-- 미리보기 -->
+      <div class="share-preview-section">
+        <div class="share-preview-label">📱 자녀에게 보낼 메시지 미리보기</div>
+        <div class="share-preview-card">
+          ${this._renderShareMessagePreview(cardio, result, sharedName || '부모님')}
+        </div>
+      </div>
+
+      <!-- 공유 옵션 -->
+      <div class="share-options-section">
+        <div class="share-options-label">공유 방법</div>
+
+        <button class="share-option-btn primary" type="button" onclick="App._shareToFamily()">
+          <div class="sob-icon">📤</div>
+          <div class="sob-body">
+            <div class="sob-title">바로 공유하기</div>
+            <div class="sob-sub">카카오톡 · 문자 · 메일 · 기타 앱</div>
+          </div>
+        </button>
+
+        <button class="share-option-btn" type="button" onclick="App._copyShareLink()">
+          <div class="sob-icon">🔗</div>
+          <div class="sob-body">
+            <div class="sob-title">링크 복사</div>
+            <div class="sob-sub">URL을 복사해서 직접 붙여넣기</div>
+          </div>
+        </button>
+
+        <button class="share-option-btn" type="button" onclick="App._copyShareMessage()">
+          <div class="sob-icon">📋</div>
+          <div class="sob-body">
+            <div class="sob-title">메시지 + 링크 복사</div>
+            <div class="sob-sub">메시지와 링크 함께 복사</div>
+          </div>
+        </button>
+      </div>
+
+      <!-- 정기 측정 알림 -->
+      <div class="share-reminder-section">
+        <div class="share-reminder-title">⏰ 매일 같은 시간 측정 알림</div>
+        <div class="share-reminder-body">
+          매일 정해진 시간에 측정 알림을 받으면 빠짐없이 측정할 수 있어요.<br>
+          꾸준한 측정 데이터가 자녀에게 더 정확한 안부 신호가 됩니다.
+        </div>
+        <button class="share-reminder-btn" type="button" onclick="App._setupDailyReminder()">
+          🔔 알림 설정하기
+        </button>
+      </div>
+
+      <!-- 정보 보호 안내 -->
+      <div class="share-privacy-card">
+        🔒 <strong>개인정보 보호</strong>
+        <ul class="share-privacy-list">
+          <li>서버에 저장되지 않습니다 (링크 자체에 데이터 포함)</li>
+          <li>받는 자녀의 폰에도 저장되지 않습니다</li>
+          <li>측정값만 공유되며, 이름·연락처는 직접 입력한 호칭만 사용됩니다</li>
+        </ul>
+      </div>
+    `;
+  },
+
+  _renderShareMessagePreview(cardio, result, name) {
+    const time = new Date().toLocaleString('ko-KR', { dateStyle: 'long', timeStyle: 'short' });
+    const score = result.score;
+    const grade = result.grade;
+    const stressLabels = ['', '매우 이완', '이완', '보통', '긴장', '높은 스트레스'];
+    const stressLabel = cardio?.stressLevel ? stressLabels[cardio.stressLevel] : '측정 중';
+
+    return `
+      <div class="smp-header">
+        <div class="smp-greeting">${this._esc(name)}이 건강 측정을 마치셨어요 ✨</div>
+        <div class="smp-time">${time}</div>
+      </div>
+      <div class="smp-score-row">
+        <div class="smp-score-circle" style="color:${score >= 70 ? '#22c55e' : score >= 50 ? '#3b82f6' : '#f59e0b'}">
+          <div class="smp-score-num">${score}</div>
+          <div class="smp-score-max">/100</div>
+        </div>
+        <div class="smp-score-info">
+          <div class="smp-score-label">종합 건강 점수</div>
+          <div class="smp-score-grade">${grade}</div>
+        </div>
+      </div>
+      ${cardio ? `
+        <div class="smp-vitals">
+          <div class="smp-vital">
+            <span class="smp-v-icon">❤️</span>
+            <span class="smp-v-label">심박수</span>
+            <span class="smp-v-value">${cardio.hr || '--'} BPM</span>
+          </div>
+          <div class="smp-vital">
+            <span class="smp-v-icon">🧘</span>
+            <span class="smp-v-label">자율신경</span>
+            <span class="smp-v-value">${stressLabel}</span>
+          </div>
+        </div>
+      ` : ''}
+      <div class="smp-footer">
+        오늘도 건강하게 하루 시작 💛
+      </div>
+    `;
+  },
+
+  _saveShareName(name) {
+    try {
+      localStorage.setItem('shareSenderName', (name || '').trim());
+      // 미리보기 갱신
+      this._renderSharePage();
+    } catch (e) {}
+  },
+
+  // 공유 데이터를 URL-safe base64로 인코딩
+  _buildShareData() {
+    const w = this.state.wellness || {};
+    const cardio = this._getUnifiedCardio(w);
+    const result = this._wellnessComputeScore();
+    const name = (localStorage.getItem('shareSenderName') || '').trim();
+
+    const data = {
+      v: '1', // 데이터 포맷 버전
+      n: name || '부모님',
+      t: Date.now(),
+      s: result.score,
+      g: result.grade,
+    };
+    if (cardio) {
+      data.hr = cardio.hr;
+      data.rm = cardio.rmssd;
+      data.st = cardio.stressLevel;
+      data.si = cardio.stressIndex;
+      data.src = cardio.source;
+    }
+
+    // 측정 항목 수
+    data.cnt = ['face','finger','balance','gait','tremor','reaction','posture','bodycomp']
+      .filter(k => w[k]).length;
+
+    try {
+      const json = JSON.stringify(data);
+      // URL-safe base64
+      const b64 = btoa(unescape(encodeURIComponent(json)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      return b64;
+    } catch (e) {
+      console.error('Encode failed:', e);
+      return null;
+    }
+  },
+
+  _buildShareUrl() {
+    const encoded = this._buildShareData();
+    if (!encoded) return null;
+    const base = window.location.origin + window.location.pathname;
+    return `${base}?share=${encoded}`;
+  },
+
+  _buildShareMessage() {
+    const name = (localStorage.getItem('shareSenderName') || '부모님').trim();
+    const result = this._wellnessComputeScore();
+    const time = new Date().toLocaleString('ko-KR', { dateStyle: 'long', timeStyle: 'short' });
+    const url = this._buildShareUrl();
+    return `💌 ${name}이 건강 측정을 마치셨어요\n` +
+           `📅 ${time}\n` +
+           `📊 종합 점수: ${result.score}/100 (${result.grade})\n\n` +
+           `상세 결과 보기 👇\n${url}\n\n` +
+           `오늘도 건강하게 하루 시작 💛`;
+  },
+
+  async _shareToFamily() {
+    const text = this._buildShareMessage();
+    const url = this._buildShareUrl();
+    if (!url) {
+      alert('공유 링크 생성에 실패했습니다.');
+      return;
+    }
+
+    // Web Share API 사용
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: '건강 측정 결과',
+          text: text,
+        });
+        this._toast('✓ 공유했어요');
+      } catch (e) {
+        // 사용자 취소는 무시
+        if (e.name !== 'AbortError') {
+          console.error('Share failed:', e);
+          // Fallback: 메시지 복사
+          this._copyShareMessage();
+        }
+      }
+    } else {
+      // Web Share 미지원 → 메시지 복사로 대체
+      this._copyShareMessage();
+    }
+  },
+
+  async _copyShareLink() {
+    const url = this._buildShareUrl();
+    if (!url) {
+      alert('링크 생성 실패');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      this._toast('✓ 링크가 복사됐어요');
+    } catch (e) {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); this._toast('✓ 링크가 복사됐어요'); } catch (e2) {}
+      ta.remove();
+    }
+  },
+
+  async _copyShareMessage() {
+    const text = this._buildShareMessage();
+    try {
+      await navigator.clipboard.writeText(text);
+      this._toast('✓ 메시지가 복사됐어요. 카카오톡에 붙여넣으세요');
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); this._toast('✓ 메시지가 복사됐어요'); } catch (e2) {}
+      ta.remove();
+    }
+  },
+
+  // 정기 측정 알림 설정 (Notification API + 로컬 알림)
+  async _setupDailyReminder() {
+    if (!('Notification' in window)) {
+      alert('이 기기는 알림 기능을 지원하지 않습니다.');
+      return;
+    }
+
+    if (Notification.permission === 'denied') {
+      alert('알림 권한이 차단되어 있습니다.\n브라우저 설정에서 알림을 허용해주세요.');
+      return;
+    }
+
+    if (Notification.permission !== 'granted') {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') {
+        alert('알림 권한이 필요합니다.');
+        return;
+      }
+    }
+
+    // 알람 시간 선택 (간단히 prompt로)
+    const timeStr = prompt('매일 측정 알림을 받을 시간을 입력하세요 (예: 09:00)', '09:00');
+    if (!timeStr) return;
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) {
+      alert('시간 형식이 올바르지 않습니다. 예: 09:00');
+      return;
+    }
+    const hour = parseInt(match[1], 10);
+    const minute = parseInt(match[2], 10);
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      alert('시간이 유효하지 않습니다.');
+      return;
+    }
+
+    localStorage.setItem('reminderHour', hour);
+    localStorage.setItem('reminderMinute', minute);
+    localStorage.setItem('reminderEnabled', '1');
+    this._scheduleNextReminder();
+    this._toast(`✓ 매일 ${hour}:${minute.toString().padStart(2, '0')}에 알림이 설정됐어요`);
+  },
+
+  _scheduleNextReminder() {
+    if (localStorage.getItem('reminderEnabled') !== '1') return;
+    if (Notification.permission !== 'granted') return;
+
+    const hour = parseInt(localStorage.getItem('reminderHour') || '9', 10);
+    const minute = parseInt(localStorage.getItem('reminderMinute') || '0', 10);
+
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+
+    const ms = next - now;
+    // 최대 24시간 후만 set (브라우저 timer 한계)
+    if (ms > 0 && ms < 25 * 60 * 60 * 1000) {
+      clearTimeout(this._reminderTimer);
+      this._reminderTimer = setTimeout(() => {
+        try {
+          new Notification('💛 건강 측정 시간이에요', {
+            body: '오늘도 30초 측정하고 자녀에게 안부를 전해보세요',
+            icon: 'icons/icon-192.png',
+            tag: 'health-reminder',
+          });
+        } catch (e) {}
+        this._scheduleNextReminder(); // 다음 날 예약
+      }, ms);
+    }
+  },
+
+  // 자녀가 받은 공유 데이터 보기
+  _renderFamilyViewPage() {
+    const container = document.getElementById('family-view-container');
+    if (!container) return;
+
+    // sessionStorage에서 공유 데이터 가져오기
+    let data = null;
+    try {
+      const raw = sessionStorage.getItem('familyShareData');
+      if (raw) data = JSON.parse(raw);
+    } catch (e) {}
+
+    if (!data) {
+      container.innerHTML = `
+        <div class="share-empty-card">
+          <div class="share-empty-icon">😔</div>
+          <div class="share-empty-title">공유 정보가 없어요</div>
+          <div class="share-empty-msg">부모님이 공유해주신 링크를 통해서만 확인할 수 있습니다.</div>
+        </div>
+      `;
+      return;
+    }
+
+    // 측정 시간 계산
+    const measuredTime = new Date(data.t);
+    const ago = Date.now() - data.t;
+    let timeAgo;
+    if (ago < 60 * 1000) timeAgo = '방금 전';
+    else if (ago < 60 * 60 * 1000) timeAgo = `${Math.floor(ago / 60000)}분 전`;
+    else if (ago < 24 * 60 * 60 * 1000) timeAgo = `${Math.floor(ago / 3600000)}시간 전`;
+    else timeAgo = `${Math.floor(ago / 86400000)}일 전`;
+
+    const stressLabels = ['', '매우 이완', '이완', '보통', '긴장', '높은 스트레스'];
+    const stressLabel = data.st ? stressLabels[data.st] : '측정됨';
+    const stressColors = ['', '#16a34a', '#22c55e', '#3b82f6', '#f59e0b', '#dc2626'];
+    const stressColor = stressColors[data.st || 3];
+
+    const scoreColor = data.s >= 70 ? '#22c55e' : data.s >= 50 ? '#3b82f6' : '#f59e0b';
+
+    // 안부 메시지 생성 (점수에 따라)
+    let goodMsg;
+    if (data.s >= 80) {
+      goodMsg = `${this._esc(data.n)}이 매우 건강하게 지내고 계시는 것 같아요. 안심해도 좋겠어요. 😊`;
+    } else if (data.s >= 60) {
+      goodMsg = `${this._esc(data.n)}이 건강하게 잘 지내고 계세요. 따뜻한 안부 한마디 전해보세요. 💛`;
+    } else if (data.s >= 40) {
+      goodMsg = `${this._esc(data.n)}이 평소대로 잘 지내고 계세요. 가볍게 안부를 여쭤보면 좋겠어요. 🌱`;
+    } else {
+      goodMsg = `${this._esc(data.n)}의 컨디션이 평소보다 낮을 수 있어요. 안부 연락 한 통이 큰 힘이 될 거예요. 💞`;
+    }
+
+    container.innerHTML = `
+      <div class="family-view-card">
+        <div class="fvc-header">
+          <div class="fvc-icon">💌</div>
+          <div class="fvc-title">${this._esc(data.n)}이 건강 측정을 마치셨어요</div>
+          <div class="fvc-time">${timeAgo} · ${measuredTime.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+        </div>
+
+        <!-- 종합 점수 -->
+        <div class="fvc-score-block">
+          <div class="fvc-score-circle" style="color:${scoreColor}">
+            <div class="fvc-score-num">${data.s}</div>
+            <div class="fvc-score-max">/100</div>
+          </div>
+          <div class="fvc-score-label">종합 건강 점수</div>
+          <div class="fvc-score-grade" style="color:${scoreColor}">${data.g}</div>
+        </div>
+
+        <!-- 안부 메시지 -->
+        <div class="fvc-message">
+          ${goodMsg}
+        </div>
+
+        <!-- 측정 항목 -->
+        ${data.hr || data.rm || data.st ? `
+          <div class="fvc-metrics">
+            <div class="fvc-metrics-title">📊 측정 결과</div>
+            ${data.hr ? `
+              <div class="fvc-metric">
+                <span class="fvc-m-icon">❤️</span>
+                <span class="fvc-m-label">심박수</span>
+                <span class="fvc-m-value">${data.hr} BPM</span>
+              </div>
+            ` : ''}
+            ${data.rm ? `
+              <div class="fvc-metric">
+                <span class="fvc-m-icon">📊</span>
+                <span class="fvc-m-label">심박변이도 (HRV)</span>
+                <span class="fvc-m-value">${data.rm} ms</span>
+              </div>
+            ` : ''}
+            ${data.st ? `
+              <div class="fvc-metric">
+                <span class="fvc-m-icon">🧘</span>
+                <span class="fvc-m-label">자율신경 상태</span>
+                <span class="fvc-m-value" style="color:${stressColor}">${stressLabel}</span>
+              </div>
+            ` : ''}
+            ${data.si !== undefined ? `
+              <div class="fvc-metric">
+                <span class="fvc-m-icon">🌡️</span>
+                <span class="fvc-m-label">스트레스 지수</span>
+                <span class="fvc-m-value">${data.si}</span>
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        <!-- 측정 활동 표시 -->
+        <div class="fvc-activity">
+          <div class="fvc-activity-icon">✨</div>
+          <div class="fvc-activity-text">
+            <strong>오늘 ${data.cnt || 1}개 항목을 측정하셨어요.</strong><br>
+            <small>건강을 스스로 챙기시는 모습이 보여요.</small>
+          </div>
+        </div>
+
+        <!-- 안부 메시지 보내기 (전화/카톡 링크) -->
+        <div class="fvc-actions">
+          <a class="fvc-action-btn primary" href="tel:" onclick="App._toast('통화 앱이 열립니다')">
+            📞 전화 드리기
+          </a>
+        </div>
+
+        <!-- 면책 -->
+        <div class="fvc-disclaimer">
+          ⚠️ 이 측정은 의료 진단이 아닌 건강 참고용입니다.
+          이상이 느껴지시면 의료진과 상담하시는 것이 좋습니다.
+        </div>
+      </div>
+    `;
+  },
+
+  // URL에서 share 파라미터 감지 → 자녀 보기 페이지로 자동 이동
+  _checkSharedUrl() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const shared = params.get('share');
+      if (!shared) return false;
+
+      // URL-safe base64 디코딩
+      const b64 = shared.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64 + '==='.slice((b64.length + 3) % 4);
+      const json = decodeURIComponent(escape(atob(padded)));
+      const data = JSON.parse(json);
+
+      // 검증
+      if (!data || !data.v || !data.t || data.s === undefined) {
+        console.warn('Invalid share data');
+        return false;
+      }
+
+      // 만료 검사 (7일 이내만 표시)
+      if (Date.now() - data.t > 7 * 24 * 60 * 60 * 1000) {
+        sessionStorage.setItem('familyShareExpired', '1');
+      }
+
+      sessionStorage.setItem('familyShareData', JSON.stringify(data));
+
+      // URL에서 share 파라미터 제거 (clean URL)
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({page:'family-view'}, '', cleanUrl);
+
+      // 가족 보기 페이지로
+      setTimeout(() => this.goPage('family-view'), 300);
+      return true;
+    } catch (e) {
+      console.error('Share URL parse failed:', e);
+      return false;
+    }
   },
 
   // ─── 홈 카드 렌더링 ───

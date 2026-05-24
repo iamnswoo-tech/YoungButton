@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v16.1",
-  "short_name": "건강측정 v16.1",
-  "description": "v16.1 — R/G/AI 다채널 분석 + 이상치 거부 + Peak 보강 + 신뢰도",
+  "name": "건강 측정 v16.2",
+  "short_name": "건강측정 v16.2",
+  "description": "v16.2 — 손가락+얼굴 통합 분석 + 가족 건강 정보 공유",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
