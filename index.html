@@ -573,6 +573,35 @@ body::before {
   letter-spacing: -.02em;
 }
 
+/* ★ v16.3: 결과 페이지 그룹 디바이더 (계층 구조 시각화) */
+.res-group-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 16px 12px;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.08), transparent);
+  border-left: 4px solid #6366f1;
+  border-radius: 8px;
+}
+.res-group-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.res-group-title {
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--text);
+  letter-spacing: -.02em;
+  flex: 1;
+}
+.res-group-sub {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  letter-spacing: -.01em;
+}
+
 /* 측정 항목 카드 */
 /* ★ v14.2: 결과 페이지 그래프 카드 (신체지수 스타일) */
 .res-graph-card {
@@ -4410,6 +4439,158 @@ body::before {
   margin-bottom: 12px;
 }
 
+/* ★ v16.3: 외부 조명 환경 가이드 (메인 카드) */
+.finger-env-guide {
+  background: linear-gradient(135deg, #fef9c3 0%, #fde68a 100%);
+  border-radius: 18px;
+  padding: 18px 16px;
+  margin-bottom: 14px;
+  border: 1.5px solid #facc15;
+}
+.finger-env-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #78350f;
+  margin-bottom: 12px;
+  letter-spacing: -.02em;
+}
+.finger-env-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.finger-env-good, .finger-env-bad {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 14px;
+  padding: 12px 10px;
+}
+.finger-env-good { border-left: 4px solid #22c55e; }
+.finger-env-bad { border-left: 4px solid #ef4444; }
+.feg-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+.feg-label {
+  font-size: 12px;
+  font-weight: 900;
+  color: #78350f;
+  margin-bottom: 8px;
+  letter-spacing: -.01em;
+}
+.finger-env-good .feg-label { color: #14532d; }
+.finger-env-bad .feg-label { color: #7f1d1d; }
+.finger-env-good ul, .finger-env-bad ul {
+  margin: 0;
+  padding-left: 4px;
+  list-style: none;
+}
+.finger-env-good li, .finger-env-bad li {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.5;
+  padding: 2px 0;
+}
+.finger-env-science {
+  font-size: 11px;
+  color: #78350f;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  padding: 8px 10px;
+  line-height: 1.5;
+}
+
+/* ★ v16.3: 플래시 보조 안내 (인트로) */
+.finger-flash-aux {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.ffa-icon { font-size: 24px; flex-shrink: 0; }
+.ffa-body { flex: 1; }
+.ffa-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.ffa-sub {
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+
+/* ★ v16.3: Stage 1 측정 시작 메인 버튼 (큰 사이즈) */
+.finger-measure-main-btn {
+  width: 100%;
+  padding: 18px;
+  background: var(--bg);
+  color: var(--text3);
+  border: 2px dashed var(--border);
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 900;
+  font-family: inherit;
+  cursor: pointer;
+  margin-bottom: 10px;
+  letter-spacing: -.01em;
+  transition: all .15s;
+}
+.finger-measure-main-btn:not(:disabled) {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  border: none;
+  box-shadow: 0 8px 24px rgba(239, 68, 68, .35);
+  animation: ready-pulse 1.6s ease-in-out infinite;
+}
+.finger-measure-main-btn:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* ★ v16.3: 플래시 보조 토글 (작은 사이즈) */
+.finger-torch-aux {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+.fta-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+}
+.finger-torch-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+}
+.finger-torch-toggle.on {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #fff;
+  border-color: #f59e0b;
+}
+.finger-torch-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ★ v15.8: 토치 미동작 기기 안내 카드 */
 .finger-tip-card {
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
@@ -4783,6 +4964,30 @@ body::before {
 .finger-stat.highlight .fs-msg {
   color: #991b1b;
   border-top-color: rgba(239, 68, 68, .25);
+}
+
+/* ★ v16.3: 정상 범위 가이드 (수치 밑) */
+.fs-range {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text3);
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dotted rgba(0, 0, 0, .08);
+  letter-spacing: .02em;
+}
+.finger-stat.highlight .fs-range {
+  color: #b45309;
+  border-top-color: rgba(239, 68, 68, .15);
+}
+
+/* ★ v16.3: 통합 카드 정상범위 */
+.ucc-m-range {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text3);
+  margin-top: 4px;
+  letter-spacing: .02em;
 }
 
 /* ★ v15.9: 종합 점수 멘트 */
@@ -7475,7 +7680,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.2 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.3 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -8200,7 +8405,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.2</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.3</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>
@@ -8214,73 +8419,97 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
        STAGE 0 — 인트로 (측정 전 안내)
        ────────────────────────────────────────────────── -->
   <div id="finger-stage-intro" class="finger-stage">
+    <!-- ★ v16.3: 외부 조명 우선 안내로 재설계 -->
     <div class="finger-hero">
       <div class="finger-hero-icon">☝️</div>
       <div class="finger-hero-badge">CLINICAL GRADE</div>
-      <div class="finger-hero-title">단계별로 차근차근<br>측정해드릴게요</div>
+      <div class="finger-hero-title">밝은 조명 아래에서<br>측정해주세요</div>
       <div class="finger-hero-sub">
-        카메라 활성화 → 손가락 위치 확인 →<br>
-        신호 확인 → 측정 시작
+        스마트폰 플래시보다 외부 조명이 더 정확합니다<br>
+        자연광이나 밝은 실내등 앞에서 측정하세요
       </div>
     </div>
 
+    <!-- ★ v16.3: 추천 환경 시각화 (메인 가이드) -->
+    <div class="finger-env-guide">
+      <div class="finger-env-title">📍 추천 측정 환경</div>
+      <div class="finger-env-grid">
+        <div class="finger-env-good">
+          <div class="feg-icon">✅</div>
+          <div class="feg-label">좋아요</div>
+          <ul>
+            <li>☀️ 자연광이 들어오는 창가</li>
+            <li>💡 밝은 실내 조명 아래</li>
+            <li>🪟 조명을 등지지 않고 마주보기</li>
+          </ul>
+        </div>
+        <div class="finger-env-bad">
+          <div class="feg-icon">❌</div>
+          <div class="feg-label">피하세요</div>
+          <ul>
+            <li>🌙 어두운 방·야간</li>
+            <li>🔦 스마트폰 플래시 의존</li>
+            <li>🌪️ 흔들리며 측정</li>
+          </ul>
+        </div>
+      </div>
+      <div class="finger-env-science">
+        💡 학술 근거: G(녹색) 채널이 RGB를 모두 활용해 신호 노이즈가 더 적습니다 (Verkruysse 2008, Allagi 2022)
+      </div>
+    </div>
+
+    <!-- ★ v16.3: 단계 안내 — 외부 조명 우선 -->
     <div class="finger-howto-card">
-      <div class="finger-howto-title">📖 측정 단계</div>
+      <div class="finger-howto-title">📖 측정 단계 (30초)</div>
       <div class="finger-howto-step">
         <div class="fhs-num">1</div>
         <div class="fhs-body">
-          <div class="fhs-title">카메라 권한 허용</div>
-          <div class="fhs-sub">후면 카메라가 활성화됩니다</div>
+          <div class="fhs-title">밝은 곳에 자리잡기</div>
+          <div class="fhs-sub">조명을 등지지 말고 마주보는 자세</div>
         </div>
       </div>
       <div class="finger-howto-step">
         <div class="fhs-num">2</div>
         <div class="fhs-body">
-          <div class="fhs-title">플래시를 켜주세요</div>
-          <div class="fhs-sub">버튼으로 직접 켜고 끌 수 있어요</div>
+          <div class="fhs-title">카메라 권한 허용</div>
+          <div class="fhs-sub">후면 카메라로 측정합니다</div>
         </div>
       </div>
       <div class="finger-howto-step">
         <div class="fhs-num">3</div>
         <div class="fhs-body">
-          <div class="fhs-title">검지를 카메라+플래시에 살짝 덮기</div>
-          <div class="fhs-sub">압박하지 말고 가볍게. 실시간 신호 확인됨</div>
+          <div class="fhs-title">검지를 카메라에 살짝 대기</div>
+          <div class="fhs-sub">압박하지 말고 가볍게. 카메라 렌즈를 가리는 정도</div>
         </div>
       </div>
       <div class="finger-howto-step">
         <div class="fhs-num">4</div>
         <div class="fhs-body">
-          <div class="fhs-title">신호 확인 후 측정 시작</div>
-          <div class="fhs-sub">30초간 정밀 측정 (HR, RMSSD, SDNN)</div>
+          <div class="fhs-title">신호 양호 확인 후 측정 시작</div>
+          <div class="fhs-sub">30초간 가만히 (호흡은 자연스럽게)</div>
         </div>
       </div>
     </div>
 
-    <div class="finger-warn-card">
-      ⚠️ 플래시가 켜진 동안 손가락이 따뜻해질 수 있어요.
-      불편하시면 언제든 중단 가능합니다.
-    </div>
-
-    <!-- ★ v16.1: 외부 조명 측정 권장 (사용자 발견) -->
-    <div class="finger-tip-card">
-      <div class="finger-tip-title">💡 가장 정확한 측정 방법</div>
-      <div class="finger-tip-body">
-        <strong>플래시 OFF + 외부 조명 (자연광/실내등)</strong>이 가장 정확합니다.<br>
-        <small style="opacity: 0.85">학술 근거: G(녹색) 채널이 RGB 모두 활용 가능해 노이즈 감소 (Verkruysse 2008)</small><br>
-        밝은 곳에서 손가락을 카메라에 가볍게 대고 측정하세요.
+    <!-- ★ v16.3: 플래시는 작은 보조 옵션으로 강등 -->
+    <div class="finger-flash-aux">
+      <div class="ffa-icon">🔦</div>
+      <div class="ffa-body">
+        <div class="ffa-title">어두운 환경에서만 플래시 사용</div>
+        <div class="ffa-sub">측정 화면에서 직접 켤 수 있어요. 다만 외부 조명이 더 정확합니다.</div>
       </div>
     </div>
 
     <!-- v16.0: AI + 신호 안정화 기술 안내 -->
     <div class="finger-ai-card">
-      <div class="finger-ai-badge">🤖 v16.1 · 다채널 + AI</div>
-      <div class="finger-ai-title">3개 채널 자동 분석 + AI 검증</div>
+      <div class="finger-ai-badge">🤖 v16.3 · 다채널 + AI</div>
+      <div class="finger-ai-title">3개 채널 자동 분석 + 신뢰도 검증</div>
       <div class="finger-ai-body">
-        ✓ R/G/AI 3개 채널 동시 분석<br>
-        ✓ 토치 ON/OFF 자동 최적 채널 선택<br>
-        ✓ 비정상치 자동 거부 (이상치 검증)<br>
+        ✓ R/G/AI 3개 채널 동시 분석으로 정확도 향상<br>
+        ✓ 비정상치 자동 거부 (RMSSD/SDNN 검증)<br>
         ✓ 놓친 peak 자동 보강 (인접 IBI 일관성)<br>
-        <small style="opacity: 0.85">신뢰도 등급 표시 (높음/보통/낮음)</small>
+        ✓ 신뢰도 등급 표시 (높음/보통/낮음)<br>
+        <small style="opacity: 0.85">의료기기 수준 측정을 위해 다중 검증</small>
       </div>
     </div>
 
@@ -8339,13 +8568,16 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </div>
     </div>
 
-    <!-- 컨트롤 버튼들 -->
-    <div class="finger-controls">
-      <button class="finger-ctrl-btn torch-btn" type="button" id="finger-torch-btn" onclick="App.fingerToggleTorch()">
-        💡 플래시 켜기
-      </button>
-      <button class="finger-ctrl-btn measure-btn" type="button" id="finger-measure-btn" onclick="App.fingerBeginMeasurement()" disabled>
-        ▶ 측정 시작 <span class="fmb-hint">(신호 확인 후)</span>
+    <!-- ★ v16.3: 측정 시작 메인 버튼 (큰 사이즈) -->
+    <button class="finger-measure-main-btn" type="button" id="finger-measure-btn" onclick="App.fingerBeginMeasurement()" disabled>
+      ▶ 측정 시작 <span class="fmb-hint">(신호 확인 후)</span>
+    </button>
+
+    <!-- ★ v16.3: 플래시 보조 옵션 (작은 토글) -->
+    <div class="finger-torch-aux">
+      <span class="fta-hint">어두운 환경에서만 사용:</span>
+      <button class="finger-torch-toggle" type="button" id="finger-torch-btn" onclick="App.fingerToggleTorch()">
+        🔦 플래시 켜기
       </button>
     </div>
 
@@ -8449,7 +8681,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
-    🚀 Reset Button - 승우 ‍🚀<br>
+    🚀 Reset Button - 기획/개발: 남승우 ‍🚀<br>
     rPPG 엔진: ME-rPPG (Apache 2.0)<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>

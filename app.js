@@ -1792,25 +1792,48 @@ const App = {
 
       ${ageHTML}
 
+      <!-- ★ v16.3: 핵심 건강 지표 (그룹 1) -->
+      <div class="res-group-divider">
+        <div class="res-group-icon">💗</div>
+        <div class="res-group-title">핵심 건강 지표</div>
+        <div class="res-group-sub">심혈관 · 자율신경 통합</div>
+      </div>
+
       <!-- ★ v16.2: 통합 심혈관 측정 카드 (손가락+얼굴 가중평균) -->
       ${this._renderUnifiedCardioCard(w)}
 
       <!-- ★ v15.2: 정신건강 점수 카드 (감정 게임 + 자율신경 통합) -->
       ${this._renderResultsMentalCard()}
 
+      <!-- ★ v16.3: 변화 추이 (그룹 2) -->
+      ${(w.face || w.finger) ? `
+        <div class="res-group-divider">
+          <div class="res-group-icon">📈</div>
+          <div class="res-group-title">변화 추이</div>
+          <div class="res-group-sub">평소 대비 변화</div>
+        </div>
+      ` : ''}
+
       <!-- ★ v14.4: 평소 대비 변화 카드 (얼굴 측정 baseline 비교) -->
       ${this._renderBaselineComparisonCard(w)}
 
+      <!-- ★ v16.3: 전체 측정 항목 (그룹 3) -->
+      ${measuredCount > 0 ? `
+        <div class="res-group-divider">
+          <div class="res-group-icon">📊</div>
+          <div class="res-group-title">전체 측정 항목</div>
+          <div class="res-group-sub">${measuredCount}/8 측정 완료</div>
+        </div>
+      ` : ''}
+
       <!-- ★ v14.2: 항목별 점수 레이더/막대 차트 -->
       ${measuredCount > 0 ? `
-        <div class="res-section-title">📈 항목별 점수 분포</div>
         <div class="res-graph-card">
           ${categoryScores}
         </div>
       ` : ''}
 
       <!-- 측정 항목 미니 카드 그리드 -->
-      <div class="res-section-title">📋 측정 항목</div>
       <div class="res-mini-grid">
         ${cardsHTML}
       </div>
@@ -2146,14 +2169,17 @@ const App = {
           <div class="ucc-metric">
             <div class="ucc-m-label">심박수</div>
             <div class="ucc-m-value">${cardio.hr || '--'}<span class="ucc-m-unit">BPM</span></div>
+            <div class="ucc-m-range">정상 60~100</div>
           </div>
           <div class="ucc-metric highlight">
             <div class="ucc-m-label">HRV (RMSSD)</div>
             <div class="ucc-m-value">${cardio.rmssd || '--'}<span class="ucc-m-unit">ms</span></div>
+            <div class="ucc-m-range">정상 20~60</div>
           </div>
           <div class="ucc-metric">
             <div class="ucc-m-label">스트레스</div>
             <div class="ucc-m-value" style="color:${stressColor}; font-size: 18px">${stressLabel}</div>
+            <div class="ucc-m-range">5단계 척도</div>
           </div>
         </div>
 
@@ -3706,7 +3732,7 @@ const App = {
       torchStatus.textContent = '꺼짐 (수동 켜기 필요)';
       torchBtn.disabled = false;
       torchBtn.textContent = '💡 플래시 켜기';
-      this._fingerSetStatus('카메라 준비 완료', '플래시 버튼을 누르고 손가락을 대주세요');
+      this._fingerSetStatus('카메라 준비 완료', '💡 밝은 조명 앞에서 검지를 카메라에 가볍게 대주세요');
 
       if (!torchInCapabilities) {
         this._flog('Capabilities는 미지원이지만 일단 시도해봅니다 (Chrome 버그 회피)', 'warn');
@@ -3812,11 +3838,11 @@ const App = {
       const torchBtn = document.getElementById('finger-torch-btn');
       if (newState) {
         torchStatus.innerHTML = '<span style="color:#22c55e">✓ 켜짐</span>';
-        torchBtn.textContent = '💡 플래시 끄기';
+        torchBtn.textContent = '🔦 플래시 끄기';
         torchBtn.classList.add('on');
       } else {
         torchStatus.textContent = '꺼짐';
-        torchBtn.textContent = '💡 플래시 켜기';
+        torchBtn.textContent = '🔦 플래시 켜기';
         torchBtn.classList.remove('on');
       }
       this._flog(`✓ 토치 ${newState ? 'ON' : 'OFF'} 완료`);
@@ -3827,7 +3853,7 @@ const App = {
       const torchBtn = document.getElementById('finger-torch-btn');
       torchStatus.innerHTML = '<span style="color:#f59e0b">⚠️ 브라우저 제어 불가</span>';
       torchBtn.disabled = true;
-      torchBtn.textContent = '💡 미지원';
+      torchBtn.textContent = '🔦 미지원';
       this._fingerSetStatus('브라우저로 플래시 제어 불가',
         '⚙️ 손전등 아이콘으로 직접 켜고 다시 시도하세요');
       alert(
@@ -4025,7 +4051,8 @@ const App = {
     if (enable) {
       // ★ v15.7: 토치 여부 안내
       const f = this._finger;
-      const hint = f.torchOn ? '(신호 양호)' : '(토치 없이 측정 — 정확도 낮음)';
+      // ★ v16.3: 외부 조명을 우대 (토치 OFF가 권장)
+      const hint = f.torchOn ? '(플래시 ON — 가능하면 끄세요)' : '(외부 조명 · 권장 환경)';
       btn.innerHTML = `▶ 측정 시작 <span class="fmb-hint">${hint}</span>`;
       btn.classList.add('ready');
     } else {
@@ -4069,8 +4096,11 @@ const App = {
     const f = this._finger;
     this._flog('Stage 2: 정식 측정 시작');
 
-    if (!f.torchOn && f.torchSupported) {
-      this._flog('경고: 토치 안 켠 상태로 측정 시작', 'warn');
+    // ★ v16.3: 외부 조명이 권장 환경 — 토치 OFF는 경고 아님
+    if (f.torchOn) {
+      this._flog('정보: 플래시 ON 상태로 측정 (외부 조명 권장)', 'info');
+    } else {
+      this._flog('정보: 외부 조명 모드 측정 (권장 환경)', 'info');
     }
 
     // UI 전환
@@ -5087,31 +5117,35 @@ const App = {
           <div class="finger-score-msg">${scoreInterp}</div>
         </div>
 
-        <!-- v15.9: 4가지 핵심 수치 + 각각 의미 멘트 -->
+        <!-- v15.9: 4가지 핵심 수치 + 각각 의미 멘트 + v16.3 정상 범위 -->
         <div class="finger-stats-grid">
           <div class="finger-stat">
             <div class="fs-icon">❤️</div>
             <div class="fs-label">심박수</div>
             <div class="fs-value">${result.hr}<span class="fs-unit">BPM</span></div>
             <div class="fs-msg">${hrInterp}</div>
+            <div class="fs-range">정상: 60~100 BPM</div>
           </div>
           <div class="finger-stat highlight">
             <div class="fs-icon">📊</div>
             <div class="fs-label">RMSSD (HRV)</div>
             <div class="fs-value">${result.rmssd}<span class="fs-unit">ms</span></div>
             <div class="fs-msg">${rmssdInterp}</div>
+            <div class="fs-range">정상: 20~60 ms</div>
           </div>
           <div class="finger-stat">
             <div class="fs-icon">📈</div>
             <div class="fs-label">SDNN</div>
             <div class="fs-value">${result.sdnn}<span class="fs-unit">ms</span></div>
             <div class="fs-msg">${sdnnInterp}</div>
+            <div class="fs-range">정상: 30~100 ms</div>
           </div>
           <div class="finger-stat">
             <div class="fs-icon">⚡</div>
             <div class="fs-label">pNN50</div>
             <div class="fs-value">${result.pNN50}<span class="fs-unit">%</span></div>
             <div class="fs-msg">${pNN50Interp}</div>
+            <div class="fs-range">정상: 5~25 %</div>
           </div>
         </div>
 
