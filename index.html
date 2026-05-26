@@ -328,15 +328,42 @@
   /* 자동 적용됨 */
 }
 
-html, body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100dvh; overflow-x: hidden; font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+html, body {
+  background: var(--bg);
+  color: var(--text-strong);
+  font-family: var(--sans);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  /* ★ v16.6: 2026 UX - 부드러운 색상 전환 */
+  transition: background-color var(--dur-base, 250ms) ease;
+}
 body::before {
   content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background: radial-gradient(1200px 600px at 0% -10%, rgba(34, 197, 94, .08), transparent 50%),
-              radial-gradient(900px 500px at 100% 110%, rgba(59, 130, 246, .06), transparent 50%);
+  /* ★ v16.6: 2026 UX - 더 미묘하고 깊이있는 배경 그라데이션 */
+  background:
+    radial-gradient(1400px 700px at 0% -15%, rgba(34, 197, 94, .07), transparent 55%),
+    radial-gradient(1000px 600px at 100% 115%, rgba(59, 130, 246, .05), transparent 55%),
+    radial-gradient(600px 400px at 50% 50%, rgba(168, 85, 247, .03), transparent 70%);
+}
+
+/* ★ v16.6: 2026 UX 페이지 진입 트랜지션 (부드러운 fade-in) */
+.page.on {
+  animation: pageEnter var(--dur-slow, 400ms) var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* 모션 감소 사용자 */
+@media (prefers-reduced-motion: reduce) {
+  .page.on { animation: none; }
 }
 
 /* HEADER */
-/* ★ v16.5: 2026 UX - Liquid Glass 헤더 (Apple iOS 2026 트렌드) */
+/* ★ v16.6: 2026 UX - 더 깔끔한 헤더 */
 .hd {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top));
@@ -349,15 +376,39 @@ body::before {
 }
 .hd-logo { display: flex; align-items: center; gap: 12px; }
 .hd-icon {
-  width: 38px; height: 38px; border-radius: 12px;
-  background: rgba(255,255,255,.2);
+  width: 40px; height: 40px; border-radius: 14px;
+  background: rgba(255,255,255,.22);
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,.3);
+  border: 1px solid rgba(255,255,255,.35);
+  font-size: 20px;
 }
-.hd-title { font-size: 17px; font-weight: 800; letter-spacing: -.02em; color: #fff; }
-.hd-sub { font-size: 10px; color: rgba(255,255,255,.85); font-weight: 600; letter-spacing: .08em; }
-.hd-ver { font-size: 10px; color: #fff; background: rgba(255,255,255,.2); padding: 5px 12px; border-radius: 14px; font-weight: 700; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,.25); }
+.hd-title {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -.025em;
+  color: #fff;
+  line-height: 1.2;
+}
+.hd-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,.85);
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.hd-ver {
+  font-size: 10px;
+  color: #fff;
+  background: rgba(255,255,255,.22);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.3);
+  letter-spacing: .03em;
+}
 
 /* PAGE CONTAINER */
 .page { display: none; padding-bottom: 80px; position: relative; z-index: 1; }
@@ -1015,52 +1066,59 @@ body::before {
   flex: 0 0 auto;
 }
 
-/* ★ v14.2: 미니 카드 그리드 (3열) */
+/* ★ v16.6: 2026 UX - 미니 카드 그리드 */
 .res-mini-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 0 12px 14px;
+  gap: 10px;
+  margin: 0 16px 16px;
 }
 .res-mini-card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px 12px;
+  border-radius: 16px;
+  padding: 16px 14px;
   cursor: pointer;
   font-family: inherit;
   text-align: center;
-  transition: transform .12s;
+  transition: transform var(--dur-fast, 150ms) ease,
+              box-shadow var(--dur-fast, 150ms) ease;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  box-shadow: var(--shadow);
+  gap: 8px;
+  box-shadow: var(--elev-1, 0 1px 2px rgba(15, 23, 42, .04));
+  min-height: 110px;
 }
-.res-mini-card:active { transform: scale(.97); }
+.res-mini-card:active {
+  transform: scale(.97);
+  box-shadow: var(--elev-2, 0 4px 12px rgba(15, 23, 42, .06));
+}
 .res-mini-card.pending {
   background: var(--bg);
   border-style: dashed;
+  border-color: rgba(15, 23, 42, .15);
 }
 .res-mini-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 22px;
   margin-bottom: 2px;
 }
 .res-mini-name {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
-  color: var(--text);
+  color: var(--text-strong);
+  letter-spacing: -.01em;
 }
 .res-mini-score {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 900;
-  letter-spacing: -.02em;
+  letter-spacing: -.03em;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -7357,22 +7415,46 @@ body::before {
 .info-text strong { color: var(--text); font-weight: 700; }
 
 /* === MEASUREMENT PAGE COMMON === */
+/* ★ v16.6: 2026 UX - 더 큰 타이틀 + 부드러운 백 버튼 */
 .back-bar {
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px 16px;
-  background: var(--card);
-  box-shadow: 0 1px 0 var(--border);
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 16px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid rgba(15, 23, 42, .06);
 }
 .back-btn {
-  width: 40px; height: 40px;
-  border-radius: 12px; border: none;
-  background: var(--primary-light); color: var(--primary);
+  width: 44px; height: 44px;
+  border-radius: 14px; border: none;
+  background: var(--primary-light);
+  color: var(--primary);
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: 20px; font-weight: 800;
+  cursor: pointer;
+  font-size: 22px; font-weight: 800;
+  transition: transform var(--dur-fast, 150ms) ease,
+              background var(--dur-fast, 150ms) ease;
 }
-.back-btn:active { transform: scale(.92); }
-.page-title { font-size: 17px; font-weight: 800; color: var(--text); }
-.page-subtitle { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.back-btn:active {
+  transform: scale(.92);
+  background: rgba(34, 197, 94, .15);
+}
+.page-title {
+  font-size: 19px;
+  font-weight: 900;
+  color: var(--text-strong);
+  letter-spacing: -.025em;
+  line-height: 1.2;
+}
+.page-subtitle {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-top: 3px;
+  font-weight: 600;
+}
 
 /* CAMERA AREA (face) */
 .cam-wrap {
@@ -7579,28 +7661,55 @@ body::before {
 .console-note { font-size: 10px; color: var(--muted); margin-top: 6px; text-align: center; }
 
 /* BOTTOM NAV */
+/* ★ v16.6: 2026 UX - Liquid Glass 네비게이션 + 활성 인디케이터 */
 .bottom-nav {
   position: fixed; bottom: 0; left: 0; right: 0;
-  display: flex; padding: 6px 8px max(6px, env(safe-area-inset-bottom));
-  background: rgba(255,255,255,.95); backdrop-filter: blur(20px);
-  border-top: 1px solid var(--border);
+  display: flex; padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+  background: rgba(255,255,255,.85);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-top: 1px solid rgba(15, 23, 42, .08);
   z-index: 40;
-  box-shadow: 0 -4px 16px rgba(124,58,237,.06);
+  box-shadow: 0 -4px 24px rgba(15, 23, 42, .06);
 }
 .nav-btn {
   flex: 1; padding: 10px 4px;
   background: none; border: none;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: var(--text-soft);
   cursor: pointer;
   font-family: var(--sans);
-  border-radius: 12px;
-  transition: color .15s;
+  border-radius: 14px;
+  transition: color var(--dur-fast, 150ms) ease,
+              transform var(--dur-fast, 150ms) ease;
+  position: relative;
+  min-height: 56px; /* WCAG 터치 영역 */
 }
-.nav-btn.on { color: var(--primary); }
-.nav-btn.on .nav-label { font-weight: 800; }
-.nav-icon { font-size: 22px; }
-.nav-label { font-size: 10px; font-weight: 700; }
+.nav-btn.on {
+  color: var(--primary);
+}
+.nav-btn.on::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 3px;
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+  border-radius: 0 0 3px 3px;
+}
+.nav-btn:active { transform: scale(0.94); }
+.nav-btn.on .nav-label { font-weight: 900; }
+.nav-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.nav-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
 
 /* FLASH MODAL & ALERT */
 .modal {
@@ -8528,7 +8637,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.5 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.6 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -9253,7 +9362,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.5</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.6</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>

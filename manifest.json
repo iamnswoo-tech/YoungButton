@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v16.5",
-  "short_name": "건강측정 v16.5",
-  "description": "v16.5 — 페이지 이탈 버그 수정 + 에크만/러셀 통합 + 2026 UX 디자인",
+  "name": "건강 측정 v16.6",
+  "short_name": "건강측정 v16.6",
+  "description": "v16.6 — 안정화 (페이지복원 + finger 복원 + 자율신경 검증 디버그 + 2026 UX 실적용)",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

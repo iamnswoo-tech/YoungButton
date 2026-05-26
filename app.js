@@ -214,32 +214,34 @@ const App = {
     this._setupCanvas();
     this._bindFaceButton();
     this._bindVisibilityHandler();
-    this._setupBackButton();
     window.addEventListener('beforeunload', () => this._cleanupAll());
 
-    // ★ v16.5: 리셋/새로고침 시 마지막 페이지 복원 (페이지 이탈 버그 수정)
-    // 단, 측정 진행 중이던 페이지(face/finger/body/test-*)는 home으로 (안전)
-    const lastPage = sessionStorage.getItem('lastPage') || 'home';
-    const safeLastPages = ['home', 'results', 'mood', 'share', 'detail', 'trends', 'body'];
-    const restoredPage = safeLastPages.includes(lastPage) ? lastPage : 'home';
-    history.replaceState({ page: restoredPage }, '', '');
-    if (restoredPage !== 'home') {
-      // 초기화 후 마지막 페이지로 이동 (DOM 준비 후)
-      setTimeout(() => {
-        this._goPageInternal(restoredPage);
-      }, 50);
-    }
-
-    // 매 페이지 이동 시 sessionStorage에 저장 (페이지 핸들러에서 자동 처리)
-    // ★ v13: 누적 Wellness 결과 복원
+    // ★ v13: 누적 Wellness 결과 복원 (먼저)
     this._wellnessRestore();
     this._wellnessRender();
 
+    // ★ v16.6: 페이지 복원 안정화 — setTimeout 없이 즉시 복원
+    // 우선순위:
+    //   1. URL ?share= 파라미터 → 가족 보기 페이지 (자녀가 받은 링크)
+    //   2. sessionStorage lastPage → 마지막 안전 페이지
+    //   3. 기본값 home
+    const sharedHandled = this._checkSharedUrl(); // share URL이면 true 반환 (내부에서 페이지 전환)
+    if (!sharedHandled) {
+      const lastPage = sessionStorage.getItem('lastPage') || 'home';
+      const safeLastPages = ['home', 'results', 'mood', 'share', 'detail', 'trends', 'body'];
+      const restoredPage = safeLastPages.includes(lastPage) ? lastPage : 'home';
+
+      // DOM 즉시 적용 (setTimeout 없음 → 깜빡임 제거)
+      if (restoredPage !== 'home') {
+        this._goPageInternal(restoredPage);
+      }
+    }
+
+    // 뒤로가기 버튼 설정 — 페이지 복원 후 (history 정리)
+    this._setupBackButton();
+
     // ★ v15.0: 홈 첫 화면에 오늘의 감정 카드 렌더링
     this._renderMoodHomeCard();
-
-    // ★ v16.2: 가족 공유 URL 자동 감지
-    this._checkSharedUrl();
 
     // ★ v16.2: 매일 측정 알림 재예약 (페이지 진입 시)
     this._scheduleNextReminder();
@@ -768,12 +770,18 @@ const App = {
         // 7일 지나면 만료 (최신 측정만 유효)
         const now = Date.now();
         const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
-        for (const key of ['face', 'balance', 'gait', 'tremor', 'reaction', 'posture', 'bodycomp']) {
-          if (data[key] && (now - data[key].t) < MAX_AGE) {
+        // ★ v16.6: 'finger' 누락 버그 수정 — 손가락 측정 데이터도 복원
+        const restoreKeys = ['face', 'finger', 'balance', 'gait', 'tremor', 'reaction', 'posture', 'bodycomp'];
+        for (const key of restoreKeys) {
+          if (data[key] && data[key].t && (now - data[key].t) < MAX_AGE) {
             this.state.wellness[key] = data[key];
           }
         }
-        console.log('[Wellness] 복원:', this.state.wellness);
+        // lastUpdated도 복원
+        if (data.lastUpdated) {
+          this.state.wellness.lastUpdated = data.lastUpdated;
+        }
+        console.log('[Wellness] 복원:', Object.keys(this.state.wellness).filter(k => this.state.wellness[k] && typeof this.state.wellness[k] === 'object'));
       }
     } catch (e) {
       console.warn('[Wellness] 복원 실패:', e);
@@ -1531,14 +1539,15 @@ const App = {
   },
 
   // === 뒤로가기 버튼 처리 (앱 종료 방지) ===
-  // ★ v15.9: 첫 진입 시 history 초기화 + 두 번 누르기 정확한 로직
+  // ★ v16.6: 현재 페이지 기준 history 초기화 (페이지 복원 후 호출)
   _setupBackButton() {
-    // 진입 시 home state를 history에 두 번 push (1번째: anchor, 2번째: 현재 페이지)
-    // 이렇게 하면 첫 뒤로가기에서 anchor로 가고, 두 번째에서만 떠남
-    if (!history.state) {
-      history.replaceState({ page: 'home', anchor: true }, '', '');
-      history.pushState({ page: 'home' }, '', '');
-    }
+    const curPage = this.state.page || 'home';
+
+    // history를 깔끔하게 정리:
+    //   anchor (떠나면 종료) → 현재 페이지
+    // 새로고침으로 다시 진입한 경우에도 이 구조가 유지됨
+    history.replaceState({ page: 'home', anchor: true }, '', '');
+    history.pushState({ page: curPage }, '', '');
 
     this._exitWarnUntil = 0; // 종료 경고 만료 시각
 
@@ -6390,8 +6399,8 @@ const App = {
       const cleanUrl = window.location.origin + window.location.pathname;
       window.history.replaceState({page:'family-view'}, '', cleanUrl);
 
-      // 가족 보기 페이지로
-      setTimeout(() => this.goPage('family-view'), 300);
+      // ★ v16.6: 즉시 가족 보기 페이지로 (setTimeout 제거 - 깜빡임 방지)
+      this._goPageInternal('family-view');
       return true;
     } catch (e) {
       console.error('Share URL parse failed:', e);
@@ -6872,6 +6881,13 @@ const App = {
     //      - Baevsky SI는 X축 보강 (높을수록 부정 쪽)
     let autoA = 0, autoV = 0, hasAuto = false;
     const cardio = this._getUnifiedCardio(this.state.wellness || {});
+    // ★ v16.6: 자율신경 검증 진단 로그 (디버깅용)
+    console.log('[Emotion] 자율신경 데이터 확인:', {
+      wellness_keys: Object.keys(this.state.wellness || {}).filter(k => this.state.wellness[k] && typeof this.state.wellness[k] === 'object'),
+      cardio: cardio,
+      hasFace: !!(this.state.wellness && this.state.wellness.face),
+      hasFinger: !!(this.state.wellness && this.state.wellness.finger),
+    });
     if (cardio && cardio.hr && cardio.rmssd) {
       // Arousal (Y축)
       const hrZ = (cardio.hr - 72) / 12;     // 정상 60~84, ±2σ
