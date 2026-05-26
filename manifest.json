@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v16.3",
-  "short_name": "건강측정 v16.3",
-  "description": "v16.3 — 외부조명 우선 디자인 + 정상범위 가이드 + 결과페이지 통합",
+  "name": "건강 측정 v16.4",
+  "short_name": "건강측정 v16.4",
+  "description": "v16.4 — 통합 감정 측정 (PANAS+색상+표정+자율신경) + Plutchik 24 감정 카드",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

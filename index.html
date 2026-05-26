@@ -2020,6 +2020,538 @@ body::before {
   text-align: center;
   padding: 24px 8px;
 }
+
+/* ★ v16.4: 통합 감정 측정 프로모 카드 (인트로 상단) */
+.mood-integrated-promo {
+  background: linear-gradient(135deg, #fff7ed 0%, #fde68a 50%, #fbbf24 100%);
+  border-radius: 24px;
+  padding: 22px 18px;
+  margin: 0 8px 18px;
+  text-align: center;
+  border: 2px solid #f59e0b;
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.25);
+}
+.mip-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 4px 12px;
+  border-radius: 999px;
+  letter-spacing: .04em;
+  margin-bottom: 12px;
+}
+.mip-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #78350f;
+  letter-spacing: -.03em;
+  margin-bottom: 8px;
+}
+.mip-sub {
+  font-size: 13px;
+  color: #78350f;
+  font-weight: 700;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+.mip-evidence {
+  font-size: 10px;
+  color: #92400e;
+  font-weight: 700;
+  background: rgba(255,255,255,0.5);
+  padding: 6px 10px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.mip-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
+  text-align: left;
+  background: rgba(255,255,255,0.55);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.mip-features li {
+  font-size: 12px;
+  color: #78350f;
+  font-weight: 700;
+  padding: 4px 0;
+  line-height: 1.5;
+}
+.mip-time {
+  font-size: 11px;
+  opacity: 0.85;
+  margin-left: 4px;
+}
+
+/* ★ v16.4: 빠른 게임 섹션 */
+.mood-quick-section {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 16px 12px;
+  margin: 0 8px 16px;
+  border: 1px solid var(--border);
+}
+.mood-quick-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 4px;
+  letter-spacing: -.02em;
+  padding: 0 8px;
+}
+.mood-quick-sub {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 600;
+  margin-bottom: 12px;
+  padding: 0 8px;
+}
+
+/* ★ v16.4: 통합 측정 진행 헤더 */
+.integrated-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.integrated-back {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.integrated-progress {
+  flex: 1;
+}
+.integrated-progress-track {
+  height: 6px;
+  background: var(--bg);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.integrated-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+  border-radius: 999px;
+  transition: width 0.4s cubic-bezier(.2,.6,.3,1);
+}
+.integrated-progress-text {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text2);
+  letter-spacing: .03em;
+}
+
+/* ★ v16.4: 통합 단계 카드 */
+.integrated-step-card {
+  background: var(--card);
+  border-radius: 0;
+  padding: 24px 18px 40px;
+}
+.integrated-step-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: -.03em;
+  text-align: center;
+}
+.integrated-step-sub {
+  font-size: 13px;
+  color: var(--text2);
+  text-align: center;
+  font-weight: 600;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+/* ★ v16.4: PANAS 항목 */
+.panas-legend {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 8px;
+  margin-bottom: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text3);
+}
+.panas-list {
+  margin-bottom: 24px;
+}
+.panas-item {
+  background: var(--bg);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.panas-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.panas-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text2);
+  flex-shrink: 0;
+}
+.panas-text {
+  flex: 1;
+}
+.panas-ko {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+.panas-en {
+  font-size: 10px;
+  color: var(--text3);
+  font-weight: 700;
+  letter-spacing: .03em;
+  margin-top: 2px;
+}
+.panas-scale {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.panas-dot {
+  height: 38px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.panas-dot:active { transform: scale(0.92); }
+.panas-dot.on {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff;
+  border-color: #ef4444;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, .35);
+}
+
+.integrated-next-btn {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 900;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: -.01em;
+}
+.integrated-next-btn:disabled {
+  background: var(--bg);
+  color: var(--text3);
+  cursor: not-allowed;
+}
+.integrated-next-btn:not(:disabled):active { transform: scale(0.98); }
+
+/* ★ v16.4: 빠른 색상 선택 */
+.quickc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.quickc-btn {
+  aspect-ratio: 1;
+  border-radius: 16px;
+  border: 2px solid rgba(0,0,0,0.08);
+  position: relative;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 8px;
+  transition: all 0.2s;
+}
+.quickc-btn:active { transform: scale(0.94); }
+.quickc-name {
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  letter-spacing: -.01em;
+}
+.quickc-hint {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 600;
+}
+
+/* ★ v16.4: 빠른 표정 선택 */
+.quickf-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.quickf-btn {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  transition: all 0.2s;
+}
+.quickf-btn:active {
+  transform: scale(0.94);
+  border-color: #ef4444;
+}
+.quickf-emoji {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.quickf-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.01em;
+}
+
+/* ★ v16.4: 큰 감정 카드 (결과 hero) */
+.emotion-result-hero {
+  margin: -16px -16px 0;
+  padding: 56px 24px 40px;
+  text-align: center;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.emotion-result-hero::before {
+  content: '';
+  position: absolute;
+  top: -100px;
+  left: -100px;
+  right: -100px;
+  height: 200px;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.3) 0%, transparent 70%);
+  pointer-events: none;
+}
+.erh-meta {
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.85;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  position: relative;
+}
+.erh-word {
+  font-size: 76px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.05em;
+  margin-bottom: 8px;
+  text-shadow: 0 4px 18px rgba(0,0,0,0.18);
+  position: relative;
+  animation: emotion-reveal 0.8s cubic-bezier(.2,.8,.3,1.2);
+}
+@keyframes emotion-reveal {
+  from { opacity: 0; transform: scale(0.6) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.erh-en {
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.8;
+  letter-spacing: .08em;
+  margin-bottom: 18px;
+  position: relative;
+}
+.erh-desc {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  padding: 0 8px;
+  letter-spacing: -.01em;
+  position: relative;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+.erh-conf {
+  font-size: 11px;
+  font-weight: 800;
+  background: rgba(255,255,255,0.25);
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  letter-spacing: .03em;
+  position: relative;
+  backdrop-filter: blur(6px);
+}
+
+/* ★ v16.4: 감정 분석 섹션 */
+.emotion-analysis {
+  padding: 24px 16px 40px;
+}
+.ea-section {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+}
+.ea-section.ea-auto {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: #fca5a5;
+}
+.ea-section.ea-auto-prompt {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #93c5fd;
+}
+.ea-section.ea-tips {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  border-color: #c4b5fd;
+}
+.ea-section.ea-evidence {
+  background: var(--bg);
+  border-style: dashed;
+}
+.ea-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: -.02em;
+}
+.ea-body {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.7;
+  font-weight: 600;
+}
+.ea-body strong {
+  color: var(--text);
+  font-weight: 900;
+}
+.ea-coord {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 700;
+  text-align: center;
+  margin-top: 8px;
+  letter-spacing: .03em;
+}
+.ea-action {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 800;
+  margin-top: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  width: 100%;
+}
+.ea-tips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ea-tip {
+  font-size: 13px;
+  color: #5b21b6;
+  font-weight: 700;
+  background: rgba(255,255,255,0.6);
+  border-radius: 10px;
+  padding: 10px 12px;
+  line-height: 1.6;
+}
+
+/* ★ v16.4: Russell 2차원 좌표 */
+.russell-plot {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 8px;
+  margin-bottom: 4px;
+}
+
+/* ★ v16.4: PANAS 점수 바 */
+.panas-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.panas-bar-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 50px;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+}
+.pbr-label {
+  font-weight: 700;
+  color: var(--text2);
+}
+.pbr-track {
+  height: 10px;
+  background: rgba(0,0,0,0.06);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.pbr-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.8s cubic-bezier(.2,.6,.3,1);
+}
+.pbr-fill.pa { background: linear-gradient(90deg, #22c55e, #16a34a); }
+.pbr-fill.na { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.pbr-value {
+  font-weight: 900;
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.emotion-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 20px;
+}
 .mood-intro-icon {
   font-size: 72px;
   margin-bottom: 16px;
@@ -7680,7 +8212,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.3 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.4 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -8405,7 +8937,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.3</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.4</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>
@@ -8681,7 +9213,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
 <footer>
   <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
-    🚀 Reset Button - 기획/개발: 남승우 ‍🚀<br>
+    🚀 Reset Button - 기획/개발:남승우 ‍🚀<br>
     rPPG 엔진: ME-rPPG (Apache 2.0)<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
