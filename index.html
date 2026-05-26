@@ -12,74 +12,82 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+<!-- ★ v16.7: Pretendard 한국어 최적화 폰트 (한국형 헬스케어 표준) -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <style>
 :root {
-  /* ★ v13.3: PDF UI/UX 전략 기반 디자인 시스템 */
-  /* PDF 컬러 시스템: 그린(#22c55e=안전/건강), 블루(#3b82f6=신뢰/분석), 엠버(#f59e0b=주의) */
+  /* ★ v16.7: 한국형 프리미엄 헬스케어 디자인 시스템
+     - 블루 계열 (신뢰감 + 의학적 안정감)
+     - 부드러운 흰색 배경 + 미묘한 그라데이션
+     - 노인 친화 큰 텍스트
+     - Apple Health + 토스/카카오 헬스 스타일 */
 
-  /* 베이스 (라이트 + 클린, 필라이즈 스타일) */
-  --bg: #f8fafc;             /* 더 깔끔한 슬레이트 톤 */
+  /* 베이스 — 부드러운 화이트 */
+  --bg: #FAFBFC;
   --bg2: #ffffff;
+  --bg-soft: #F4F7FA;
   --card: #ffffff;
   --card-elev: #ffffff;
   --border: rgba(15, 23, 42, .06);
-  --border2: rgba(15, 23, 42, .12);
-  --shadow: 0 2px 8px rgba(15, 23, 42, .04), 0 1px 2px rgba(15, 23, 42, .06);
-  --shadow-lg: 0 12px 40px rgba(15, 23, 42, .08), 0 4px 12px rgba(15, 23, 42, .06);
-  --shadow-glow: 0 8px 32px rgba(34, 197, 94, .25);
+  --border2: rgba(15, 23, 42, .10);
+  --shadow: 0 2px 8px rgba(59, 130, 246, .04), 0 1px 2px rgba(15, 23, 42, .04);
+  --shadow-lg: 0 12px 40px rgba(59, 130, 246, .08), 0 4px 12px rgba(15, 23, 42, .06);
+  --shadow-glow: 0 8px 32px rgba(59, 130, 246, .25);
 
-  /* 시그니처 컬러 (PDF 권장) */
-  --primary: #22c55e;        /* ★ 그린 (안전/건강/성공) - PDF 핵심 컬러 */
-  --primary2: #4ade80;
-  --primary-dark: #16a34a;
-  --primary-light: rgba(34, 197, 94, .08);
-  --primary-glow: rgba(34, 197, 94, .3);
+  /* 시그니처 — 신뢰감 블루 */
+  --primary: #2D7CFF;          /* ★ 메인 블루 (의학 신뢰) */
+  --primary2: #4F92FF;
+  --primary-dark: #1D5FD9;
+  --primary-light: rgba(45, 124, 255, .08);
+  --primary-glow: rgba(45, 124, 255, .25);
 
-  /* 보조 컬러 */
-  --accent: #3b82f6;          /* 블루 (신뢰/분석) - PDF */
-  --accent2: #60a5fa;
-  --accent-light: rgba(59, 130, 246, .08);
+  /* 보조 — 차분한 시안 */
+  --accent: #00B8D9;
+  --accent2: #4DD0E1;
+  --accent-light: rgba(0, 184, 217, .08);
 
-  /* 카테고리 컬러 (구분용) */
-  --face: #7c3aed;            /* 보라 (얼굴 측정 - 기존 브랜드 유지) */
-  --face2: #a78bfa;
-  --body: #3b82f6;            /* 블루로 변경 (신체 측정) */
-  --body2: #60a5fa;
-  --legacy: #f59e0b;          /* 엠버 (레거시) */
-  --legacy2: #fbbf24;
+  /* 카테고리 컬러 */
+  --face: #5B6CFF;             /* 인디고 (얼굴 측정) */
+  --face2: #7B8AFF;
+  --body: #00B8D9;             /* 시안 (신체 측정) */
+  --body2: #4DD0E1;
+  --finger: #FF6B6B;           /* 코랄 (손가락 측정) */
+  --finger2: #FF8E8E;
+  --legacy: #FFA94D;           /* 따뜻한 오렌지 */
+  --legacy2: #FFBE7A;
 
-  /* 시맨틱 */
-  --green: #22c55e;
-  --green2: #4ade80;
-  --warn: #f59e0b;            /* 엠버 (주의/변화 필요) */
-  --warn2: #fbbf24;
-  --danger: #ef4444;
-  --danger2: #f87171;
+  /* 시맨틱 (부드럽게) */
+  --green: #10B981;            /* 차분한 그린 (성공 상태만) */
+  --green2: #34D399;
+  --warn: #FFA94D;             /* 부드러운 오렌지 */
+  --warn2: #FFBE7A;
+  --danger: #FF6B6B;           /* 부드러운 코랄 (덜 공격적) */
+  --danger2: #FF8E8E;
 
   /* 텍스트 위계 */
-  --text: #0f172a;            /* 진한 슬레이트 */
-  --text2: #475569;
-  --text3: #64748b;
-  --muted: #94a3b8;
+  --text: #1A2B45;             /* 진한 네이비 (부드러운 검정) */
+  --text2: #4A5B75;
+  --text3: #7585A0;
+  --muted: #A5B0C5;
 
   /* 기타 */
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --radius: 16px;
-  --radius-lg: 20px;
-  --radius-xl: 24px;
+  --sans: 'Pretendard', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", system-ui, sans-serif;
+  --radius: 18px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
 
-  /* ★ v16.5: 2026 UX 디자인 시스템 (미니멀리즘 + Liquid Glass + 접근성) */
-  /* 타이포그래피 스케일 (8-step modular scale) */
-  --t-xs: 11px;  /* 메타 정보 */
-  --t-sm: 13px;  /* 본문 보조 */
-  --t-base: 15px; /* 본문 */
-  --t-lg: 17px;  /* 강조 */
-  --t-xl: 20px;  /* 섹션 타이틀 */
-  --t-2xl: 26px; /* 페이지 타이틀 */
-  --t-3xl: 36px; /* 큰 수치 */
-  --t-display: 56px; /* hero 디스플레이 */
+  /* 타이포그래피 스케일 (노인 친화 - 더 크게) */
+  --t-xs: 12px;  /* 메타 정보 */
+  --t-sm: 14px;  /* 본문 보조 */
+  --t-base: 16px; /* 본문 (기본) */
+  --t-lg: 18px;  /* 강조 */
+  --t-xl: 22px;  /* 섹션 타이틀 */
+  --t-2xl: 28px; /* 페이지 타이틀 */
+  --t-3xl: 40px; /* 큰 수치 */
+  --t-display: 64px; /* hero 디스플레이 */
 
-  /* 간격 (8-pt grid) */
+  /* 간격 (넉넉하게) */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -89,23 +97,23 @@
   --sp-7: 32px;
   --sp-8: 40px;
 
-  /* 카드 elevation (3-tier system) */
+  /* 카드 elevation (3-tier) */
   --elev-0: none;
-  --elev-1: 0 1px 2px rgba(15, 23, 42, .04), 0 1px 1px rgba(15, 23, 42, .04);
-  --elev-2: 0 4px 12px rgba(15, 23, 42, .06), 0 2px 4px rgba(15, 23, 42, .04);
-  --elev-3: 0 12px 32px rgba(15, 23, 42, .08), 0 4px 8px rgba(15, 23, 42, .06);
+  --elev-1: 0 1px 3px rgba(59, 130, 246, .04), 0 1px 2px rgba(15, 23, 42, .03);
+  --elev-2: 0 4px 16px rgba(59, 130, 246, .06), 0 2px 4px rgba(15, 23, 42, .04);
+  --elev-3: 0 12px 40px rgba(59, 130, 246, .12), 0 4px 8px rgba(15, 23, 42, .06);
 
-  /* Liquid Glass (Apple iOS 2026 트렌드) */
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.5);
-  --glass-blur: blur(20px) saturate(180%);
+  /* Liquid Glass */
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-blur: blur(24px) saturate(180%);
 
-  /* 접근성 컬러 (WCAG AAA 대비비 7:1) */
-  --text-strong: #020617;     /* 본문 강조용 - 대비 21:1 */
-  --text-medium: #334155;     /* 본문 표준 - 대비 9.5:1 */
-  --text-soft: #64748b;       /* 보조 - 대비 5.7:1 */
+  /* WCAG AAA 접근성 컬러 */
+  --text-strong: #0F1B2D;
+  --text-medium: #3A4A65;
+  --text-soft: #7585A0;
 
-  /* 모션 (감속/가속 표준) */
+  /* 모션 */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --dur-fast: 150ms;
@@ -342,11 +350,11 @@ html, body {
 }
 body::before {
   content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  /* ★ v16.6: 2026 UX - 더 미묘하고 깊이있는 배경 그라데이션 */
+  /* ★ v16.7: 한국형 헬스케어 - 부드러운 블루/시안 배경 */
   background:
-    radial-gradient(1400px 700px at 0% -15%, rgba(34, 197, 94, .07), transparent 55%),
-    radial-gradient(1000px 600px at 100% 115%, rgba(59, 130, 246, .05), transparent 55%),
-    radial-gradient(600px 400px at 50% 50%, rgba(168, 85, 247, .03), transparent 70%);
+    radial-gradient(1400px 700px at 0% -15%, rgba(45, 124, 255, .06), transparent 55%),
+    radial-gradient(1000px 600px at 100% 115%, rgba(0, 184, 217, .05), transparent 55%),
+    radial-gradient(600px 400px at 50% 50%, rgba(91, 108, 255, .03), transparent 70%);
 }
 
 /* ★ v16.6: 2026 UX 페이지 진입 트랜지션 (부드러운 fade-in) */
@@ -363,14 +371,14 @@ body::before {
 }
 
 /* HEADER */
-/* ★ v16.6: 2026 UX - 더 깔끔한 헤더 */
+/* ★ v16.7: 한국형 헬스케어 - 블루 그라데이션 헤더 */
 .hd {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top));
-  background: linear-gradient(135deg, #16a34a 0%, #22c55e 50%, #4ade80 100%);
+  background: linear-gradient(135deg, #1D5FD9 0%, #2D7CFF 50%, #4F92FF 100%);
   position: sticky; top: 0; z-index: 50;
   color: #fff;
-  box-shadow: 0 4px 20px rgba(34,197,94,.25);
+  box-shadow: 0 4px 20px rgba(45, 124, 255, .25);
   backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
 }
@@ -2372,64 +2380,66 @@ body::before {
   padding: 24px 8px;
 }
 
-/* ★ v16.4: 통합 감정 측정 프로모 카드 (인트로 상단) */
+/* ★ v16.7: 통합 감정 측정 프로모 — 한국형 블루 디자인 (첨부 이미지 1번 스타일) */
 .mood-integrated-promo {
-  background: linear-gradient(135deg, #fff7ed 0%, #fde68a 50%, #fbbf24 100%);
+  background: linear-gradient(135deg, #EEF4FF 0%, #DBEAFE 50%, #BFDBFE 100%);
   border-radius: 24px;
-  padding: 22px 18px;
+  padding: 24px 20px;
   margin: 0 8px 18px;
   text-align: center;
-  border: 2px solid #f59e0b;
-  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.25);
+  border: 1px solid rgba(45, 124, 255, 0.15);
+  box-shadow: 0 8px 24px rgba(45, 124, 255, 0.12);
 }
 .mip-badge {
   display: inline-block;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
-  padding: 4px 12px;
+  padding: 5px 14px;
   border-radius: 999px;
   letter-spacing: .04em;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 12px rgba(45, 124, 255, 0.3);
 }
 .mip-title {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 900;
-  color: #78350f;
+  color: var(--text-strong);
   letter-spacing: -.03em;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  line-height: 1.25;
 }
 .mip-sub {
-  font-size: 13px;
-  color: #78350f;
-  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-medium);
+  font-weight: 600;
   line-height: 1.6;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 .mip-evidence {
-  font-size: 10px;
-  color: #92400e;
+  font-size: 11px;
+  color: var(--primary-dark);
   font-weight: 700;
-  background: rgba(255,255,255,0.5);
-  padding: 6px 10px;
-  border-radius: 8px;
-  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 8px 12px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  letter-spacing: -.01em;
 }
 .mip-features {
   list-style: none;
-  padding: 0;
-  margin: 0 0 14px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
   text-align: left;
-  background: rgba(255,255,255,0.55);
-  border-radius: 12px;
-  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 14px;
 }
 .mip-features li {
-  font-size: 12px;
-  color: #78350f;
-  font-weight: 700;
-  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text-medium);
+  font-weight: 600;
+  padding: 5px 0;
   line-height: 1.5;
 }
 .mip-time {
@@ -2499,7 +2509,7 @@ body::before {
 }
 .integrated-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #f59e0b, #ef4444);
+  background: linear-gradient(90deg, var(--accent), var(--primary));
   border-radius: 999px;
   transition: width 0.4s cubic-bezier(.2,.6,.3,1);
 }
@@ -2607,16 +2617,175 @@ body::before {
 }
 .panas-dot:active { transform: scale(0.92); }
 .panas-dot.on {
-  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
   color: #fff;
-  border-color: #ef4444;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, .35);
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(45, 124, 255, .35);
+}
+
+/* ★ v16.7: 새 감정 측정 UX — 카드 선택 방식 (첨부 OX 퀴즈 스타일) */
+.emo-question-card {
+  background: var(--card);
+  border-radius: 24px;
+  padding: 28px 22px;
+  margin: 16px;
+  box-shadow: var(--elev-2);
+  border: 1px solid var(--border);
+  transition: opacity 0.25s var(--ease-out, ease),
+              transform 0.25s var(--ease-out, ease);
+  animation: questionFadeIn 0.4s var(--ease-out, ease);
+}
+@keyframes questionFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.emo-question-progress {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 999px;
+  margin-bottom: 20px;
+  letter-spacing: -.01em;
+}
+.eqp-cur { font-weight: 900; }
+.eqp-divider { opacity: 0.5; }
+.eqp-total { opacity: 0.85; }
+
+.emo-question-main {
+  text-align: center;
+  margin-bottom: 28px;
+  padding: 0 4px;
+}
+.eqm-text {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--text-strong);
+  letter-spacing: -.03em;
+  line-height: 1.35;
+  margin-bottom: 10px;
+}
+.eqm-sub {
+  font-size: 13px;
+  color: var(--text-soft);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.emo-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.emo-choice-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: all 0.2s var(--ease-out, ease);
+  min-height: 64px;
+  position: relative;
+}
+.emo-choice-card:active {
+  transform: scale(0.98);
+  background: var(--primary-light);
+}
+.emo-choice-card.selected {
+  background: var(--primary-light);
+  border-color: var(--choice-color, var(--primary));
+  box-shadow: 0 4px 16px rgba(45, 124, 255, 0.15);
+}
+.ecc-emoji {
+  font-size: 32px;
+  line-height: 1;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.06));
+}
+.ecc-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ecc-label {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-strong);
+  letter-spacing: -.02em;
+}
+.ecc-sub {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+.ecc-radio {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--primary);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.emo-choice-card.selected .ecc-radio {
+  background: var(--choice-color, var(--primary));
+  color: #fff;
+  border-color: var(--choice-color, var(--primary));
+  transform: scale(1.1);
+}
+
+.emo-prev-btn {
+  display: block;
+  margin: 12px auto 0;
+  padding: 10px 20px;
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-medium);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease;
+}
+.emo-prev-btn:active {
+  background: var(--bg);
+}
+
+.emo-evidence-mini {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-soft);
+  font-weight: 600;
+  padding: 12px 16px;
+  background: var(--bg);
+  margin: 0 16px 24px;
+  border-radius: 12px;
+  letter-spacing: -.01em;
 }
 
 .integrated-next-btn {
   width: 100%;
   padding: 16px;
-  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
   color: #fff;
   border: none;
   border-radius: 14px;
@@ -2625,6 +2794,7 @@ body::before {
   font-family: inherit;
   cursor: pointer;
   letter-spacing: -.01em;
+  box-shadow: 0 6px 16px rgba(45, 124, 255, 0.25);
 }
 .integrated-next-btn:disabled {
   background: var(--bg);
@@ -2951,7 +3121,7 @@ body::before {
 .mood-start-btn {
   width: 100%;
   padding: 16px 24px;
-  background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%);
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
   color: #fff;
   border: none;
   border-radius: 16px;
@@ -2963,8 +3133,14 @@ body::before {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  box-shadow: 0 8px 24px rgba(124, 58, 237, .3);
+  box-shadow: 0 8px 24px rgba(45, 124, 255, .3);
   margin-bottom: 12px;
+  letter-spacing: -.02em;
+  min-height: 56px;
+}
+.mood-start-btn.primary {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+  box-shadow: 0 10px 28px rgba(45, 124, 255, .35);
 }
 .mood-start-btn:active { transform: scale(0.98); }
 
@@ -5427,10 +5603,10 @@ body::before {
   transition: all .15s;
 }
 .finger-measure-main-btn:not(:disabled) {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(135deg, var(--finger), var(--finger2));
   color: #fff;
   border: none;
-  box-shadow: 0 8px 24px rgba(239, 68, 68, .35);
+  box-shadow: 0 8px 24px rgba(255, 107, 107, .35);
   animation: ready-pulse 1.6s ease-in-out infinite;
 }
 .finger-measure-main-btn:not(:disabled):active {
@@ -6506,16 +6682,17 @@ body::before {
 .ucc-action {
   display: block;
   margin-top: 8px;
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
   color: #fff;
   border: none;
   border-radius: 10px;
-  padding: 8px 14px;
-  font-size: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
   font-family: inherit;
   width: 100%;
+  letter-spacing: -.01em;
 }
 .ucc-action:active { transform: scale(0.97); }
 
@@ -7345,9 +7522,9 @@ body::before {
 
 .measure-card {
   display: flex; align-items: center; gap: 16px;
-  padding: 20px;
+  padding: 22px 20px;
   margin-bottom: 12px;
-  border-radius: 20px;
+  border-radius: 22px;
   background: var(--card);
   border: 1px solid var(--border);
   box-shadow: var(--elev-1);
@@ -7357,27 +7534,34 @@ body::before {
   text-align: left; width: 100%;
   font-family: var(--sans); color: var(--text-strong);
   position: relative; overflow: hidden;
-  min-height: 84px; /* WCAG 큰 터치 영역 */
+  min-height: 88px;
 }
 .measure-card::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-  width: 4px; background: var(--primary);
+  width: 4px;
+  background: linear-gradient(180deg, var(--primary), var(--accent));
 }
-.measure-card.face::before  { background: linear-gradient(to bottom, #7c3aed, #a78bfa); }
-.measure-card.body::before  { background: linear-gradient(to bottom, #06b6d4, #22d3ee); }
-.measure-card.results::before { background: linear-gradient(to bottom, #22c55e, #4ade80); }
+.measure-card.face::before  { background: linear-gradient(180deg, var(--face), var(--face2)); }
+.measure-card.body::before  { background: linear-gradient(180deg, var(--body), var(--body2)); }
+.measure-card.finger::before { background: linear-gradient(180deg, var(--finger), var(--finger2)); }
+.measure-card.results::before { background: linear-gradient(180deg, var(--primary), var(--accent)); }
+.measure-card.share::before { background: linear-gradient(180deg, #A855F7, #C084FC); }
 .measure-card:active {
   transform: scale(.98);
   box-shadow: var(--elev-2);
 }
 .mc-icon {
   width: 56px; height: 56px; flex-shrink: 0;
-  border-radius: 16px; display: flex; align-items: center; justify-content: center;
+  border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
   font-size: 30px;
 }
-.mc-icon.face  { background: linear-gradient(135deg, #ede9fe, #ddd6fe); }
-.mc-icon.body  { background: linear-gradient(135deg, #cffafe, #a5f3fc); }
-.mc-icon.results { background: linear-gradient(135deg, #dcfce7, #bbf7d0); }
+/* 부드러운 파스텔 배경 */
+.mc-icon.face  { background: linear-gradient(135deg, #EEF2FF, #E0E7FF); }
+.mc-icon.body  { background: linear-gradient(135deg, #E0F7FA, #B2EBF2); }
+.mc-icon.finger { background: linear-gradient(135deg, #FEE2E2, #FECACA); }
+.mc-icon.results { background: linear-gradient(135deg, #DBEAFE, #BFDBFE); }
+.mc-icon.share { background: linear-gradient(135deg, #F5F3FF, #EDE9FE); }
 .mc-content { flex: 1; min-width: 0; }
 .mc-title {
   font-size: 17px;
@@ -7696,7 +7880,7 @@ body::before {
   transform: translateX(-50%);
   width: 32px;
   height: 3px;
-  background: linear-gradient(90deg, #16a34a, #22c55e);
+  background: linear-gradient(90deg, var(--primary-dark), var(--primary));
   border-radius: 0 0 3px 3px;
 }
 .nav-btn:active { transform: scale(0.94); }
@@ -8637,7 +8821,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.6 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.7 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -9362,7 +9546,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.6</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.7</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>

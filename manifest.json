@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v16.6",
-  "short_name": "건강측정 v16.6",
-  "description": "v16.6 — 안정화 (페이지복원 + finger 복원 + 자율신경 검증 디버그 + 2026 UX 실적용)",
+  "name": "건강 측정 v16.7",
+  "short_name": "건강측정 v16.7",
+  "description": "v16.7 — 한국형 헬스케어 디자인 (블루 팔레트 + Pretendard) + 카드형 감정 측정 UX",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

@@ -6650,6 +6650,7 @@ const App = {
     this._moodState.steps = ['panas', 'color', 'mirror1', 'result'];
     this._moodState.stepIdx = 0;
     this._moodState.panasScores = {};
+    this._moodState.panasIdx = 0; // ★ v16.7: 카드 방식 인덱스 초기화
     this._moodState.colorChoice = null;
     this._moodState.mirrorChoice = null;
     this._renderIntegratedStep(container);
@@ -6658,15 +6659,25 @@ const App = {
   _renderIntegratedStep(container) {
     const s = this._moodState;
     const step = s.steps[s.stepIdx];
-    const progress = ((s.stepIdx) / (s.steps.length - 1)) * 100;
+    // ★ v16.7: PANAS 내부 진행도까지 반영한 부드러운 진행바
+    let progress;
+    if (step === 'panas') {
+      const panasProgress = (s.panasIdx || 0) / this._panasItems.length;
+      progress = (s.stepIdx + panasProgress) / (s.steps.length - 1) * 100;
+    } else {
+      progress = (s.stepIdx / (s.steps.length - 1)) * 100;
+    }
+    const stepNames = ['감정 응답', '색상 선택', '표정 선택', '결과 확인'];
     const headerHTML = `
       <div class="integrated-header">
         <button class="integrated-back" type="button" onclick="App._renderMoodPage()">×</button>
         <div class="integrated-progress">
           <div class="integrated-progress-track">
-            <div class="integrated-progress-fill" style="width:${progress}%"></div>
+            <div class="integrated-progress-fill" style="width:${Math.min(100, progress)}%"></div>
           </div>
-          <div class="integrated-progress-text">단계 ${s.stepIdx + 1} / ${s.steps.length}</div>
+          <div class="integrated-progress-text">
+            ${stepNames[s.stepIdx] || ''} · ${s.stepIdx + 1} / ${s.steps.length}
+          </div>
         </div>
       </div>
     `;
@@ -6677,66 +6688,134 @@ const App = {
     else if (step === 'result') this._renderIntegratedResult(container);
   },
 
-  // ─── Step 1: 단축 PANAS 10문항 ───
+  // ─── Step 1: 단축 PANAS — 카드 선택 UX (한 화면에 한 질문) ───
+  // ★ v16.7: 첨부 OX 퀴즈 스타일 — 큰 카드 선택, 인지 부담 ↓
   _renderPanasStep(container, headerHTML) {
+    // 현재 질문 인덱스 (없으면 0부터 시작)
+    if (this._moodState.panasIdx === undefined) {
+      this._moodState.panasIdx = 0;
+    }
+    const idx = this._moodState.panasIdx;
     const items = this._panasItems;
-    const itemsHTML = items.map((item, i) => `
-      <div class="panas-item" data-id="${item.id}">
-        <div class="panas-label">
-          <span class="panas-num">${i + 1}</span>
-          <div class="panas-text">
-            <div class="panas-ko">${item.ko}</div>
-            <div class="panas-en">${item.label}</div>
-          </div>
-        </div>
-        <div class="panas-scale">
-          ${[1,2,3,4,5].map(v => `
-            <button class="panas-dot" type="button" data-val="${v}" onclick="App._panasSelect('${item.id}', ${v}, this)">${v}</button>
-          `).join('')}
-        </div>
-      </div>
+    const item = items[idx];
+    const total = items.length;
+    const answered = Object.keys(this._moodState.panasScores).length;
+
+    // 진행 표시
+    const innerProgress = ((idx) / total) * 100;
+
+    // 응답 선택지 — 5단계지만 직관적 표현
+    // 각 선택지는 색상 + 이모지 + 라벨로 구성
+    const choices = [
+      { val: 1, label: '전혀 아니에요', sub: '거의 그렇지 않음', emoji: '🙁', color: '#94A3B8' },
+      { val: 2, label: '조금 그래요',   sub: '약간 그러함',     emoji: '😐', color: '#7585A0' },
+      { val: 3, label: '보통이에요',     sub: '중간 정도',         emoji: '😊', color: '#4F92FF' },
+      { val: 4, label: '꽤 그래요',     sub: '많이 그러함',     emoji: '😄', color: '#2D7CFF' },
+      { val: 5, label: '매우 그래요',     sub: '아주 강하게',     emoji: '🤩', color: '#1D5FD9' },
+    ];
+
+    // 현재 질문에 이미 답이 있으면 표시
+    const currentAnswer = this._moodState.panasScores[item.id];
+
+    const choiceCards = choices.map(c => `
+      <button class="emo-choice-card ${currentAnswer === c.val ? 'selected' : ''}"
+              type="button"
+              style="--choice-color: ${c.color}"
+              onclick="App._panasPickAndNext('${item.id}', ${c.val})">
+        <span class="ecc-emoji">${c.emoji}</span>
+        <span class="ecc-text">
+          <span class="ecc-label">${c.label}</span>
+          <span class="ecc-sub">${c.sub}</span>
+        </span>
+        <span class="ecc-radio">${currentAnswer === c.val ? '✓' : ''}</span>
+      </button>
     `).join('');
 
     container.innerHTML = `
       ${headerHTML}
-      <div class="integrated-step-card">
-        <div class="integrated-step-title">😊 지금 이 순간의 감정</div>
-        <div class="integrated-step-sub">
-          지금 이 순간 얼마나 그렇게 느끼는지 1~5로 표시해주세요.<br>
-          <small style="opacity:0.75">학술 근거: PANAS-SF (Watson & Clark 1988, Thompson 2007)</small>
+      <div class="emo-question-card">
+        <!-- 진행 표시 -->
+        <div class="emo-question-progress">
+          <span class="eqp-cur">질문 ${idx + 1}</span>
+          <span class="eqp-divider">/</span>
+          <span class="eqp-total">${total}</span>
         </div>
-        <div class="panas-legend">
-          <span>1 전혀 아님</span>
-          <span>3 보통</span>
-          <span>5 매우 그렇다</span>
+
+        <!-- 큰 질문 -->
+        <div class="emo-question-main">
+          <div class="eqm-text">${item.ko}</div>
+          <div class="eqm-sub">지금 이 순간을 솔직하게 선택해주세요</div>
         </div>
-        <div class="panas-list">
-          ${itemsHTML}
+
+        <!-- 5개 카드 선택 -->
+        <div class="emo-choices">
+          ${choiceCards}
         </div>
-        <button class="integrated-next-btn" type="button" id="panas-next-btn" onclick="App._panasNext()" disabled>
-          다음 단계 →
-        </button>
+
+        <!-- 이전 버튼 (첫 질문 제외) -->
+        ${idx > 0 ? `
+          <button class="emo-prev-btn" type="button" onclick="App._panasPrev()">
+            ← 이전 질문
+          </button>
+        ` : ''}
+      </div>
+
+      <!-- 학술 근거 (작게 하단) -->
+      <div class="emo-evidence-mini">
+        📚 PANAS-SF (Watson & Clark 1988) · 학술 검증된 감정 측정
       </div>
     `;
   },
 
-  _panasSelect(itemId, val, btnEl) {
+  // ★ v16.7: 카드 선택 후 자동으로 다음 질문
+  _panasPickAndNext(itemId, val) {
     this._moodState.panasScores[itemId] = val;
-    // UI 업데이트 — 같은 행의 다른 버튼 비활성, 현재 버튼 활성
-    const row = btnEl.closest('.panas-item');
-    row.querySelectorAll('.panas-dot').forEach(d => d.classList.remove('on'));
-    btnEl.classList.add('on');
+    const idx = this._moodState.panasIdx || 0;
+    const total = this._panasItems.length;
 
-    // 모든 항목 완료 시 next 활성화
-    const totalItems = this._panasItems.length;
-    const answered = Object.keys(this._moodState.panasScores).length;
-    const nextBtn = document.getElementById('panas-next-btn');
-    if (nextBtn) {
-      nextBtn.disabled = answered < totalItems;
-      nextBtn.innerHTML = answered < totalItems
-        ? `${totalItems - answered}개 남았어요`
-        : '다음 단계 →';
+    // 햅틱 (지원 시)
+    if (navigator.vibrate) {
+      try { navigator.vibrate(10); } catch (e) {}
     }
+
+    if (idx < total - 1) {
+      // 다음 질문
+      this._moodState.panasIdx = idx + 1;
+      // 부드러운 전환 효과
+      const card = document.querySelector('.emo-question-card');
+      if (card) {
+        card.style.opacity = '0';
+        card.style.transform = 'translateX(-20px)';
+      }
+      setTimeout(() => {
+        this._renderIntegratedStep(document.getElementById('mood-container'));
+      }, 200);
+    } else {
+      // 마지막 질문 — 다음 단계로
+      this._moodState.panasIdx = 0; // reset
+      this._moodState.stepIdx++;
+      setTimeout(() => {
+        this._renderIntegratedStep(document.getElementById('mood-container'));
+      }, 300);
+    }
+  },
+
+  _panasPrev() {
+    const idx = this._moodState.panasIdx || 0;
+    if (idx > 0) {
+      this._moodState.panasIdx = idx - 1;
+      this._renderIntegratedStep(document.getElementById('mood-container'));
+    }
+  },
+
+  // (기존 호환용 — 다른 곳에서 호출 안 함)
+  _panasSelect(itemId, val, btnEl) {
+    this._panasPickAndNext(itemId, val);
+  },
+
+  _panasNext() {
+    this._moodState.stepIdx++;
+    this._renderIntegratedStep(document.getElementById('mood-container'));
   },
 
   _panasNext() {
