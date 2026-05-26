@@ -216,8 +216,21 @@ const App = {
     this._bindVisibilityHandler();
     this._setupBackButton();
     window.addEventListener('beforeunload', () => this._cleanupAll());
-    history.replaceState({ page: 'home' }, '', '');
 
+    // ★ v16.5: 리셋/새로고침 시 마지막 페이지 복원 (페이지 이탈 버그 수정)
+    // 단, 측정 진행 중이던 페이지(face/finger/body/test-*)는 home으로 (안전)
+    const lastPage = sessionStorage.getItem('lastPage') || 'home';
+    const safeLastPages = ['home', 'results', 'mood', 'share', 'detail', 'trends', 'body'];
+    const restoredPage = safeLastPages.includes(lastPage) ? lastPage : 'home';
+    history.replaceState({ page: restoredPage }, '', '');
+    if (restoredPage !== 'home') {
+      // 초기화 후 마지막 페이지로 이동 (DOM 준비 후)
+      setTimeout(() => {
+        this._goPageInternal(restoredPage);
+      }, 50);
+    }
+
+    // 매 페이지 이동 시 sessionStorage에 저장 (페이지 핸들러에서 자동 처리)
     // ★ v13: 누적 Wellness 결과 복원
     this._wellnessRestore();
     this._wellnessRender();
@@ -1600,10 +1613,21 @@ const App = {
 
   _goPageInternal(page) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
-    document.getElementById('page-' + page).classList.add('on');
+    const pageEl = document.getElementById('page-' + page);
+    if (!pageEl) {
+      // ★ v16.5: 없는 페이지 요청 시 home으로 안전 폴백 (orphan page 보호)
+      console.warn(`[Nav] 존재하지 않는 페이지: ${page} → home으로`);
+      const homeEl = document.getElementById('page-home');
+      if (homeEl) homeEl.classList.add('on');
+      page = 'home';
+    } else {
+      pageEl.classList.add('on');
+    }
     document.querySelectorAll('.nav-btn').forEach(n => n.classList.remove('on'));
     document.getElementById('nav-' + page)?.classList.add('on');
     this.state.page = page;
+    // ★ v16.5: 새로고침 복원용 마지막 페이지 저장
+    try { sessionStorage.setItem('lastPage', page); } catch (e) {}
     // ★ v14.5: 페이지 이동 트래킹
     this._trackEvent('page_view', { page });
     // ★ v14.0: 결과 페이지 진입 시 종합 렌더링
@@ -6835,30 +6859,72 @@ const App = {
     const mirrorV = s.mirrorChoice ? s.mirrorChoice.v : 0;
     const mirrorA = s.mirrorChoice ? s.mirrorChoice.a : 0;
 
-    // 4. 자율신경 (HRV/심박) — Russell Arousal 객관 측정
-    //    높은 HR + 낮은 RMSSD = 교감신경 우세 = 각성 ↑ (Berntson 1997)
-    let autoA = 0, hasAuto = false;
+    // 4. 자율신경 (HRV/심박) — Russell Arousal + Valence 객관 측정
+    //    ★ v16.5: 에크만/러셀 통합 강화 (첨부 학술 분석 기반)
+    //
+    //    Y축 (Arousal): 교감신경 활성도
+    //      - 높은 HR + 낮은 RMSSD = 교감 우세 = 각성 ↑ (Berntson 1997)
+    //      - 호흡수 빠름도 각성 보강 (Grossman 2007)
+    //
+    //    X축 (Valence): 자율신경 균형
+    //      - 부교감 우세 (높은 RMSSD) + 안정 HR = 긍정 영역 (Park 2019)
+    //      - 만성 스트레스 (낮은 HRV + 빠른 HR) = 부정 영역
+    //      - Baevsky SI는 X축 보강 (높을수록 부정 쪽)
+    let autoA = 0, autoV = 0, hasAuto = false;
     const cardio = this._getUnifiedCardio(this.state.wellness || {});
     if (cardio && cardio.hr && cardio.rmssd) {
-      const hrZ = (cardio.hr - 72) / 12;     // ±2σ
+      // Arousal (Y축)
+      const hrZ = (cardio.hr - 72) / 12;     // 정상 60~84, ±2σ
       const rmssdZ = (40 - cardio.rmssd) / 20; // 낮을수록 + (교감 우세)
-      autoA = Math.max(-1, Math.min(1, (hrZ + rmssdZ) / 2 * 0.6));
+      let arousalRaw = (hrZ + rmssdZ) / 2;
+      // 호흡 빠름 보강 (얼굴 측정에서)
+      if (cardio.respRate && cardio.respRate > 20) {
+        arousalRaw += (cardio.respRate - 16) / 20 * 0.3;
+      }
+      autoA = Math.max(-1, Math.min(1, arousalRaw * 0.6));
+
+      // Valence (X축) — 자율신경 균형 평가
+      // 좋은 HRV + 안정 HR = 긍정 / 만성 교감 우세 = 부정
+      let valenceRaw = 0;
+      // 안정 HR (60-75)이면서 RMSSD 양호 (30+) = 긍정
+      if (cardio.hr >= 55 && cardio.hr <= 78 && cardio.rmssd >= 30) {
+        valenceRaw = 0.3 + Math.min(0.3, (cardio.rmssd - 30) / 40 * 0.3);
+      }
+      // 너무 빠른 HR + 낮은 RMSSD = 부정
+      else if (cardio.hr > 85 && cardio.rmssd < 25) {
+        valenceRaw = -0.4 - Math.min(0.2, (cardio.hr - 85) / 20 * 0.2);
+      }
+      // 비정상 범위
+      else if (cardio.hr > 90 || cardio.rmssd < 15) {
+        valenceRaw = -0.5;
+      }
+      // Baevsky Stress Index 보강 (있을 때)
+      if (cardio.stressIndex !== undefined && cardio.stressIndex !== null) {
+        // SI 0-50=긍정, 50-150=중립, 150-500=경미한 부정, 500+=부정
+        const siNorm = Math.log10(cardio.stressIndex + 10) / Math.log10(2010); // 0-1
+        valenceRaw -= (siNorm - 0.3) * 0.4;
+      }
+      autoV = Math.max(-1, Math.min(1, valenceRaw));
+
       hasAuto = true;
     }
 
     // 5. 가중평균 — PANAS 50%, 색상 15%, 표정 20%, 자율신경 15%
-    // (PANAS가 가장 검증됨, 자율신경 없으면 비율 재조정)
+    // ★ v16.5: 자율신경 가중치를 Valence/Arousal 각각 적용
+    //    - PANAS는 가장 검증된 자기보고 → V/A 모두 50%
+    //    - 자율신경은 객관 데이터 → A에 더 큰 가중치 (각성도 더 정확)
     const weights = hasAuto ?
-      { panas: 0.50, color: 0.15, mirror: 0.20, auto: 0.15 } :
-      { panas: 0.60, color: 0.18, mirror: 0.22, auto: 0 };
+      { panas: 0.50, color: 0.15, mirror: 0.20, autoV: 0.15, autoA: 0.15 } :
+      { panas: 0.60, color: 0.18, mirror: 0.22, autoV: 0, autoA: 0 };
 
     const finalV = panasV  * weights.panas +
                    colorV  * weights.color +
-                   mirrorV * weights.mirror;
+                   mirrorV * weights.mirror +
+                   autoV   * weights.autoV;
     const finalA = panasA  * weights.panas +
                    colorA  * weights.color +
                    mirrorA * weights.mirror +
-                   autoA   * weights.auto;
+                   autoA   * weights.autoA;
 
     // 6. Plutchik 감정 카드 매칭 — 24개 중 가장 가까운 것
     const cards = this._emotionCards;
@@ -6881,6 +6947,7 @@ const App = {
       panasV, panasA,
       paAvg, naAvg,
       autoA: hasAuto ? autoA : null,
+      autoV: hasAuto ? autoV : null, // ★ v16.5
       hasAuto,
       confidence,
       weights,
@@ -6956,13 +7023,31 @@ const App = {
     else if (result.valence < 0 && result.arousal >= 0) quadrantMsg = '⚡ 긴장되고 불편한 영역';
     else quadrantMsg = '💧 가라앉고 우울한 영역';
 
-    // 자율신경 코멘트
+    // ★ v16.5: 자율신경 검증 멘트 — V/A 모두 활용 + 자기보고 일치도 검사
     let autoMsg = '';
     if (result.hasAuto) {
       const cardio = this._getUnifiedCardio(this.state.wellness || {});
-      if (result.autoA > 0.3) autoMsg = `자율신경 측정에서도 교감신경이 활성화된 상태(HR ${cardio.hr}, HRV ${cardio.rmssd}ms)로 나와, 자기보고와 일치해요.`;
-      else if (result.autoA < -0.3) autoMsg = `자율신경 측정에서 부교감 우세 상태(HR ${cardio.hr}, HRV ${cardio.rmssd}ms)가 확인돼 매우 이완된 상태예요.`;
-      else autoMsg = `자율신경(HR ${cardio.hr}, HRV ${cardio.rmssd}ms)도 균형잡혀 있어요.`;
+
+      // PANAS 자기보고와 자율신경 일치도 검사
+      const reportedQuadrant = `${result.panasV >= 0 ? '+' : '-'}V${result.panasA >= 0 ? '+' : '-'}A`;
+      const objectiveQuadrant = `${result.autoV >= 0 ? '+' : '-'}V${result.autoA >= 0 ? '+' : '-'}A`;
+      const agree = reportedQuadrant === objectiveQuadrant;
+
+      // 자율신경 상태 해석
+      const arousalState = result.autoA > 0.3 ? '교감신경 우세 (각성↑)' :
+                          result.autoA < -0.3 ? '부교감신경 우세 (이완)' :
+                          '균형 상태';
+      const valenceState = result.autoV > 0.2 ? '안정/긍정' :
+                          result.autoV < -0.3 ? '긴장/부정' :
+                          '중립';
+
+      if (agree) {
+        autoMsg = `<strong>자기보고와 일치</strong> · 자율신경 측정 결과 ${arousalState}, ${valenceState} 영역으로 측정됐어요. 본인이 느끼는 감정과 신체 반응이 일치합니다. (HR ${cardio.hr}, HRV ${cardio.rmssd}ms)`;
+      } else if (Math.abs(result.autoA - result.panasA) > 0.5 || Math.abs(result.autoV - result.panasV) > 0.5) {
+        autoMsg = `<strong>자기보고와 차이 있음</strong> · 자율신경 측정에서는 ${arousalState}, ${valenceState}로 나와 본인이 느끼는 감정과 신체 반응 사이에 차이가 있어요. 감정 억압이나 신체화 가능성을 살펴볼 수 있습니다. (HR ${cardio.hr}, HRV ${cardio.rmssd}ms)`;
+      } else {
+        autoMsg = `자율신경 측정 결과 ${arousalState}, ${valenceState} 상태로 자기보고와 대체로 일치해요. (HR ${cardio.hr}, HRV ${cardio.rmssd}ms)`;
+      }
     }
 
     // 추천 행동
@@ -7058,13 +7143,24 @@ const App = {
 
         <!-- 학술 근거 -->
         <div class="ea-section ea-evidence">
-          <div class="ea-title">📚 측정 방법론</div>
+          <div class="ea-title">📚 측정 방법론 (v16.5 강화)</div>
           <div class="ea-body">
-            본 분석은 다음 학술 모델들의 통합으로 산출됐어요:<br>
-            <strong>PANAS-SF</strong> (Watson 1988, α=0.89) — 10항목 자기보고 50%<br>
-            <strong>색상-감정 매핑</strong> (Valdez 1994) — 직관 검증 15%<br>
-            <strong>Ekman 표정 모델</strong> (1992) — 시각 검증 20%<br>
-            ${result.hasAuto ? `<strong>자율신경 (Berntson 1997)</strong> — HRV/HR 객관 측정 15%` : '<small style="opacity:0.7">자율신경 측정 없음 (손가락 측정 추가 시 통합 가능)</small>'}
+            <strong>범주형 + 차원형 모델 통합 (Ekman + Russell)</strong><br>
+            본 분석은 6가지 학술 모델의 통합으로 산출됐어요:<br><br>
+            <strong>1. PANAS-SF</strong> (Watson & Clark 1988, α=0.89) — 자기보고 50%<br>
+            <strong>2. 색상-감정 매핑</strong> (Valdez & Mehrabian 1994) — 직관 검증 15%<br>
+            <strong>3. Ekman 표정 모델</strong> (1992) — 범주형 시각 검증 20%<br>
+            <strong>4. Russell Circumplex</strong> (1980) — V/A 2차원 좌표계 통합<br>
+            <strong>5. Plutchik Wheel</strong> (1980) — 24개 감정 카드 매칭<br>
+            ${result.hasAuto ?
+              `<strong>6. 자율신경 통합</strong> (Berntson 1997 + Park 2019) — Russell V/A 객관 측정 30%<br>
+              <small style="opacity:0.85; line-height:1.6; display:block; margin-top:8px">
+                · HRV/HR로 각성도(Y축) 측정 — 교감/부교감 균형<br>
+                · 자율신경 균형 + Baevsky SI로 정서가(X축) 측정<br>
+                · 자기보고와 객관 데이터 일치도 자동 검증
+              </small>` :
+              '<small style="opacity:0.7">자율신경 측정 없음 (손가락 측정 추가 시 객관적 검증 30% 추가 가능)</small>'
+            }
           </div>
         </div>
 

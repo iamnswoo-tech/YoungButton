@@ -67,8 +67,267 @@
   --radius: 16px;
   --radius-lg: 20px;
   --radius-xl: 24px;
+
+  /* ★ v16.5: 2026 UX 디자인 시스템 (미니멀리즘 + Liquid Glass + 접근성) */
+  /* 타이포그래피 스케일 (8-step modular scale) */
+  --t-xs: 11px;  /* 메타 정보 */
+  --t-sm: 13px;  /* 본문 보조 */
+  --t-base: 15px; /* 본문 */
+  --t-lg: 17px;  /* 강조 */
+  --t-xl: 20px;  /* 섹션 타이틀 */
+  --t-2xl: 26px; /* 페이지 타이틀 */
+  --t-3xl: 36px; /* 큰 수치 */
+  --t-display: 56px; /* hero 디스플레이 */
+
+  /* 간격 (8-pt grid) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+
+  /* 카드 elevation (3-tier system) */
+  --elev-0: none;
+  --elev-1: 0 1px 2px rgba(15, 23, 42, .04), 0 1px 1px rgba(15, 23, 42, .04);
+  --elev-2: 0 4px 12px rgba(15, 23, 42, .06), 0 2px 4px rgba(15, 23, 42, .04);
+  --elev-3: 0 12px 32px rgba(15, 23, 42, .08), 0 4px 8px rgba(15, 23, 42, .06);
+
+  /* Liquid Glass (Apple iOS 2026 트렌드) */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-blur: blur(20px) saturate(180%);
+
+  /* 접근성 컬러 (WCAG AAA 대비비 7:1) */
+  --text-strong: #020617;     /* 본문 강조용 - 대비 21:1 */
+  --text-medium: #334155;     /* 본문 표준 - 대비 9.5:1 */
+  --text-soft: #64748b;       /* 보조 - 대비 5.7:1 */
+
+  /* 모션 (감속/가속 표준) */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --dur-slow: 400ms;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+/* ★ v16.5: 2026 UX 디자인 컴포넌트 (.ux2026-* 옵트인 클래스) */
+
+/* Liquid Glass 카드 */
+.ux2026-glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: var(--sp-5);
+  box-shadow: var(--elev-2);
+}
+
+/* 미니멀 컨텐츠 카드 */
+.ux2026-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: var(--sp-5);
+  margin-bottom: var(--sp-4);
+  box-shadow: var(--elev-1);
+  transition: transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
+}
+.ux2026-card.interactive:active {
+  transform: scale(0.98);
+  box-shadow: var(--elev-2);
+}
+
+/* 섹션 헤더 (2026 트렌드: 큰 타이포, 간결한 메타) */
+.ux2026-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--sp-6) var(--sp-4) var(--sp-3);
+}
+.ux2026-section-title {
+  font-size: var(--t-xl);
+  font-weight: 900;
+  color: var(--text-strong);
+  letter-spacing: -0.025em;
+}
+.ux2026-section-meta {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--text-soft);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* 큰 수치 디스플레이 (헬스 앱 표준) */
+.ux2026-stat-display {
+  font-size: var(--t-3xl);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--text-strong);
+}
+.ux2026-stat-unit {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--text-soft);
+  margin-left: 4px;
+  letter-spacing: 0;
+}
+
+/* CTA 버튼 (2026: clear hierarchy) */
+.ux2026-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: 14px var(--sp-5);
+  border-radius: 14px;
+  font-size: var(--t-base);
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  letter-spacing: -0.01em;
+  transition: transform var(--dur-fast) var(--ease-out);
+  min-height: 48px; /* WCAG 터치 타겟 최소 */
+}
+.ux2026-btn.primary {
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.3);
+}
+.ux2026-btn.secondary {
+  background: var(--card);
+  color: var(--text-strong);
+  border: 1.5px solid var(--border2);
+}
+.ux2026-btn.ghost {
+  background: transparent;
+  color: var(--text-medium);
+  border: 1px solid var(--border);
+}
+.ux2026-btn:active { transform: scale(0.97); }
+
+/* 라벨 칩 */
+.ux2026-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: var(--t-xs);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.ux2026-chip.success { background: rgba(34, 197, 94, 0.12); color: #15803d; }
+.ux2026-chip.warning { background: rgba(245, 158, 11, 0.12); color: #b45309; }
+.ux2026-chip.info    { background: rgba(59, 130, 246, 0.12); color: #1e40af; }
+.ux2026-chip.danger  { background: rgba(239, 68, 68, 0.12); color: #b91c1c; }
+.ux2026-chip.neutral { background: rgba(100, 116, 139, 0.12); color: #475569; }
+
+/* 빈 상태 (2026: 친근하고 명확하게) */
+.ux2026-empty {
+  text-align: center;
+  padding: var(--sp-7) var(--sp-5);
+  color: var(--text-soft);
+}
+.ux2026-empty-icon {
+  font-size: 48px;
+  margin-bottom: var(--sp-3);
+  opacity: 0.7;
+}
+.ux2026-empty-title {
+  font-size: var(--t-lg);
+  font-weight: 800;
+  color: var(--text-medium);
+  margin-bottom: var(--sp-2);
+}
+.ux2026-empty-msg {
+  font-size: var(--t-sm);
+  color: var(--text-soft);
+  line-height: 1.6;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+/* 디바이더 (의도적 분리) */
+.ux2026-divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--sp-5) 0;
+}
+.ux2026-divider-thick {
+  height: 8px;
+  background: var(--bg);
+  margin: var(--sp-5) calc(-1 * var(--sp-4));
+}
+
+/* 정상 범위 인디케이터 (수치 옆 작은 게이지) */
+.ux2026-range-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--text-soft);
+}
+.ux2026-range-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.ux2026-range-dot.normal { background: #22c55e; }
+.ux2026-range-dot.borderline { background: #f59e0b; }
+.ux2026-range-dot.abnormal { background: #ef4444; }
+
+/* 점진 표시 (2026 트렌드: bar + 색상 코딩) */
+.ux2026-progress {
+  height: 6px;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+.ux2026-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/* 접근성 강화 — 포커스 표시 */
+.ux2026-btn:focus-visible,
+.ux2026-card.interactive:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 미디어 쿼리: 다크모드 자동 대응 (선언만) */
+@media (prefers-color-scheme: dark) {
+  /* 향후 다크모드 대응 시 활성화 (현재는 라이트 우선) */
+  /* :root { --bg: #0a0e1a; --card: #131826; ... } */
+}
+
+/* 모션 감소 선호 사용자 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 큰 텍스트 선호 사용자 대응 */
+@media (min-resolution: 144dpi) {
+  /* 자동 적용됨 */
+}
+
 html, body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100dvh; overflow-x: hidden; font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 body::before {
   content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
@@ -77,6 +336,7 @@ body::before {
 }
 
 /* HEADER */
+/* ★ v16.5: 2026 UX - Liquid Glass 헤더 (Apple iOS 2026 트렌드) */
 .hd {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top));
@@ -84,6 +344,8 @@ body::before {
   position: sticky; top: 0; z-index: 50;
   color: #fff;
   box-shadow: 0 4px 20px rgba(34,197,94,.25);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
 }
 .hd-logo { display: flex; align-items: center; gap: 12px; }
 .hd-icon {
@@ -573,69 +835,99 @@ body::before {
   letter-spacing: -.02em;
 }
 
-/* ★ v16.3: 결과 페이지 그룹 디바이더 (계층 구조 시각화) */
+/* ★ v16.5: 결과 페이지 그룹 디바이더 (2026 UX 트렌드 - 미니멀 + 명확한 계층) */
 .res-group-divider {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 24px 16px 12px;
-  padding: 10px 14px;
-  background: linear-gradient(90deg, rgba(99, 102, 241, 0.08), transparent);
-  border-left: 4px solid #6366f1;
-  border-radius: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 32px 16px 16px;
+  padding: 0 4px 12px;
+  border-bottom: 2px solid var(--border);
+}
+.res-group-divider::before {
+  content: '';
+  width: 4px;
+  height: 24px;
+  background: linear-gradient(180deg, #22c55e, #16a34a);
+  border-radius: 2px;
+  position: absolute;
+  left: 16px;
+  margin-top: -2px;
+}
+.res-group-divider {
+  position: relative;
+  padding-left: 16px;
 }
 .res-group-icon {
-  font-size: 22px;
+  font-size: 26px;
   flex-shrink: 0;
+  margin-right: 10px;
 }
 .res-group-title {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 900;
-  color: var(--text);
-  letter-spacing: -.02em;
+  color: var(--text-strong);
+  letter-spacing: -.025em;
   flex: 1;
+  line-height: 1.2;
 }
 .res-group-sub {
   font-size: 11px;
   font-weight: 700;
-  color: var(--text2);
-  letter-spacing: -.01em;
+  color: var(--text-soft);
+  letter-spacing: .04em;
+  text-transform: uppercase;
 }
 
 /* 측정 항목 카드 */
-/* ★ v14.2: 결과 페이지 그래프 카드 (신체지수 스타일) */
+/* ★ v16.5: 결과 페이지 그래프 카드 (2026 UX - 미니멀 + 큰 수치) */
 .res-graph-card {
-  background: var(--card);
-  border-radius: 18px;
-  padding: 18px;
-  margin: 0 12px 14px;
-  box-shadow: var(--shadow);
+  background: linear-gradient(135deg, var(--card) 0%, rgba(255,255,255,0.85) 100%);
+  border-radius: 22px;
+  padding: 22px 20px;
+  margin: 0 12px 16px;
+  box-shadow: var(--elev-2);
   border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+.res-graph-card::after {
+  content: '';
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 150px;
+  height: 150px;
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.08), transparent 70%);
+  pointer-events: none;
 }
 .res-graph-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  position: relative;
 }
 .res-graph-status {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--text);
-  line-height: 1.3;
+  color: var(--text-medium);
+  line-height: 1.4;
+  letter-spacing: -.01em;
 }
 .res-graph-status strong {
   font-weight: 900;
+  color: var(--text-strong);
 }
 .res-graph-value {
-  font-size: 28px;
+  font-size: 42px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -.03em;
+  letter-spacing: -.04em;
   line-height: 1;
 }
 .res-graph-unit {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--muted);
 }
@@ -645,12 +937,13 @@ body::before {
   display: block;
 }
 .res-graph-progress {
-  margin-top: 12px;
+  margin-top: 14px;
+  position: relative;
 }
 .res-graph-progress-track {
-  height: 8px;
-  background: var(--bg);
-  border-radius: 4px;
+  height: 10px;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 5px;
   overflow: hidden;
 }
 .res-graph-progress-fill {
@@ -6993,15 +7286,20 @@ body::before {
 .ws-reset:active { color: var(--text); }
 
 .measure-card {
-  display: flex; align-items: center; gap: 14px;
-  padding: 18px; border-radius: var(--radius);
+  display: flex; align-items: center; gap: 16px;
+  padding: 20px;
+  margin-bottom: 12px;
+  border-radius: 20px;
   background: var(--card);
-  border: none;
-  box-shadow: var(--shadow);
-  cursor: pointer; transition: transform .12s, box-shadow .15s;
+  border: 1px solid var(--border);
+  box-shadow: var(--elev-1);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
   text-align: left; width: 100%;
-  font-family: var(--sans); color: var(--text);
+  font-family: var(--sans); color: var(--text-strong);
   position: relative; overflow: hidden;
+  min-height: 84px; /* WCAG 큰 터치 영역 */
 }
 .measure-card::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0;
@@ -7010,23 +7308,41 @@ body::before {
 .measure-card.face::before  { background: linear-gradient(to bottom, #7c3aed, #a78bfa); }
 .measure-card.body::before  { background: linear-gradient(to bottom, #06b6d4, #22d3ee); }
 .measure-card.results::before { background: linear-gradient(to bottom, #22c55e, #4ade80); }
-.measure-card:active { transform: scale(.98); box-shadow: 0 2px 8px rgba(124,58,237,.1); }
+.measure-card:active {
+  transform: scale(.98);
+  box-shadow: var(--elev-2);
+}
 .mc-icon {
-  width: 52px; height: 52px; flex-shrink: 0;
-  border-radius: 14px; display: flex; align-items: center; justify-content: center;
-  font-size: 28px;
+  width: 56px; height: 56px; flex-shrink: 0;
+  border-radius: 16px; display: flex; align-items: center; justify-content: center;
+  font-size: 30px;
 }
 .mc-icon.face  { background: linear-gradient(135deg, #ede9fe, #ddd6fe); }
 .mc-icon.body  { background: linear-gradient(135deg, #cffafe, #a5f3fc); }
 .mc-icon.results { background: linear-gradient(135deg, #dcfce7, #bbf7d0); }
-.mc-content { flex: 1; }
-.mc-title { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
-.mc-badge { font-size: 9px; font-weight: 800; padding: 3px 8px; border-radius: 8px; letter-spacing: .03em; }
+.mc-content { flex: 1; min-width: 0; }
+.mc-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-strong);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: -.02em;
+  line-height: 1.3;
+}
+.mc-badge { font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 999px; letter-spacing: .03em; }
 .mc-badge.new { background: #ede9fe; color: #7c3aed; }
 .mc-badge.beta { background: #cffafe; color: #0891b2; }
 .mc-badge.results { background: #dcfce7; color: #166534; }
-.mc-desc { font-size: 12px; color: var(--text2); line-height: 1.4; }
-.mc-arrow { color: var(--primary); font-size: 22px; flex-shrink: 0; font-weight: 800; }
+.mc-desc {
+  font-size: 13px;
+  color: var(--text-medium);
+  line-height: 1.5;
+  font-weight: 500;
+}
+.mc-arrow { color: var(--text-soft); font-size: 24px; flex-shrink: 0; font-weight: 700; }
 
 /* INFO CARD */
 .info-card {
@@ -8212,7 +8528,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.4 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.5 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -8937,7 +9253,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.4</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.5</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>

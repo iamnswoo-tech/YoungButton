@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v16.4",
-  "short_name": "건강측정 v16.4",
-  "description": "v16.4 — 통합 감정 측정 (PANAS+색상+표정+자율신경) + Plutchik 24 감정 카드",
+  "name": "건강 측정 v16.5",
+  "short_name": "건강측정 v16.5",
+  "description": "v16.5 — 페이지 이탈 버그 수정 + 에크만/러셀 통합 + 2026 UX 디자인",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
