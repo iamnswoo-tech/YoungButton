@@ -7857,17 +7857,18 @@ body::before {
   box-shadow: 0 -4px 24px rgba(15, 23, 42, .06);
 }
 .nav-btn {
-  flex: 1; padding: 10px 4px;
+  flex: 1; padding: 9px 2px;
   background: none; border: none;
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
   color: var(--text-soft);
   cursor: pointer;
   font-family: var(--sans);
-  border-radius: 14px;
+  border-radius: 12px;
   transition: color var(--dur-fast, 150ms) ease,
               transform var(--dur-fast, 150ms) ease;
   position: relative;
-  min-height: 56px; /* WCAG 터치 영역 */
+  min-height: 52px; /* WCAG 터치 영역 */
+  min-width: 0; /* flex item이 컨텐츠보다 작아질 수 있게 */
 }
 .nav-btn.on {
   color: var(--primary);
@@ -7878,21 +7879,22 @@ body::before {
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 32px;
+  width: 24px;
   height: 3px;
   background: linear-gradient(90deg, var(--primary-dark), var(--primary));
   border-radius: 0 0 3px 3px;
 }
-.nav-btn:active { transform: scale(0.94); }
+.nav-btn:active { transform: scale(0.92); }
 .nav-btn.on .nav-label { font-weight: 900; }
 .nav-icon {
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1;
 }
 .nav-label {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: -.01em;
+  letter-spacing: -.02em;
+  white-space: nowrap;
 }
 
 /* FLASH MODAL & ALERT */
@@ -8821,7 +8823,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.7 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.8 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -9546,7 +9548,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.7</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.8</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>
@@ -9801,6 +9803,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 </div>
 
 <!-- BOTTOM NAV -->
+<!-- ★ v16.8: 6개 메뉴 (홈/얼굴/감정/손가락/신체/결과) -->
 <nav class="bottom-nav">
   <button class="nav-btn on" id="nav-home" type="button" onclick="App.goPage('home')">
     <span class="nav-icon">🏠</span>
@@ -9809,6 +9812,14 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <button class="nav-btn" id="nav-face" type="button" onclick="App.goPage('face')">
     <span class="nav-icon">😊</span>
     <span class="nav-label">얼굴</span>
+  </button>
+  <button class="nav-btn" id="nav-mood" type="button" onclick="App.goPage('mood')">
+    <span class="nav-icon">💝</span>
+    <span class="nav-label">감정</span>
+  </button>
+  <button class="nav-btn" id="nav-finger" type="button" onclick="App.goPage('finger')">
+    <span class="nav-icon">☝️</span>
+    <span class="nav-label">손가락</span>
   </button>
   <button class="nav-btn" id="nav-body" type="button" onclick="App.goPage('body')">
     <span class="nav-icon">🏃</span>

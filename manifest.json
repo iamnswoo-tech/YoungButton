@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v16.7",
-  "short_name": "건강측정 v16.7",
-  "description": "v16.7 — 한국형 헬스케어 디자인 (블루 팔레트 + Pretendard) + 카드형 감정 측정 UX",
+  "name": "건강 측정 v16.8",
+  "short_name": "건강측정 v16.8",
+  "description": "v16.8 — undefined/NaN 버그 수정 + 6개 메뉴 + 상세 분석 다양성 + 자동 데이터 마이그레이션",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
