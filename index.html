@@ -6764,6 +6764,32 @@ body::before {
   margin-bottom: 16px;
   border: 1.5px solid rgba(168, 85, 247, .25);
 }
+/* ★ v16.9: 안부 카드 컨셉 — 따뜻한 핑크/로즈 그라데이션 (홈 카드와 일관) */
+.share-intro-card.share-intro-warm {
+  background: linear-gradient(135deg, #FFF1F8 0%, #FCE7F3 50%, #F5D0FE 100%);
+  border: 1.5px solid rgba(236, 72, 153, .2);
+  box-shadow: 0 8px 24px rgba(236, 72, 153, .12);
+}
+.share-intro-warm .share-intro-icon {
+  font-size: 56px;
+  filter: drop-shadow(0 4px 12px rgba(236, 72, 153, .35));
+  animation: care-float 6s ease-in-out infinite;
+}
+.share-intro-warm .share-intro-title {
+  font-size: 22px;
+  color: #831843;
+  letter-spacing: -.03em;
+  margin-bottom: 12px;
+}
+.share-intro-warm .share-intro-body {
+  font-size: 14px;
+  color: #9F1239;
+  line-height: 1.7;
+}
+.share-intro-warm .share-intro-body strong {
+  color: #831843;
+  font-weight: 900;
+}
 .share-intro-icon {
   font-size: 48px;
   margin-bottom: 10px;
@@ -7550,6 +7576,183 @@ body::before {
   transform: scale(.98);
   box-shadow: var(--elev-2);
 }
+
+/* ═══════════ ★ v16.9: 안부 카드 (특별 프로모 컴포넌트) ═══════════
+   - 핑크/퍼플/로즈 따뜻한 그라데이션
+   - 데코레이션 이모지 플로팅
+   - 핵심 콘텐츠로 강조 (감정 측정 프로모와 동등 위계)
+═══════════════════════════════════════════════════════════════════ */
+.care-card {
+  position: relative;
+  width: 100%;
+  margin: 8px 0 12px;
+  padding: 0;
+  border: none;
+  border-radius: 24px;
+  background: linear-gradient(135deg,
+    #FFF1F8 0%,
+    #FCE7F3 30%,
+    #F5D0FE 65%,
+    #E9D5FF 100%);
+  cursor: pointer;
+  font-family: var(--sans);
+  text-align: left;
+  overflow: hidden;
+  box-shadow:
+    0 12px 32px rgba(236, 72, 153, 0.18),
+    0 4px 12px rgba(168, 85, 247, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: transform var(--dur-fast, 150ms) var(--ease-out, ease),
+              box-shadow var(--dur-fast, 150ms) var(--ease-out, ease);
+}
+.care-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.4),
+    transparent 50%);
+  pointer-events: none;
+}
+.care-card:active {
+  transform: scale(0.98);
+  box-shadow:
+    0 6px 18px rgba(236, 72, 153, 0.2),
+    0 2px 6px rgba(168, 85, 247, 0.14);
+}
+
+/* 떠다니는 데코레이션 이모지 */
+.care-card-deco {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.care-deco {
+  position: absolute;
+  font-size: 80px;
+  opacity: 0.08;
+  filter: blur(1px);
+  animation: care-float 6s ease-in-out infinite;
+}
+.care-deco-1 {
+  top: -10px;
+  right: -10px;
+  font-size: 90px;
+  animation-delay: 0s;
+}
+.care-deco-2 {
+  bottom: -20px;
+  left: 10%;
+  font-size: 60px;
+  opacity: 0.06;
+  animation-delay: 2s;
+}
+.care-deco-3 {
+  top: 40%;
+  right: 20%;
+  font-size: 50px;
+  opacity: 0.05;
+  animation-delay: 4s;
+}
+@keyframes care-float {
+  0%, 100% { transform: translateY(0) rotate(-5deg); }
+  50% { transform: translateY(-8px) rotate(5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .care-deco { animation: none; }
+}
+
+.care-card-inner {
+  position: relative;
+  padding: 24px 22px 22px;
+  z-index: 1;
+}
+
+.care-badge {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  color: #BE185D;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 999px;
+  letter-spacing: -.01em;
+  margin-bottom: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.12);
+}
+
+.care-title {
+  font-size: 28px;
+  font-weight: 900;
+  color: #831843;
+  letter-spacing: -.035em;
+  margin-bottom: 10px;
+  line-height: 1.15;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+.care-subtitle {
+  font-size: 14px;
+  color: #9F1239;
+  font-weight: 600;
+  line-height: 1.6;
+  margin-bottom: 18px;
+}
+.care-subtitle strong {
+  font-weight: 900;
+  color: #831843;
+}
+
+.care-features {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  border-radius: 14px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+.cf-item {
+  font-size: 12px;
+  color: #9F1239;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  line-height: 1.5;
+}
+
+.care-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #EC4899, #DB2777);
+  color: #fff;
+  padding: 14px 18px;
+  border-radius: 14px;
+  box-shadow:
+    0 6px 16px rgba(236, 72, 153, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.care-cta-text {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+.care-cta-arrow {
+  font-size: 18px;
+  font-weight: 700;
+  transition: transform var(--dur-fast, 150ms) var(--ease-out, ease);
+}
+.care-card:active .care-cta-arrow {
+  transform: translateX(4px);
+}
+
+/* ═══════════ 끝: 안부 카드 ═══════════ */
 .mc-icon {
   width: 56px; height: 56px; flex-shrink: 0;
   border-radius: 18px;
@@ -8823,7 +9026,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.8 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.9 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -8926,14 +9129,30 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="mc-arrow">›</div>
     </button>
 
-    <!-- ★ v16.2: 가족 공유 카드 -->
-    <button type="button" class="measure-card share" onclick="App.goPage('share')">
-      <div class="mc-icon share">💌</div>
-      <div class="mc-content">
-        <div class="mc-title">건강 정보 공유 <span class="mc-badge family">가족</span></div>
-        <div class="mc-desc">자녀에게 측정 결과와 안부를 전해요</div>
+    <!-- ★ v16.9: 안부 카드 - 특별 프로모 컴포넌트 (감정 측정과 동등한 핵심 콘텐츠) -->
+    <button type="button" class="care-card" onclick="App.goPage('share')">
+      <div class="care-card-deco">
+        <span class="care-deco care-deco-1">💝</span>
+        <span class="care-deco care-deco-2">💌</span>
+        <span class="care-deco care-deco-3">🤍</span>
       </div>
-      <div class="mc-arrow">›</div>
+      <div class="care-card-inner">
+        <div class="care-badge">💌 가족 안부 · 따뜻함</div>
+        <div class="care-title">안부를 보내세요</div>
+        <div class="care-subtitle">
+          단순한 측정 결과가 아니라<br>
+          <strong>안심을 전하는 마음</strong>이 됩니다
+        </div>
+        <div class="care-features">
+          <span class="cf-item">✨ 측정 결과 자동 첨부</span>
+          <span class="cf-item">💝 따뜻한 안부 메시지</span>
+          <span class="cf-item">🔗 자녀에게 링크 한 번</span>
+        </div>
+        <div class="care-cta">
+          <span class="care-cta-text">자녀에게 안부 전하기</span>
+          <span class="care-cta-arrow">→</span>
+        </div>
+      </div>
     </button>
   </div>
 
@@ -9524,8 +9743,8 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.goPage('home')">←</button>
     <div>
-      <div class="page-title">💌 건강 정보 공유</div>
-      <div class="page-subtitle">자녀에게 안부와 함께 전해요</div>
+      <div class="page-title">💌 안부를 보내세요</div>
+      <div class="page-subtitle">측정 결과와 함께 안심을 전해보세요</div>
     </div>
   </div>
   <div id="share-container" class="share-page-container"></div>
@@ -9548,7 +9767,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.8</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.9</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>

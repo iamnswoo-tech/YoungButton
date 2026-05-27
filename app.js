@@ -783,8 +783,61 @@ const App = {
         }
         console.log('[Wellness] 복원:', Object.keys(this.state.wellness).filter(k => this.state.wellness[k] && typeof this.state.wellness[k] === 'object'));
       }
+
+      // ★ v16.8: 손상된 mental 객체 자동 정리 (이전 v16.4~v16.7 버그 데이터)
+      // patternIcon, resilience 등 필수 필드 누락된 mental → 재계산 또는 제거
+      this._migrateMoodHistory();
     } catch (e) {
       console.warn('[Wellness] 복원 실패:', e);
+    }
+  },
+
+  // ★ v16.8: 이전 버전에서 저장된 손상된 mental 객체 마이그레이션
+  _migrateMoodHistory() {
+    try {
+      const raw = localStorage.getItem('history_mood');
+      if (!raw) return;
+      const history = JSON.parse(raw);
+      if (!Array.isArray(history) || history.length === 0) return;
+
+      let migrated = 0;
+      for (let i = 0; i < history.length; i++) {
+        const h = history[i];
+        // 손상 판정: mental 있는데 patternIcon 없으면 v16.4~v16.7 통합 측정 버그 데이터
+        if (h.mental && (h.mental.patternIcon === undefined || h.mental.resilience === undefined)) {
+          // 통합 측정이면 재계산 시도
+          if (h.gameId === 'integrated' && h.valence !== undefined) {
+            try {
+              const analysisInput = {
+                gameId: 'integrated',
+                valence: h.valence,
+                negBias: h.naAvg !== undefined ? Math.max(0, Math.min(1, (h.naAvg - 2) / 3)) : 0,
+                loneliness: h.paAvg !== undefined ? Math.max(0, Math.min(1, (3 - h.paAvg) / 3)) : 0,
+                rawData: h.rawData || { paAvg: h.paAvg, naAvg: h.naAvg, cardId: h.cardId },
+                faceLink: h.faceLink || null,
+              };
+              h.mental = this._computeMentalWellnessScore(analysisInput);
+              h.score = h.mental.overall;
+              migrated++;
+            } catch (e) {
+              // 재계산 실패 → mental 제거 (빈 카드로 표시됨)
+              delete h.mental;
+              migrated++;
+            }
+          } else if (!h.mental.patternIcon) {
+            // 다른 게임인데 필드 부족 → mental 제거
+            delete h.mental;
+            migrated++;
+          }
+        }
+      }
+
+      if (migrated > 0) {
+        localStorage.setItem('history_mood', JSON.stringify(history));
+        console.log(`[Migrate] mood history ${migrated}개 항목 정리됨`);
+      }
+    } catch (e) {
+      console.warn('[Migrate] mood history 마이그레이션 실패:', e);
     }
   },
 
@@ -2690,6 +2743,22 @@ const App = {
     // ★ v16.2: 얼굴 + 손가락 측정 통합 데이터 사용
     const cardio = this._getUnifiedCardio(w);
 
+    // ★ v16.8: 측정값 다양성 — 시간대, RMSSD, 호흡수 등 보조 데이터로 멘트 다양화
+    const now = new Date();
+    const hour = now.getHours();
+    const isMorning = hour >= 5 && hour < 11;
+    const isAfternoon = hour >= 11 && hour < 17;
+    const isEvening = hour >= 17 && hour < 22;
+    const isNight = hour >= 22 || hour < 5;
+
+    // 측정 빈도 (다양한 멘트를 위해)
+    let measureCount = 0;
+    try {
+      const histKey = w.finger ? 'history_finger' : 'history_face';
+      const hist = JSON.parse(localStorage.getItem(histKey) || '[]');
+      measureCount = hist.length;
+    } catch (e) {}
+
     // 1. 심혈관 (통합 측정)
     if (cardio) {
       const hr = cardio.hr;
@@ -2697,54 +2766,117 @@ const App = {
       const stress = cardio.stressLevel || 3;
       let cls = 'good', icon = '💗', title, label, body, tip;
       if (hr) {
+        // ★ v16.8: HR 4단계 × RMSSD 보조 × 시간대 = 다양한 조합
+        const rmssdGood = rmssd && rmssd >= 35;
+        const rmssdLow = rmssd && rmssd < 20;
+
         if (hr < 60) {
           cls = 'good';
-          title = '심장이 매우 안정적이에요';
-          label = `심박수 ${hr} BPM`;
-          body = `심박수가 분당 ${hr}회로 매우 차분합니다. 일반적으로 60회 미만은 평소 운동을 잘 하시거나 휴식을 깊게 취하시는 분들에게 나타나는 좋은 신호입니다. 심장이 한 번 뛸 때 충분히 많은 피를 내보내고 있다는 뜻입니다.`;
-          tip = '지금 컨디션을 유지하면서 가벼운 걷기를 꾸준히 해주세요';
+          // 시간대별 변형
+          if (isMorning) {
+            title = '아침인데도 심장이 평온하게 뛰고 있어요';
+            body = `심박수가 분당 ${hr}회로 아침 안정 심박치고도 차분합니다. 평소 운동을 잘 하시거나 깊은 수면을 취하시는 분들의 특징입니다. ${rmssdGood ? `심박변이도(HRV)도 ${rmssd}ms로 양호해 자율신경 균형도 좋은 상태예요.` : ''}`;
+            tip = isMorning ? '아침 산책 20분이면 이 컨디션이 하루 종일 이어집니다' : '가벼운 걷기를 꾸준히 해주세요';
+          } else if (isEvening) {
+            title = '하루를 마무리하기 좋은 안정 상태';
+            body = `저녁 심박수가 분당 ${hr}회로 매우 차분합니다. 하루의 활동 후에도 심장이 잘 회복되고 있다는 신호입니다. ${rmssdGood ? `HRV ${rmssd}ms로 부교감신경이 잘 작동 중이에요.` : ''}`;
+            tip = '수면 1시간 전부터 스마트폰 화면을 어둡게 해보세요';
+          } else {
+            title = '심장이 매우 안정적이에요';
+            body = `심박수가 분당 ${hr}회로 매우 차분합니다. 60회 미만은 평소 운동을 잘 하시거나 휴식을 깊게 취하시는 분들에게 나타나는 좋은 신호입니다. ${rmssdGood ? `자율신경 균형도 좋은 상태(HRV ${rmssd}ms)예요.` : ''}`;
+            tip = '지금 컨디션을 유지하면서 가벼운 걷기를 꾸준히 해주세요';
+          }
+          label = `심박수 ${hr} BPM${rmssd ? ` · HRV ${rmssd}ms` : ''}`;
         } else if (hr < 80) {
           cls = 'good';
-          title = '심장이 정상적으로 일하고 있어요';
-          label = `심박수 ${hr} BPM`;
-          body = `심박수가 분당 ${hr}회로 건강한 성인의 정상 범위(60~80회) 안에 있습니다. 심장이 무리 없이 잘 일하고 있다는 뜻이에요.`;
-          tip = '주 3회 이상 30분 걷기로 이 상태를 유지하세요';
+          // RMSSD 상태에 따라 분기
+          if (rmssdGood) {
+            title = '심장과 자율신경 모두 건강해요';
+            body = `심박수 ${hr} BPM, HRV ${rmssd}ms로 둘 다 양호합니다. 심장이 정상 범위 안에서 일하면서 자율신경 회복력도 좋은 균형 잡힌 상태예요. ${isMorning ? '아침부터 컨디션이 좋은 하루를 시작하셨네요.' : isEvening ? '하루를 잘 보내신 후의 안정된 모습입니다.' : ''}`;
+            tip = measureCount > 3 ? '꾸준한 측정으로 본인 baseline이 잡혀가고 있어요' : '주 3회 이상 30분 걷기로 이 상태를 유지하세요';
+          } else if (rmssdLow) {
+            title = '심박수는 정상, 자율신경은 조금 긴장';
+            body = `심박수 ${hr} BPM은 정상 범위이지만 HRV ${rmssd}ms로 자율신경이 평소보다 긴장된 상태입니다. 카페인, 부족한 수면, 누적 피로 중 하나가 원인일 수 있어요.`;
+            tip = '오늘은 가능한 일찍 잠자리에 들어보세요';
+          } else {
+            title = '심장이 정상적으로 일하고 있어요';
+            body = `심박수가 분당 ${hr}회로 건강한 성인의 정상 범위(60~80회) 안에 있습니다. 심장이 무리 없이 잘 일하고 있다는 뜻이에요.${rmssd ? ` HRV는 ${rmssd}ms입니다.` : ''}`;
+            tip = '주 3회 이상 30분 걷기로 이 상태를 유지하세요';
+          }
+          label = `심박수 ${hr} BPM${rmssd ? ` · HRV ${rmssd}ms` : ''}`;
         } else if (hr < 100) {
           cls = 'warn';
-          title = '심장이 평소보다 빠르게 뛰고 있어요';
-          label = `심박수 ${hr} BPM`;
-          body = `심박수가 분당 ${hr}회로 정상 범위 상단입니다. 측정 직전 활동, 카페인 섭취, 긴장 등이 영향을 주었을 수 있어요. 한두 번 더 측정해보고 계속 80 이상이면 휴식과 수분 섭취를 늘려보세요.`;
-          tip = '깊은 호흡(4초 들이쉬고 6초 내쉬기)을 5분 해보세요';
+          // 시간대 + RMSSD 조합
+          if (isMorning) {
+            title = '아침 심박수가 약간 높아요';
+            body = `심박수가 분당 ${hr}회로 아침 안정 심박보다 높습니다. 알람으로 갑자기 깨거나, 어제 카페인을 늦게 드셨거나, 수면이 부족했을 때 나타나는 패턴입니다.${rmssdLow ? ' HRV도 낮아 자율신경이 충분히 회복하지 못한 상태로 보여요.' : ''}`;
+            tip = '천천히 5분 호흡한 후 다시 측정해보세요';
+          } else if (isEvening) {
+            title = '저녁인데 심장이 평소보다 활발해요';
+            body = `심박수 ${hr} BPM은 저녁 안정 시치고 약간 빠른 편입니다. 오늘 활동량이 많았거나 저녁 식사 직후이거나 카페인 섭취 영향일 수 있어요. 30분 정도 휴식 후 다시 측정해보세요.`;
+            tip = '잠자리 들기 2시간 전부터는 카페인을 피해주세요';
+          } else {
+            title = '심장이 평소보다 빠르게 뛰고 있어요';
+            body = `심박수가 분당 ${hr}회로 정상 범위 상단입니다. 측정 직전 활동, 카페인 섭취, 긴장 등이 영향을 주었을 수 있어요. 한두 번 더 측정해보고 계속 80 이상이면 휴식과 수분 섭취를 늘려보세요.`;
+            tip = '깊은 호흡(4초 들이쉬고 6초 내쉬기)을 5분 해보세요';
+          }
+          label = `심박수 ${hr} BPM${rmssd ? ` · HRV ${rmssd}ms` : ''}`;
         } else {
           cls = 'bad';
           title = '심장이 빠르게 뛰고 있어요';
-          label = `심박수 ${hr} BPM`;
-          body = `안정 시 심박수가 분당 ${hr}회로 다소 빠릅니다. 카페인, 스트레스, 부족한 수면, 탈수 등이 원인일 수 있어요. 5분간 편안히 앉아 호흡한 후 다시 측정해보세요. 반복적으로 100 이상이면 병원 진료를 권합니다.`;
+          body = `안정 시 심박수가 분당 ${hr}회로 다소 빠릅니다. 카페인, 스트레스, 부족한 수면, 탈수 등이 원인일 수 있어요.${rmssdLow ? ` HRV도 낮아(${rmssd}ms) 자율신경 회복이 필요한 상태로 보입니다.` : ''} 5분간 편안히 앉아 호흡한 후 다시 측정해보세요. 반복적으로 100 이상이면 병원 진료를 권합니다.`;
           tip = '카페인 줄이고 물을 한 잔 마신 후 다시 측정해보세요';
+          label = `심박수 ${hr} BPM${rmssd ? ` · HRV ${rmssd}ms` : ''}`;
         }
       }
       if (title) {
         insights.push({ cls, icon, title, label, body, tip });
       }
 
-      // 스트레스 인사이트 별도
+      // 스트레스 인사이트 별도 — 시간대 추가
       if (stress >= 4) {
+        const stressBody = isNight
+          ? `자율신경이 평소보다 긴장된 패턴입니다. 늦은 시각의 측정은 디지털 자극(스마트폰, TV)과 늦은 식사가 영향을 줄 수 있어요. 만성 스트레스가 누적되면 면역력 저하, 수면 장애로 이어질 수 있습니다.`
+          : isMorning
+          ? `아침부터 자율신경이 긴장된 상태로 시작하셨네요. 수면 질이 충분하지 않았거나, 오늘 일정에 대한 부담이 무의식적으로 영향을 줄 수 있어요. 의도적인 휴식 시간을 가져보세요.`
+          : `자율신경(심박변이도)이 평소보다 긴장된 패턴을 보입니다. 만성 스트레스나 피로가 누적되면 면역력 저하, 수면 장애, 혈압 상승으로 이어질 수 있어요. 오늘 하루 10분이라도 의도적인 휴식을 가져보세요.`;
+
+        const stressTip = isMorning
+          ? '아침 햇볕 5분 + 가벼운 스트레칭으로 부드럽게 깨어나보세요'
+          : isEvening
+          ? '저녁 명상 앱이나 자연 소리 음악으로 마음을 가라앉혀보세요'
+          : '4-7-8 호흡법: 4초 들이쉬고 7초 멈췄다가 8초 내쉬기를 3번 반복';
+
         insights.push({
           cls: stress === 5 ? 'bad' : 'warn',
           icon: '😰',
           title: stress === 5 ? '높은 스트레스 신호가 감지됐어요' : '약간 긴장된 상태예요',
           label: `스트레스 ${stress}/5단계`,
-          body: `자율신경(심박변이도)이 평소보다 긴장된 패턴을 보입니다. 만성 스트레스나 피로가 누적되면 면역력 저하, 수면 장애, 혈압 상승으로 이어질 수 있어요. 오늘 하루 10분이라도 의도적인 휴식을 가져보세요.`,
-          tip: '4-7-8 호흡법: 4초 들이쉬고 7초 멈췄다가 8초 내쉬기를 3번 반복',
+          body: stressBody,
+          tip: stressTip,
         });
       } else if (stress <= 2) {
+        const goodBody = isMorning
+          ? `아침부터 자율신경이 안정적이고 부교감신경(휴식 모드)이 잘 작동하고 있어요. 충분한 수면 후의 좋은 컨디션입니다.`
+          : isEvening
+          ? `저녁 시간 자율신경이 평온하게 안정되어 있어요. 하루를 잘 마무리하고 회복 모드로 잘 전환된 상태입니다.`
+          : `자율신경이 안정적이고 부교감신경(휴식 모드)이 잘 작동하고 있습니다. 이런 상태에서는 회복, 소화, 면역 기능이 활발하게 일어납니다.`;
+
+        const goodTip = isMorning
+          ? '아침 산책 20분이면 이 좋은 상태가 더 오래 지속됩니다'
+          : isEvening
+          ? '이 안정된 상태로 잠자리에 들면 깊은 수면을 취할 수 있어요'
+          : measureCount > 3
+          ? '꾸준한 측정 덕분에 본인의 안정 상태를 잘 파악하고 계세요'
+          : '이 좋은 컨디션을 유지하려면 규칙적인 수면이 가장 중요해요';
+
         insights.push({
           cls: 'good',
           icon: '😌',
           title: '마음이 편안한 상태예요',
           label: `스트레스 ${stress}/5단계`,
-          body: `자율신경이 안정적이고 부교감신경(휴식 모드)이 잘 작동하고 있습니다. 이런 상태에서는 회복, 소화, 면역 기능이 활발하게 일어납니다.`,
-          tip: '이 좋은 컨디션을 유지하려면 규칙적인 수면이 가장 중요해요',
+          body: goodBody,
+          tip: goodTip,
         });
       }
     }
@@ -5908,12 +6040,13 @@ const App = {
     const sharedName = localStorage.getItem('shareSenderName') || '';
 
     container.innerHTML = `
-      <div class="share-intro-card">
-        <div class="share-intro-icon">💌</div>
-        <div class="share-intro-title">자녀에게 안부와 함께 전해요</div>
+      <div class="share-intro-card share-intro-warm">
+        <div class="share-intro-icon">💝</div>
+        <div class="share-intro-title">안부는 안심입니다</div>
         <div class="share-intro-body">
-          측정 결과를 카카오톡이나 문자로 자녀에게 보낼 수 있어요.<br>
-          자녀는 받은 링크를 눌러 부모님 건강 상태를 확인하고, 안부를 확인할 수 있습니다.
+          측정 결과와 함께 한 줄의 안부를 자녀에게 전해보세요.<br>
+          <strong>"오늘 건강해요"</strong> 한 마디가 자녀에게는<br>
+          <strong>가장 큰 안심</strong>이 됩니다.
         </div>
       </div>
 
@@ -7058,12 +7191,37 @@ const App = {
     try {
       const history = JSON.parse(localStorage.getItem('history_mood') || '[]');
 
-      // ★ v16.4: 통합 측정에서 mental 점수 계산 (다른 시스템에 반영)
-      // PANAS 기반 자기보고 점수 → mental.overall에 매핑
-      const subjective = Math.max(0, Math.min(100, 50 + result.valence * 40));
-      // 자율신경 보너스 (있을 때)
-      const autonomic = result.hasAuto ? Math.max(0, Math.min(100, 70 - result.autoA * 20)) : null;
-      const mentalOverall = autonomic !== null ? Math.round((subjective + autonomic) / 2) : Math.round(subjective);
+      // ★ v16.8: undefined/NaN 버그 수정 — _computeMentalWellnessScore 사용
+      // 이전엔 직접 객체 만들어서 patternIcon, resilience 등 필수 필드 누락됐음
+      const w = this.state.wellness || {};
+      const now = Date.now();
+      const hasRecentFace = w.face && w.face.t && (now - w.face.t) < 6 * 60 * 60 * 1000;
+
+      // 통합 결과를 _computeMentalWellnessScore 입력 형식으로 변환
+      const analysisInput = {
+        gameId: 'integrated',
+        valence: result.valence,
+        // PANAS negative affect가 높으면 부정 편향
+        negBias: Math.max(0, Math.min(1, (result.naAvg - 2) / 3)),
+        // PANAS positive affect 낮으면 외로움 추정 (대용)
+        loneliness: Math.max(0, Math.min(1, (3 - result.paAvg) / 3)),
+        rawData: {
+          paAvg: result.paAvg,
+          naAvg: result.naAvg,
+          cardId: result.cardId,
+        },
+        // 얼굴 측정 데이터 연결 (있으면)
+        faceLink: hasRecentFace ? {
+          hr: w.face.hr,
+          rmssd: w.face.rmssd,
+          stressLevel: w.face.stressLevel,
+          respRate: w.face.respRate,
+          ageMinutes: Math.round((now - w.face.t) / 60000),
+        } : null,
+      };
+
+      // 전체 mental 객체 계산 (모든 필수 필드 포함)
+      const mentalFull = this._computeMentalWellnessScore(analysisInput);
 
       const entry = {
         t: Date.now(),
@@ -7076,16 +7234,13 @@ const App = {
         naAvg: result.naAvg,
         confidence: result.confidence,
         hasAuto: result.hasAuto,
-        // mental 점수 객체 (종합 결과에 반영)
-        mental: {
-          overall: mentalOverall,
-          subjective: Math.round(subjective),
-          autonomic: autonomic !== null ? Math.round(autonomic) : null,
-          source: 'integrated',
-          cardId: result.cardId,
-        },
-        // 점수 (다른 시스템 호환)
-        score: mentalOverall,
+        negBias: analysisInput.negBias,
+        loneliness: analysisInput.loneliness,
+        rawData: analysisInput.rawData,
+        faceLink: analysisInput.faceLink,
+        // ★ v16.8: 완전한 mental 객체 (모든 필드 포함)
+        mental: mentalFull,
+        score: mentalFull.overall,
       };
       history.push(entry);
       if (history.length > 200) history.splice(0, history.length - 200);
@@ -8380,6 +8535,23 @@ const App = {
     const m = analysis.mental;
     if (!m) return '';
 
+    // ★ v16.8: 누락된 필수 필드 안전 폴백 (undefined/NaN 방지)
+    const safe = {
+      overall: typeof m.overall === 'number' && !isNaN(m.overall) ? m.overall : 0,
+      subjective: typeof m.subjective === 'number' && !isNaN(m.subjective) ? m.subjective : 50,
+      autonomic: typeof m.autonomic === 'number' && !isNaN(m.autonomic) ? m.autonomic : 50,
+      resilience: typeof m.resilience === 'number' && !isNaN(m.resilience) ? m.resilience : 50,
+      selfAwareness: typeof m.selfAwareness === 'number' && !isNaN(m.selfAwareness) ? m.selfAwareness : 50,
+      connection: typeof m.connection === 'number' && !isNaN(m.connection) ? m.connection : 50,
+      regulation: typeof m.regulation === 'number' && !isNaN(m.regulation) ? m.regulation : 50,
+      hasFaceData: !!m.hasFaceData,
+      pattern: m.pattern || 'exhausted',
+      patternIcon: m.patternIcon || '🌿',
+      patternLabel: m.patternLabel || '측정 중',
+      patternDesc: m.patternDesc || '추가 측정으로 더 정확한 분석을 받아보세요',
+      patternAction: m.patternAction || '얼굴 측정을 함께 진행해보세요',
+    };
+
     // 점수 색상 결정
     const getScoreColor = (score) => {
       if (score >= 75) return '#22C55E';
@@ -8404,62 +8576,62 @@ const App = {
 
     // 자기보고 vs 자율신경 일치도 라벨
     let alignmentLabel = '';
-    if (m.hasFaceData) {
-      const gap = Math.abs(m.subjective - m.autonomic);
+    if (safe.hasFaceData) {
+      const gap = Math.abs(safe.subjective - safe.autonomic);
       if (gap < 15) alignmentLabel = '✨ 자기인식 좋음';
       else if (gap < 30) alignmentLabel = '🌿 보통';
       else alignmentLabel = '🌫️ 불일치 — 무의식적 신호';
     }
 
     const dimensions = [
-      { key: 'resilience', label: '회복력', icon: '💪', score: m.resilience,
+      { key: 'resilience', label: '회복력', icon: '💪', score: safe.resilience,
         hint: '자율신경 안정성' },
-      { key: 'selfAwareness', label: '자기인식', icon: '🔍', score: m.selfAwareness,
-        hint: m.hasFaceData ? '감정-신체 일치' : '얼굴 측정 필요' },
-      { key: 'connection', label: '연결감', icon: '🫂', score: m.connection,
+      { key: 'selfAwareness', label: '자기인식', icon: '🔍', score: safe.selfAwareness,
+        hint: safe.hasFaceData ? '감정-신체 일치' : '얼굴 측정 필요' },
+      { key: 'connection', label: '연결감', icon: '🫂', score: safe.connection,
         hint: '사회적 친밀감' },
-      { key: 'regulation', label: '감정조절', icon: '⚖️', score: m.regulation,
+      { key: 'regulation', label: '감정조절', icon: '⚖️', score: safe.regulation,
         hint: '인식·표현 능력' },
     ];
 
     return `
-      <div class="mental-card" style="background: ${patternBg[m.pattern] || patternBg.exhausted}; border-color: ${patternBorder[m.pattern]};">
+      <div class="mental-card" style="background: ${patternBg[safe.pattern]}; border-color: ${patternBorder[safe.pattern]};">
 
         <!-- 종합 점수 + 패턴 -->
         <div class="mental-header">
           <div class="mental-overall">
             <div class="mental-overall-label">정신건강 점수</div>
-            <div class="mental-overall-score" style="color: ${getScoreColor(m.overall)};">
-              ${m.overall}<span class="mental-overall-max">/100</span>
+            <div class="mental-overall-score" style="color: ${getScoreColor(safe.overall)};">
+              ${safe.overall}<span class="mental-overall-max">/100</span>
             </div>
           </div>
           <div class="mental-pattern">
-            <div class="mental-pattern-icon">${m.patternIcon}</div>
-            <div class="mental-pattern-label">${m.patternLabel}</div>
+            <div class="mental-pattern-icon">${safe.patternIcon}</div>
+            <div class="mental-pattern-label">${safe.patternLabel}</div>
           </div>
         </div>
 
-        <div class="mental-pattern-desc">${m.patternDesc}</div>
+        <div class="mental-pattern-desc">${safe.patternDesc}</div>
 
         <!-- 자기보고 vs 자율신경 비교 -->
-        ${m.hasFaceData ? `
+        ${safe.hasFaceData ? `
           <div class="mental-compare">
             <div class="mental-bar">
               <div class="mental-bar-label">
                 <span>🎮 마음 (게임)</span>
-                <strong>${Math.round(m.subjective)}</strong>
+                <strong>${Math.round(safe.subjective)}</strong>
               </div>
               <div class="mental-bar-track">
-                <div class="mental-bar-fill subj" style="width: ${m.subjective}%"></div>
+                <div class="mental-bar-fill subj" style="width: ${safe.subjective}%"></div>
               </div>
             </div>
             <div class="mental-bar">
               <div class="mental-bar-label">
                 <span>💗 몸 (자율신경)</span>
-                <strong>${Math.round(m.autonomic)}</strong>
+                <strong>${Math.round(safe.autonomic)}</strong>
               </div>
               <div class="mental-bar-track">
-                <div class="mental-bar-fill auto" style="width: ${m.autonomic}%"></div>
+                <div class="mental-bar-fill auto" style="width: ${safe.autonomic}%"></div>
               </div>
             </div>
             ${alignmentLabel ? `<div class="mental-alignment">${alignmentLabel}</div>` : ''}
@@ -8492,7 +8664,7 @@ const App = {
         <!-- 권유 -->
         <div class="mental-action">
           <div class="mental-action-icon">💚</div>
-          <div class="mental-action-text">${m.patternAction}</div>
+          <div class="mental-action-text">${safe.patternAction}</div>
         </div>
       </div>
     `;
