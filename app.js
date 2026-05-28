@@ -208,65 +208,150 @@ const App = {
   },
 
   // ─── 초기화 ───
-  init() {
-    Console.init();
-    console.log('[App v14.5] 초기화 - 모드:', APP_MODE);
-    this._setupCanvas();
-    this._bindFaceButton();
-    this._bindVisibilityHandler();
-    window.addEventListener('beforeunload', () => this._cleanupAll());
-
-    // ★ v13: 누적 Wellness 결과 복원 (먼저)
-    this._wellnessRestore();
-    this._wellnessRender();
-
-    // ★ v16.6: 페이지 복원 안정화 — setTimeout 없이 즉시 복원
-    // 우선순위:
-    //   1. URL ?share= 파라미터 → 가족 보기 페이지 (자녀가 받은 링크)
-    //   2. sessionStorage lastPage → 마지막 안전 페이지
-    //   3. 기본값 home
-    const sharedHandled = this._checkSharedUrl(); // share URL이면 true 반환 (내부에서 페이지 전환)
-    if (!sharedHandled) {
-      const lastPage = sessionStorage.getItem('lastPage') || 'home';
-      const safeLastPages = ['home', 'results', 'mood', 'share', 'detail', 'trends', 'body'];
-      const restoredPage = safeLastPages.includes(lastPage) ? lastPage : 'home';
-
-      // DOM 즉시 적용 (setTimeout 없음 → 깜빡임 제거)
-      if (restoredPage !== 'home') {
-        this._goPageInternal(restoredPage);
-      }
+  // ★ v17.2: 에러 격리 구조 — 각 단계를 독립적으로 보호
+  //   한 단계가 실패해도 나머지(특히 온보딩/안내)는 정상 작동
+  _safeStep(label, fn) {
+    try {
+      fn();
+    } catch (e) {
+      console.error(`[init:${label}] 실패 (건너뜀):`, e);
+      // 에러를 기록하되 전체 흐름은 계속 진행
+      try {
+        const errs = JSON.parse(sessionStorage.getItem('initErrors') || '[]');
+        errs.push({ step: label, msg: String(e && e.message || e), t: Date.now() });
+        sessionStorage.setItem('initErrors', JSON.stringify(errs.slice(-20)));
+      } catch (_) {}
     }
-
-    // 뒤로가기 버튼 설정 — 페이지 복원 후 (history 정리)
-    this._setupBackButton();
-
-    // ★ v15.0: 홈 첫 화면에 오늘의 감정 카드 렌더링
-    this._renderMoodHomeCard();
-
-    // ★ v16.2: 매일 측정 알림 재예약 (페이지 진입 시)
-    this._scheduleNextReminder();
-
-    // ★ v13.8: 인앱 브라우저 감지 + 안내
-    this._detectInAppBrowser();
-
-    // ★ 첫 방문 시 권한 일괄 요청 안내
-    setTimeout(() => this._maybeShowPermissionGuide(), 1000);
-
-    // ★ v14.5: 베타 안내 모달 (첫 방문 1회만)
-    setTimeout(() => this._maybeShowBetaNotice(), 1500);
-
-    // ★ v14.5: 피드백 플로팅 버튼 추가
-    this._injectFeedbackButton();
-
-    // ★ v14.5: 익명 분석 이벤트 (페이지 진입)
-    this._trackEvent('app_open');
-
-    // ★ 음성 합성 워밍업 (사용자 첫 인터랙션 후 한 번 깨우기)
-    document.addEventListener('click', () => this._warmupSpeech(), { once: true, capture: true });
-    document.addEventListener('touchstart', () => this._warmupSpeech(), { once: true, capture: true });
   },
 
-  // ★ v14.5: 베타 안내 모달
+  init() {
+    Console.init();
+    console.log('[App v17.2] 초기화 - 모드:', APP_MODE);
+
+    // 1. 핵심 렌더링 인프라 (실패 시에도 나머지 계속)
+    this._safeStep('canvas', () => this._setupCanvas());
+    this._safeStep('faceButton', () => this._bindFaceButton());
+    this._safeStep('visibility', () => this._bindVisibilityHandler());
+    this._safeStep('beforeunload', () => {
+      window.addEventListener('beforeunload', () => this._cleanupAll());
+    });
+
+    // 2. 데이터 복원 (실패해도 빈 상태로 계속)
+    this._safeStep('wellnessRestore', () => this._wellnessRestore());
+    this._safeStep('wellnessRender', () => this._wellnessRender());
+
+    // 3. 페이지 복원 (실패 시 home 유지)
+    this._safeStep('pageRestore', () => {
+      const sharedHandled = this._checkSharedUrl();
+      if (!sharedHandled) {
+        const lastPage = sessionStorage.getItem('lastPage') || 'home';
+        const safeLastPages = ['home', 'results', 'mood', 'share', 'detail', 'trends', 'body'];
+        const restoredPage = safeLastPages.includes(lastPage) ? lastPage : 'home';
+        if (restoredPage !== 'home') {
+          this._goPageInternal(restoredPage);
+        }
+      }
+    });
+
+    // 4. 뒤로가기 버튼
+    this._safeStep('backButton', () => this._setupBackButton());
+
+    // 5. 홈 카드
+    this._safeStep('moodHomeCard', () => this._renderMoodHomeCard());
+
+    // 6. 알림 재예약
+    this._safeStep('reminder', () => this._scheduleNextReminder());
+
+    // 7. 인앱 브라우저 감지/안내
+    this._safeStep('inAppBrowser', () => this._detectInAppBrowser());
+
+    // 8. ★ 온보딩/안내 — 독립 보호 (위가 다 실패해도 이건 실행됨)
+    this._safeStep('permissionGuide', () => {
+      setTimeout(() => this._safeStep('permissionGuideDelayed', () => this._maybeShowPermissionGuide()), 1000);
+    });
+    this._safeStep('betaNotice', () => {
+      setTimeout(() => this._safeStep('betaNoticeDelayed', () => this._maybeShowBetaNotice()), 1500);
+    });
+
+    // 9. 피드백 버튼
+    this._safeStep('feedbackButton', () => this._injectFeedbackButton());
+
+    // 10. 분석 이벤트
+    this._safeStep('trackOpen', () => this._trackEvent('app_open'));
+
+    // 11. 음성 워밍업
+    this._safeStep('speechWarmup', () => {
+      document.addEventListener('click', () => this._warmupSpeech(), { once: true, capture: true });
+      document.addEventListener('touchstart', () => this._warmupSpeech(), { once: true, capture: true });
+    });
+
+    console.log('[App v17.2] 초기화 완료');
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // ★ v17.2: 개발/디버그 헬퍼 (콘솔에서 App._dev.xxx() 로 호출)
+  //   상품화 과정에서 안내·온보딩을 반복 테스트하기 위한 도구
+  // ════════════════════════════════════════════════════════════════
+  _dev: {
+    // 온보딩/안내 전부 다시 보이게 (저장된 "봤음" 플래그 제거)
+    resetOnboarding() {
+      ['beta_notice_shown', 'permission_guide_shown', 'inapp_notice_shown'].forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
+      console.log('[dev] 온보딩 플래그 초기화됨. 새로고침하면 안내가 다시 나옵니다.');
+      return '새로고침(F5) 하세요';
+    },
+    // 지금 즉시 베타 안내 띄우기 (플래그 무시)
+    showBeta() {
+      try { localStorage.removeItem('beta_notice_shown'); } catch (e) {}
+      App._maybeShowBetaNotice();
+    },
+    // init 중 발생한 에러 목록 보기
+    initErrors() {
+      try {
+        const errs = JSON.parse(sessionStorage.getItem('initErrors') || '[]');
+        if (errs.length === 0) { console.log('[dev] init 에러 없음 ✅'); return errs; }
+        console.warn('[dev] init 에러 목록:', errs);
+        return errs;
+      } catch (e) { return []; }
+    },
+    // 핵심 함수/DOM 존재 여부 자가 점검
+    selfCheck() {
+      const checks = {
+        '홈 페이지 DOM': !!document.getElementById('page-home'),
+        '공유 페이지 DOM': !!document.getElementById('page-share'),
+        '하단 네비': document.querySelectorAll('.nav-btn').length,
+        'wellness 데이터': Object.keys(App.state.wellness || {}).length,
+        '감정 카드 정의': Object.keys(App._emotionCards || {}).length,
+        'PANAS 항목': (App._panasItems || []).length,
+        'init 에러 수': JSON.parse(sessionStorage.getItem('initErrors') || '[]').length,
+      };
+      console.table(checks);
+      return checks;
+    },
+    // 전체 데이터 백업 (JSON 문자열 반환 → 복사해두면 복원 가능)
+    backup() {
+      const dump = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        dump[k] = localStorage.getItem(k);
+      }
+      const json = JSON.stringify(dump);
+      console.log('[dev] 백업 완료. 아래 문자열을 복사해두세요:\n', json);
+      return json;
+    },
+    // 백업 복원
+    restore(json) {
+      try {
+        const dump = JSON.parse(json);
+        Object.keys(dump).forEach(k => localStorage.setItem(k, dump[k]));
+        console.log('[dev] 복원 완료. 새로고침하세요.');
+        return '새로고침(F5) 하세요';
+      } catch (e) { console.error('[dev] 복원 실패:', e); }
+    },
+  },
+
+  // ★ v17.2: 베타 안내 모달
   _maybeShowBetaNotice() {
     try {
       const lastShown = localStorage.getItem('beta_notice_shown');
