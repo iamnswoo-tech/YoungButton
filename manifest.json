@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v17.2",
-  "short_name": "건강측정 v17.2",
-  "description": "v17.2 — 에러 격리 init (온보딩 복구) + 개발 디버그 도구",
+  "name": "건강 측정 v17.3",
+  "short_name": "건강측정 v17.3",
+  "description": "v17.3 — 카카오톡 인앱 감지 복구 (scrap UA + WebView 휴리스틱)",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

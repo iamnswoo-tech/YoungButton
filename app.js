@@ -349,6 +349,24 @@ const App = {
         return '새로고침(F5) 하세요';
       } catch (e) { console.error('[dev] 복원 실패:', e); }
     },
+    // ★ v17.3: 현재 UA + 인앱 감지 결과 확인 (카카오 감지 디버깅)
+    checkBrowser() {
+      const ua = navigator.userAgent;
+      try { localStorage.removeItem('inapp_notice_shown'); } catch (e) {}
+      App._isInApp = false;
+      App._detectInAppBrowser();
+      const result = {
+        'UA 전체': ua,
+        '인앱 감지됨': App._isInApp,
+        '인앱 이름': App._inAppName || '(없음)',
+        'KAKAOTALK 포함': /kakaotalk/i.test(ua),
+        'kakaotalk-scrap': /kakaotalk-scrap/i.test(ua),
+        'Android': /android/i.test(ua),
+        'WebView(wv)': /\bwv\b/i.test(ua),
+      };
+      console.table(result);
+      return result;
+    },
   },
 
   // ★ v17.2: 베타 안내 모달
@@ -633,16 +651,22 @@ const App = {
     const ua = navigator.userAgent || '';
     const lower = ua.toLowerCase();
 
+    // ★ v17.3: 디버깅용 — 전체 UA를 콘솔에 기록 (카카오 감지 문제 추적)
+    console.log('[Browser] 전체 UA:', ua);
+
     // 인앱 브라우저 시그니처 (UA 패턴)
     const inAppPatterns = [
       { name: '카카오톡', pattern: /kakaotalk/i, severity: 'high' },
+      // ★ v17.3: 카카오톡 스크랩/캐시 UA (공유 링크 첫 접근 시)
+      { name: '카카오톡', pattern: /kakaotalk-scrap/i, severity: 'high' },
+      { name: 'KakaoStory', pattern: /kakaostory/i, severity: 'high' },
       { name: '네이버', pattern: /naver\(inapp/i, severity: 'high' },
+      { name: '네이버', pattern: /\binapp\b.*naver|naver.*\binapp\b/i, severity: 'high' },
       { name: '네이버 (whale)', pattern: /naver\b/i, severity: 'medium' },
       { name: '인스타그램', pattern: /instagram/i, severity: 'high' },
       { name: '페이스북', pattern: /fb_iab|fbav|fban/i, severity: 'high' },
       { name: '라인', pattern: /line\//i, severity: 'high' },
       { name: '트위터', pattern: /twitter/i, severity: 'high' },
-      { name: 'KakaoStory', pattern: /kakaostory/i, severity: 'high' },
       { name: '다음', pattern: /daumapps/i, severity: 'medium' },
       { name: '밴드', pattern: /band\//i, severity: 'medium' },
     ];
@@ -655,6 +679,22 @@ const App = {
       }
     }
 
+    // ★ v17.3: 안드로이드 WebView 휴리스틱
+    //   카카오톡에서 공유 링크를 "타고" 들어오면 UA에 KAKAOTALK이 빠질 수 있음
+    //   (카카오 공식 문서: 주소창 직접 입력 시에만 KAKAOTALK 포함)
+    //   → Android WebView 신호('wv' or 'Version/x.x Chrome')가 있고
+    //     일반 브라우저(SamsungBrowser/Firefox/Edge/Whale) 아니면 인앱으로 간주
+    if (!detected && /android/i.test(ua)) {
+      const isWebView = /;\s*wv\)/i.test(ua) || /\bwv\b/i.test(ua) ||
+                        (/version\/[\d.]+/i.test(ua) && /chrome\//i.test(ua));
+      const isRealBrowser = /samsungbrowser|firefox|edg\/|edga\/|whale|opr\/|ucbrowser/i.test(ua);
+      const isPlainChrome = /chrome\//i.test(ua) && !/version\//i.test(ua);
+      if (isWebView && !isRealBrowser && !isPlainChrome) {
+        detected = { name: '인앱', pattern: null, severity: 'medium', heuristic: true };
+        console.warn('[Browser] WebView 휴리스틱으로 인앱 추정 (UA에 앱 이름 없음)');
+      }
+    }
+
     if (!detected) {
       console.log('[Browser] 일반 브라우저 - 모든 기능 사용 가능');
       this._isInApp = false;
@@ -663,7 +703,7 @@ const App = {
 
     this._isInApp = true;
     this._inAppName = detected.name;
-    console.warn(`[Browser] 인앱 브라우저 감지: ${detected.name} (${detected.severity})`);
+    console.warn(`[Browser] 인앱 브라우저 감지: ${detected.name} (${detected.severity})${detected.heuristic ? ' [휴리스틱]' : ''}`);
 
     // 기능 가용성 사전 점검
     const features = {
@@ -690,10 +730,17 @@ const App = {
   },
 
   _showInAppBrowserNotice(detected, features) {
-    // 이미 안내 본 경우 skip (24시간 내 1회만)
+    // ★ v17.3: 안내 재노출 주기 — high(카카오 등)는 6시간, medium은 24시간
+    //   카카오로 자주 공유받으므로 너무 길면 정작 필요할 때 안 나옴
     try {
       const lastShown = parseInt(localStorage.getItem('inapp_notice_shown') || '0');
-      if (Date.now() - lastShown < 24 * 60 * 60 * 1000) return;
+      const cooldown = detected.severity === 'high'
+        ? 6 * 60 * 60 * 1000    // 6시간
+        : 24 * 60 * 60 * 1000;  // 24시간
+      if (Date.now() - lastShown < cooldown) {
+        console.log('[Browser] 인앱 안내 쿨다운 중 (스킵)');
+        return;
+      }
     } catch (e) {}
 
     const issues = [];
