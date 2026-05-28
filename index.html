@@ -8398,6 +8398,18 @@ body::before {
   font-size: 12px; padding: 16px 0;
 }
 
+/* ★ v18.0: 통합 심혈관 카드 내 요약 뱃지 */
+.ppg-sum-badges {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.ppg-sum-badge {
+  font-size: 11px; font-weight: 700;
+  border-radius: 8px; padding: 4px 10px;
+  white-space: nowrap;
+}
+
 /* CONSOLE PANEL */
 .console-card {
   margin: 14px 16px; padding: 12px;
@@ -10380,8 +10392,6 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
        결과 화면
        ────────────────────────────────────────────────── -->
   <div id="finger-result" class="finger-result" style="display:none"></div>
-  <!-- ★ v18.0: 손가락 고급 PPG 카드 (부정맥 리스크) -->
-  <div id="finger-advanced-cards" style="display:none"></div>
 
   <!-- ──────────────────────────────────────────────────
        디버그 로그 패널 (토글)

@@ -2022,6 +2022,16 @@ const App = {
       <!-- ★ v16.2: 통합 심혈관 측정 카드 (손가락+얼굴 가중평균) -->
       ${this._renderUnifiedCardioCard(w)}
 
+      <!-- ★ v18.0: 고급 PPG 분석 (혈관나이/부정맥/RSA) — 얼굴+손가락 통합 -->
+      ${(w.face || w.finger) ? `
+        <div class="res-group-divider" style="margin-top:8px">
+          <div class="res-group-icon">🔬</div>
+          <div class="res-group-title">고급 심혈관 분석</div>
+          <div class="res-group-sub">ME-rPPG 딥러닝 기반</div>
+        </div>
+        <div id="results-advanced-cards"></div>
+      ` : ''}
+
       <!-- ★ v15.2: 정신건강 점수 카드 (감정 게임 + 자율신경 통합) -->
       ${this._renderResultsMentalCard()}
 
@@ -2101,6 +2111,11 @@ const App = {
         </div>
       ` : ''}
     `;
+
+    // ★ v18.0: innerHTML 완료 후 고급 PPG 카드 렌더링 (DOM 존재 필요)
+    if (w.face || w.finger) {
+      this._renderAdvancedPPGCardsFromWellness(w, 'results-advanced-cards');
+    }
   },
 
   // ★ v15.2.7: 결과 페이지의 위기 카드 (최근 mood 결과로부터)
@@ -2435,8 +2450,41 @@ const App = {
             ✓ 손가락 측정은 가장 정확한 방법입니다. 얼굴 측정도 함께 진행하면 더 균형잡힌 분석이 가능해요.
           </div>
         `}
+
+        <!-- ★ v18.0: 고급 PPG 요약 뱃지 (결과 있을 때만) -->
+        ${this._renderAdvancedPPGSummaryBadges(w)}
       </div>
     `;
+  },
+
+  // ★ v18.0: 통합 심혈관 카드 내 고급 PPG 요약 인라인 뱃지
+  _renderAdvancedPPGSummaryBadges(w) {
+    if (!w) return '';
+    const faceData   = w.face   || null;
+    const fingerData = w.finger || null;
+    const va  = faceData?.vascularAge   || null;
+    const rsa = faceData?.rsaIndex ?? null;
+    const arr = faceData?.arrhythmia || fingerData?.arrhythmia || null;
+    if (!va && !arr && rsa === null) return '';
+
+    const badges = [];
+    if (va) {
+      const c = va.grade === 'young' ? '#22c55e' : va.grade === 'aged' ? '#ef4444' : '#3b82f6';
+      const icon = va.grade === 'young' ? '💪' : va.grade === 'aged' ? '⚠️' : '✅';
+      badges.push(`<span class="ppg-sum-badge" style="background:${c}22;color:${c}">${icon} 혈관나이 ${va.estimatedAge}세</span>`);
+    }
+    if (arr) {
+      const c = arr.risk === 'low' ? '#22c55e' : arr.risk === 'moderate' ? '#f59e0b' : '#ef4444';
+      const icon = arr.risk === 'low' ? '💚' : arr.risk === 'moderate' ? '🟡' : '🔴';
+      const lbl = arr.risk === 'low' ? '리듬 정상' : arr.risk === 'moderate' ? '리듬 주의' : '부정맥 의심';
+      badges.push(`<span class="ppg-sum-badge" style="background:${c}22;color:${c}">${icon} ${lbl}</span>`);
+    }
+    if (rsa !== null) {
+      const c = rsa >= 50 ? '#22c55e' : rsa >= 25 ? '#f59e0b' : '#ef4444';
+      badges.push(`<span class="ppg-sum-badge" style="background:${c}22;color:${c}">🌬️ RSA ${rsa}/100</span>`);
+    }
+    if (badges.length === 0) return '';
+    return `<div class="ppg-sum-badges">${badges.join('')}</div>`;
   },
 
   // ★ v14.4: 결과 페이지의 평소 대비 변화 카드
@@ -2623,6 +2671,11 @@ const App = {
     const container = document.getElementById('detail-dashboard');
     if (!container) return;
     container.innerHTML = this._renderHealthInsights();
+    // ★ v18.0: detail 페이지에도 고급 PPG 카드 렌더링
+    const w = this.state.wellness || {};
+    if (w.face || w.finger) {
+      this._renderAdvancedPPGCardsFromWellness(w, 'detail-advanced-cards');
+    }
   },
 
   // ★ v14.1/v14.2: 통합 건강 해석 + 맞춤 운동/식단 추천
@@ -2740,6 +2793,12 @@ const App = {
     `;
 
     return `
+      <!-- ★ v18.0: 고급 PPG 분석 (혈관나이/부정맥/RSA) -->
+      ${(w.face || w.finger) ? `
+        <div class="res-section-title">🔬 고급 심혈관 분석 <span style="font-size:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:6px;padding:2px 8px;font-weight:700;vertical-align:middle;margin-left:6px">ME-rPPG</span></div>
+        <div id="detail-advanced-cards"></div>
+      ` : ''}
+
       <!-- 상세 건강 해석 -->
       <div class="res-section-title">📋 내 건강 이야기</div>
       <div class="insights-intro">
@@ -5565,6 +5624,9 @@ const App = {
           <div class="fm-row"><span>평균 IBI</span><span>${result.meanIBI}ms</span></div>
         </div>
 
+        <!-- ★ v18.0: 고급 PPG 분석 카드 (부정맥 리스크) — HTML 내부에 포함 -->
+        <div id="finger-advanced-cards"></div>
+
         <div class="finger-disclaimer">
           ⚠️ 이 측정은 의료 진단이 아닌 건강 참고용입니다.
         </div>
@@ -5584,8 +5646,8 @@ const App = {
       arrhythmia: result.arrhythmia || null, // ★ v18.0
     });
 
-    // ★ v18.0: 손가락 부정맥 카드 삽입
-    this._renderAdvancedPPGCards(result);
+    // ★ v18.0: 손가락 부정맥 카드 삽입 (innerHTML 내부의 finger-advanced-cards에 렌더)
+    this._renderAdvancedPPGCards(result, 'finger-advanced-cards');
 
     this._flog(`✓ 결과 저장: HR=${result.hr} RMSSD=${result.rmssd} Score=${result.score}`);
   },
@@ -11607,46 +11669,50 @@ const App = {
     gEl.className = 'result-grade ' + grade;
 
     // ★ v18.0: 혈관 나이 + 부정맥 + RSA 카드 렌더링
-    this._renderAdvancedPPGCards(r);
+    this._renderAdvancedPPGCards(r, 'fr-advanced-cards');
   },
 
   // ════════════════════════════════════════════════════════════════
   // ★ v18.0: 고급 PPG 분석 카드 렌더링
   // (혈관 나이 / 부정맥 리스크 / RSA 미주신경 지수)
+  // containerId: 'fr-advanced-cards' | 'finger-advanced-cards' | 'results-advanced-cards'
   // ════════════════════════════════════════════════════════════════
-  _renderAdvancedPPGCards(r) {
-    // fr-advanced-cards (얼굴) 또는 finger-advanced-cards (손가락) 둘 다 지원
-    const container = document.getElementById('fr-advanced-cards')
-                   || document.getElementById('finger-advanced-cards');
+  _renderAdvancedPPGCards(r, containerId) {
+    // containerId 명시 없으면 얼굴/손가락 순으로 탐색
+    const container = containerId
+      ? document.getElementById(containerId)
+      : (document.getElementById('fr-advanced-cards') || document.getElementById('finger-advanced-cards'));
     if (!container) return;
     container.style.display = 'block';
 
-    const va = r.vascularAge;
+    const va  = r.vascularAge;
     const arr = r.arrhythmia;
     const rsa = r.rsaIndex;
 
+    // 아무 데이터도 없으면 안내 문구
+    if (!va && !arr && (rsa === null || rsa === undefined)) {
+      container.innerHTML = `<div class="ppg-adv-empty">💡 30초 이상 측정 시 혈관 나이·부정맥·미주신경 분석이 추가됩니다.</div>`;
+      return;
+    }
+
     let html = '';
 
-    // ── 카드 1: 혈관 나이 ──
+    // ── 카드 1: 혈관 나이 (얼굴 측정에서만 가능) ──
     if (va) {
       const gradeLabel = va.grade === 'young' ? '실제보다 젊음' : va.grade === 'aged' ? '실제보다 노화' : '나이에 맞는 수준';
       const gradeClass = va.grade === 'young' ? 'normal' : va.grade === 'aged' ? 'bad' : 'normal';
       const gradeIcon  = va.grade === 'young' ? '💪' : va.grade === 'aged' ? '⚠️' : '✅';
       const deltaText  = va.delta !== null ? (va.delta > 0 ? `+${va.delta}세` : `${va.delta}세`) : '';
       const confText   = va.confidence === 'high' ? '신호 풍부' : '신호 보통';
-
-      let cmtVa;
-      if (va.grade === 'young') {
-        cmtVa = `혈관 탄성도 분석 결과, 실제 나이보다 혈관 상태가 양호합니다. 꾸준한 운동과 좋은 식습관이 혈관 건강을 유지시켜 줍니다.`;
-      } else if (va.grade === 'aged') {
-        cmtVa = `PPG 파형 분석에서 혈관 경직도가 다소 높게 나타났습니다. 규칙적인 유산소 운동, 금연, 저염식이 혈관 건강 개선에 도움이 됩니다. ※ 의학적 진단 아님`;
-      } else {
-        cmtVa = `혈관 탄성도가 나이에 맞는 정상 범위입니다. 현재의 생활 습관을 유지하세요.`;
-      }
+      let cmtVa = va.grade === 'young'
+        ? `혈관 탄성도 분석 결과, 실제 나이보다 혈관 상태가 양호합니다. 꾸준한 운동과 좋은 식습관이 혈관 건강을 유지시켜 줍니다.`
+        : va.grade === 'aged'
+        ? `PPG 파형 분석에서 혈관 경직도가 다소 높게 나타났습니다. 규칙적인 유산소 운동, 금연, 저염식이 혈관 건강 개선에 도움이 됩니다. ※ 의학적 진단 아님`
+        : `혈관 탄성도가 나이에 맞는 정상 범위입니다. 현재의 생활 습관을 유지하세요.`;
       if (va.aix !== null) cmtVa += ` (혈관 증강 지수 AIx: ${va.aix}%)`;
 
       html += `
-      <div class="rg-card ppg-adv-card" id="fr-va-card">
+      <div class="rg-card ppg-adv-card">
         <div class="rg-card-title">🫀 혈관 나이 추정 <span class="ppg-adv-badge">ME-rPPG</span></div>
         <div class="ppg-adv-main">
           <div class="ppg-adv-big">${va.estimatedAge}<span class="ppg-adv-unit">세</span></div>
@@ -11663,33 +11729,23 @@ const App = {
       const riskLabel = arr.risk === 'low' ? '낮음 (정상 리듬)' : arr.risk === 'moderate' ? '보통 (관찰 권장)' : '높음 (전문의 상담 권장)';
       const riskClass = arr.risk === 'low' ? 'normal' : arr.risk === 'moderate' ? 'high' : 'bad';
       const riskIcon  = arr.risk === 'low' ? '💚' : arr.risk === 'moderate' ? '🟡' : '🔴';
-
-      let cmtArr;
-      if (arr.risk === 'low') {
-        cmtArr = `심박 리듬이 규칙적입니다. 포앵카레 플롯 분석에서 부정맥 패턴이 관찰되지 않았습니다.`;
-      } else if (arr.risk === 'moderate') {
-        cmtArr = `심박 간격에 다소 불규칙한 패턴이 감지되었습니다. 피로·카페인·수면 부족으로도 나타날 수 있습니다. 지속될 경우 전문 검진을 권합니다.`;
-      } else {
-        cmtArr = `심박 리듬에 이상 패턴이 관찰되었습니다. 단순 측정 노이즈일 수 있으나, 증상(두근거림, 어지러움)이 동반된다면 심장내과 상담을 권합니다.`;
-      }
-
-      const flagMap = {
-        'sd_ratio_low': 'SD비율 이상',
-        'high_irr': '불규칙성 높음',
-        'pnn50_high': '박동 변동 과다',
-        'rhythm_jump': '리듬 점프 패턴',
-      };
-      const flagText = arr.flags.length > 0 ? arr.flags.map(f => flagMap[f] || f).join(', ') : '이상 없음';
+      const cmtArr = arr.risk === 'low'
+        ? `심박 리듬이 규칙적입니다. 포앵카레 플롯 분석에서 부정맥 패턴이 관찰되지 않았습니다.`
+        : arr.risk === 'moderate'
+        ? `심박 간격에 다소 불규칙한 패턴이 감지되었습니다. 피로·카페인·수면 부족으로도 나타날 수 있습니다. 지속될 경우 전문 검진을 권합니다.`
+        : `심박 리듬에 이상 패턴이 관찰되었습니다. 단순 측정 노이즈일 수 있으나, 증상(두근거림, 어지러움)이 동반된다면 심장내과 상담을 권합니다.`;
+      const flagMap = { 'sd_ratio_low':'SD비율 이상', 'high_irr':'불규칙성 높음', 'pnn50_high':'박동 변동 과다', 'rhythm_jump':'리듬 점프 패턴' };
+      const flagText = arr.flags && arr.flags.length > 0 ? arr.flags.map(f => flagMap[f] || f).join(', ') : '이상 없음';
 
       html += `
-      <div class="rg-card ppg-adv-card" id="fr-arr-card">
+      <div class="rg-card ppg-adv-card">
         <div class="rg-card-title">💓 부정맥 리스크 <span class="ppg-adv-badge">ME-rPPG</span></div>
         <div class="ppg-adv-main">
           <div class="rg-badge ${riskClass}" style="font-size:1rem;padding:6px 14px">${riskIcon} ${riskLabel}</div>
         </div>
         <div class="ppg-adv-sub">분석 지표: ${flagText}</div>
         <div class="ppg-adv-detail">
-          SD1 ${arr.sd1}ms · SD2 ${arr.sd2}ms · pNN50 ${arr.pnn50}% · 불규칙도 ${arr.irregPct}%
+          SD1 ${arr.sd1 ?? '--'}ms · SD2 ${arr.sd2 ?? '--'}ms · pNN50 ${arr.pnn50 ?? arr.pNN50 ?? '--'}% · 불규칙도 ${arr.irregPct ?? '--'}%
         </div>
         <div class="rg-comment">${cmtArr}</div>
         <div class="ppg-adv-disclaimer">※ rPPG 기반 선별 검사. 의학적 진단이 아닙니다. 증상이 있으면 병원을 방문하세요.</div>
@@ -11701,16 +11757,14 @@ const App = {
       const rsaGrade = rsa >= 50 ? 'normal' : rsa >= 25 ? 'high' : 'bad';
       const rsaLabel = rsa >= 50 ? '양호' : rsa >= 25 ? '보통' : '낮음';
       const rsaIcon  = rsa >= 50 ? '🌿' : rsa >= 25 ? '🟡' : '⚠️';
-      let cmtRsa;
-      if (rsa >= 50) {
-        cmtRsa = `호흡-심박 동기화(RSA)가 잘 이루어지고 있습니다. 미주신경이 활성화되어 심혈관 예비 능력이 양호한 상태입니다.`;
-      } else if (rsa >= 25) {
-        cmtRsa = `호흡-심박 동기화가 보통 수준입니다. 복식 호흡 연습이나 명상이 미주신경 활성화에 도움을 줄 수 있습니다.`;
-      } else {
-        cmtRsa = `호흡-심박 동기화(RSA)가 낮게 측정되었습니다. 스트레스, 피로, 불규칙한 호흡이 영향을 줄 수 있습니다. 심호흡을 통해 자율신경 균형을 회복해보세요.`;
-      }
+      const cmtRsa = rsa >= 50
+        ? `호흡-심박 동기화(RSA)가 잘 이루어지고 있습니다. 미주신경이 활성화되어 심혈관 예비 능력이 양호한 상태입니다.`
+        : rsa >= 25
+        ? `호흡-심박 동기화가 보통 수준입니다. 복식 호흡 연습이나 명상이 미주신경 활성화에 도움을 줄 수 있습니다.`
+        : `호흡-심박 동기화(RSA)가 낮게 측정되었습니다. 스트레스, 피로, 불규칙한 호흡이 영향을 줄 수 있습니다. 심호흡을 통해 자율신경 균형을 회복해보세요.`;
+
       html += `
-      <div class="rg-card ppg-adv-card" id="fr-rsa-card">
+      <div class="rg-card ppg-adv-card">
         <div class="rg-card-title">🌬️ 미주신경 활성도 (RSA) <span class="ppg-adv-badge">ME-rPPG</span></div>
         <div class="ppg-adv-main">
           <div class="ppg-adv-big">${rsa}<span class="ppg-adv-unit">/100</span></div>
@@ -11721,11 +11775,39 @@ const App = {
       </div>`;
     }
 
-    if (!html) {
-      html = `<div class="ppg-adv-empty">💡 30초 이상 측정 시 혈관 나이·부정맥·미주신경 분석이 추가됩니다.</div>`;
+    container.innerHTML = html;
+  },
+
+  // ★ v18.0: 결과/detail 페이지용 — wellness 저장 데이터에서 고급 PPG 카드 렌더링
+  _renderAdvancedPPGCardsFromWellness(w, containerId) {
+    if (!w) return;
+    // 얼굴과 손가락 중 데이터가 있는 것 우선 (혈관나이는 얼굴만, 부정맥은 둘 다)
+    const faceData   = w.face   || null;
+    const fingerData = w.finger || null;
+
+    // 혈관나이 + RSA: 얼굴 우선
+    const vascularAge = faceData?.vascularAge || null;
+    const rsaIndex    = faceData?.rsaIndex ?? null;
+
+    // 부정맥: 얼굴과 손가락 중 더 최근 것, 또는 risk가 높은 것 선택
+    let arrhythmia = null;
+    const fArr = faceData?.arrhythmia   || null;
+    const fiArr = fingerData?.arrhythmia || null;
+    if (fArr && fiArr) {
+      // 리스크 높은 쪽 우선 (high > moderate > low)
+      const riskOrder = { 'high': 3, 'moderate': 2, 'low': 1 };
+      arrhythmia = (riskOrder[fArr.risk] || 0) >= (riskOrder[fiArr.risk] || 0) ? fArr : fiArr;
+    } else {
+      arrhythmia = fArr || fiArr;
     }
 
-    container.innerHTML = html;
+    // 아무것도 없으면 렌더링 안 함
+    if (!vascularAge && !arrhythmia && rsaIndex === null) return;
+
+    this._renderAdvancedPPGCards(
+      { vascularAge, arrhythmia, rsaIndex },
+      containerId
+    );
   },
 
   faceTab(tab) {
