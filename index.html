@@ -6809,6 +6809,239 @@ body::before {
   font-weight: 600;
 }
 
+/* ═══════════ ★ v17.0: 공유 페이지 — 관계 + 모드 선택 ═══════════ */
+
+/* 누구에게 보낼지 선택 */
+.share-relation-card {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 18px 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  box-shadow: var(--elev-1, 0 1px 3px rgba(59, 130, 246, .04));
+}
+.share-relation-label {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text-strong);
+  margin-bottom: 12px;
+  letter-spacing: -.02em;
+}
+.share-relation-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.share-relation-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s var(--ease-out, ease);
+  min-height: 68px;
+}
+.share-relation-btn:active {
+  transform: scale(0.95);
+}
+.share-relation-btn.on {
+  background: linear-gradient(135deg, #FCE7F3, #F5D0FE);
+  border-color: #EC4899;
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.2);
+}
+.srb-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.srb-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-medium);
+  letter-spacing: -.02em;
+  line-height: 1.2;
+  text-align: center;
+}
+.share-relation-btn.on .srb-label {
+  color: #831843;
+}
+
+/* 무엇을 보낼지 선택 */
+.share-mode-card {
+  background: var(--card);
+  border-radius: 18px;
+  padding: 18px 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  box-shadow: var(--elev-1, 0 1px 3px rgba(59, 130, 246, .04));
+}
+.share-mode-label {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text-strong);
+  margin-bottom: 12px;
+  letter-spacing: -.02em;
+}
+.share-mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.share-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: all 0.2s var(--ease-out, ease);
+  min-height: 60px;
+  position: relative;
+}
+.share-mode-btn:not(.disabled):active {
+  transform: scale(0.98);
+}
+.share-mode-btn.on {
+  background: linear-gradient(135deg, #FCE7F3, #F5D0FE);
+  border-color: #EC4899;
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.15);
+}
+.share-mode-btn.disabled {
+  opacity: 0.55;
+  cursor: pointer;
+}
+.smb-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+.smb-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.smb-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-strong);
+  letter-spacing: -.01em;
+}
+.smb-sub {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.smb-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 900;
+  color: transparent;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.share-mode-btn.on .smb-check {
+  background: #EC4899;
+  border-color: #EC4899;
+  color: #fff;
+}
+
+/* 미리보기 - 감정 모드 hero */
+.smp-mood-hero {
+  border-radius: 14px;
+  padding: 18px 16px;
+  text-align: center;
+  margin: 12px 0;
+  border: 1.5px solid;
+}
+.smp-mood-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-soft);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.smp-mood-word {
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: -.04em;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+.smp-mood-desc {
+  font-size: 13px;
+  color: var(--text-medium);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* 가족 보기 - 감정 모드 (수신자) */
+.family-view-card.mood-card-warm {
+  background: linear-gradient(135deg, #FFF1F8 0%, #FCE7F3 100%);
+}
+.fvc-mood-hero {
+  margin: 16px -16px 16px;
+  padding: 32px 24px;
+  color: #fff;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.fvc-mood-hero::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.2) 0%, transparent 60%);
+  pointer-events: none;
+}
+.fvc-mood-meta {
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0.9;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  position: relative;
+}
+.fvc-mood-word {
+  font-size: 56px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.05em;
+  margin-bottom: 12px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  position: relative;
+}
+.fvc-mood-desc {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+  position: relative;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* ═══════════ 끝: 공유 페이지 v17.0 ═══════════ */
+
 .share-name-card {
   background: var(--card);
   border-radius: 16px;
@@ -9026,7 +9259,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v16.9 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v17.0 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -9129,7 +9362,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="mc-arrow">›</div>
     </button>
 
-    <!-- ★ v16.9: 안부 카드 - 특별 프로모 컴포넌트 (감정 측정과 동등한 핵심 콘텐츠) -->
+    <!-- ★ v17.0: 안부 카드 - 포괄적 관계 (자녀/부모/친구/연인/소중한 사람) -->
     <button type="button" class="care-card" onclick="App.goPage('share')">
       <div class="care-card-deco">
         <span class="care-deco care-deco-1">💝</span>
@@ -9137,19 +9370,19 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
         <span class="care-deco care-deco-3">🤍</span>
       </div>
       <div class="care-card-inner">
-        <div class="care-badge">💌 가족 안부 · 따뜻함</div>
+        <div class="care-badge">💌 안부 · 따뜻함</div>
         <div class="care-title">안부를 보내세요</div>
         <div class="care-subtitle">
           단순한 측정 결과가 아니라<br>
           <strong>안심을 전하는 마음</strong>이 됩니다
         </div>
         <div class="care-features">
-          <span class="cf-item">✨ 측정 결과 자동 첨부</span>
-          <span class="cf-item">💝 따뜻한 안부 메시지</span>
-          <span class="cf-item">🔗 자녀에게 링크 한 번</span>
+          <span class="cf-item">👨‍👩‍👧 부모 · 자녀 · 친구 · 연인 모두</span>
+          <span class="cf-item">💝 건강 결과 또는 감정만 선택</span>
+          <span class="cf-item">🔗 "내 마음 이해해줘" 한 번에</span>
         </div>
         <div class="care-cta">
-          <span class="care-cta-text">자녀에게 안부 전하기</span>
+          <span class="care-cta-text">소중한 사람에게 안부 전하기</span>
           <span class="care-cta-arrow">→</span>
         </div>
       </div>
@@ -9767,7 +10000,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v16.9</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v17.0</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>
@@ -10058,8 +10291,8 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>
 
-  v11.0 · 얼굴 + 신체 측정 분리<br>
-  이 앱은 의료기기가 아닙니다. 건강 참고용.
+  v17.0 · 얼굴/손가락/심리 + 신체 측정 분리<br>
+  ✉ Reset Button 문의: iamnsw@naver.com
 </footer>
 
 <script src="app.js"></script>

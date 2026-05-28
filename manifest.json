@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v16.9",
-  "short_name": "건강측정 v16.9",
-  "description": "v16.9 — 안부 카드 (핵심 콘텐츠로 부각) + 안심 메시지",
+  "name": "건강 측정 v17.0",
+  "short_name": "건강측정 v17.0",
+  "description": "v17.0 — 입력 튕김 수정 + 포괄적 관계 (부모/자녀/친구/연인) + 감정만 보내기 옵션",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

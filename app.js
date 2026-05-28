@@ -6016,16 +6016,42 @@ const App = {
     const cardio = this._getUnifiedCardio(w);
     const result = this._wellnessComputeScore();
 
-    // 공유 가능한 최근 측정이 있는지 확인
-    const hasMeasurement = cardio || result.score > 0;
+    // ★ v17.0: 감정 측정 데이터 (감정만 보내기용)
+    let moodEntry = null;
+    try {
+      const moodHistory = JSON.parse(localStorage.getItem('history_mood') || '[]');
+      if (moodHistory.length > 0) {
+        const latest = moodHistory[moodHistory.length - 1];
+        // 24시간 이내
+        if (Date.now() - latest.t < 24 * 60 * 60 * 1000) {
+          moodEntry = latest;
+        }
+      }
+    } catch (e) {}
 
-    if (!hasMeasurement) {
+    // 공유 가능한 데이터 확인
+    const hasMeasurement = cardio || result.score > 0;
+    const hasMood = !!moodEntry;
+    const hasAnyData = hasMeasurement || hasMood;
+
+    // ★ v17.0: 현재 공유 모드 (health: 측정 / mood: 감정만)
+    let mode = this._shareMode;
+    if (!mode) {
+      // 자동 선택: 측정 있으면 health, 없으면 mood
+      mode = hasMeasurement ? 'health' : (hasMood ? 'mood' : 'health');
+      this._shareMode = mode;
+    }
+
+    if (!hasAnyData) {
       container.innerHTML = `
         <div class="share-empty-card">
-          <div class="share-empty-icon">📊</div>
-          <div class="share-empty-title">공유할 측정 결과가 없어요</div>
-          <div class="share-empty-msg">먼저 손가락 측정이나 얼굴 측정을 진행한 후, 자녀에게 결과를 공유할 수 있어요.</div>
-          <button class="share-action-btn" type="button" onclick="App.goPage('finger')">
+          <div class="share-empty-icon">💝</div>
+          <div class="share-empty-title">전할 내용이 없어요</div>
+          <div class="share-empty-msg">측정을 마치거나 감정을 기록하면 안부와 함께 전할 수 있어요.</div>
+          <button class="share-action-btn" type="button" onclick="App.goPage('mood')">
+            💝 감정 측정하기
+          </button>
+          <button class="share-action-btn secondary" type="button" onclick="App.goPage('finger')">
             ☝️ 손가락 측정하기
           </button>
           <button class="share-action-btn secondary" type="button" onclick="App.goPage('face')">
@@ -6036,17 +6062,96 @@ const App = {
       return;
     }
 
-    // 이름 저장 시 사용
+    // 현재 관계 / 이름
+    const relation = localStorage.getItem('shareRelation') || 'parent';
     const sharedName = localStorage.getItem('shareSenderName') || '';
+
+    // 관계별 안내 메시지
+    const relationCopy = {
+      parent: { icon: '👨‍👩‍👧', label: '자녀에게', placeholder: '예: 엄마, 아빠, 어머니, 아버지',
+                introTitle: '안부는 안심입니다',
+                introBody: `한 줄의 안부가 자녀에게는<br><strong>가장 큰 안심</strong>이 됩니다.` },
+      child:  { icon: '👶',    label: '부모님께', placeholder: '예: 딸, 아들, 막내',
+                introTitle: '엄마, 아빠 걱정 마세요',
+                introBody: `오늘 나의 건강 상태와 안부를<br><strong>부모님께</strong> 전해보세요.` },
+      friend: { icon: '🤝',    label: '친구에게', placeholder: '예: 본인 이름 / 별명',
+                introTitle: '친구야, 오늘 나 이래',
+                introBody: `요즘 어떻게 지내는지<br><strong>친구와 나누는 일상</strong>의 안부예요.` },
+      partner:{ icon: '💕',    label: '연인에게', placeholder: '예: 본인 이름 / 애칭',
+                introTitle: '오늘 내 마음, 알아줘',
+                introBody: `소중한 사람에게<br><strong>오늘의 나</strong>를 솔직하게 전해보세요.` },
+      self:   { icon: '💝',    label: '소중한 사람에게', placeholder: '예: 본인 이름',
+                introTitle: '내 마음을 이해해줘요',
+                introBody: `누군가에게 전하고 싶은<br><strong>오늘의 나</strong>를 담아 보내세요.` },
+    };
+    const rel = relationCopy[relation] || relationCopy.parent;
+
+    const relations = [
+      { id: 'parent',  icon: '👨‍👩‍👧', label: '자녀에게' },
+      { id: 'child',   icon: '👶',    label: '부모님께' },
+      { id: 'friend',  icon: '🤝',    label: '친구에게' },
+      { id: 'partner', icon: '💕',    label: '연인에게' },
+      { id: 'self',    icon: '💝',    label: '그 외' },
+    ];
 
     container.innerHTML = `
       <div class="share-intro-card share-intro-warm">
-        <div class="share-intro-icon">💝</div>
-        <div class="share-intro-title">안부는 안심입니다</div>
-        <div class="share-intro-body">
-          측정 결과와 함께 한 줄의 안부를 자녀에게 전해보세요.<br>
-          <strong>"오늘 건강해요"</strong> 한 마디가 자녀에게는<br>
-          <strong>가장 큰 안심</strong>이 됩니다.
+        <div class="share-intro-icon">${rel.icon}</div>
+        <div class="share-intro-title">${rel.introTitle}</div>
+        <div class="share-intro-body">${rel.introBody}</div>
+      </div>
+
+      <!-- ★ v17.0: 누구에게 보낼지 선택 -->
+      <div class="share-relation-card">
+        <div class="share-relation-label">💌 누구에게 보낼까요?</div>
+        <div class="share-relation-grid">
+          ${relations.map(r => `
+            <button type="button"
+                    class="share-relation-btn ${relation === r.id ? 'on' : ''}"
+                    onclick="App._setShareRelation('${r.id}')">
+              <span class="srb-icon">${r.icon}</span>
+              <span class="srb-label">${r.label}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- ★ v17.0: 무엇을 보낼지 선택 (측정 결과 / 감정만) -->
+      <div class="share-mode-card">
+        <div class="share-mode-label">🎁 무엇을 보낼까요?</div>
+        <div class="share-mode-options">
+          ${hasMeasurement ? `
+            <button type="button"
+                    class="share-mode-btn ${mode === 'health' ? 'on' : ''}"
+                    onclick="App._setShareMode('health')">
+              <span class="smb-icon">💗</span>
+              <span class="smb-body">
+                <span class="smb-title">건강 측정 결과</span>
+                <span class="smb-sub">${cardio ? `심박/HRV/스트레스` : ''}${result.score > 0 ? (cardio ? ' + ' : '') + '종합 점수' : ''}</span>
+              </span>
+              <span class="smb-check">✓</span>
+            </button>
+          ` : ''}
+          ${hasMood ? `
+            <button type="button"
+                    class="share-mode-btn ${mode === 'mood' ? 'on' : ''}"
+                    onclick="App._setShareMode('mood')">
+              <span class="smb-icon">💝</span>
+              <span class="smb-body">
+                <span class="smb-title">감정 상태만</span>
+                <span class="smb-sub">"내 기분 이해해줘" — ${moodEntry.cardKo || '오늘의 감정'}</span>
+              </span>
+              <span class="smb-check">✓</span>
+            </button>
+          ` : `
+            <button type="button" class="share-mode-btn disabled" onclick="App.goPage('mood')">
+              <span class="smb-icon">💝</span>
+              <span class="smb-body">
+                <span class="smb-title">감정 상태만</span>
+                <span class="smb-sub">감정 측정 후 가능 →</span>
+              </span>
+            </button>
+          `}
         </div>
       </div>
 
@@ -6056,18 +6161,18 @@ const App = {
         <input type="text"
                class="share-name-input"
                id="share-sender-name"
-               placeholder="예: 엄마, 아빠, 어머니, 아버지"
+               placeholder="${rel.placeholder}"
                value="${this._esc(sharedName)}"
                maxlength="20"
                oninput="App._saveShareName(this.value)">
-        <div class="share-name-hint">자녀가 받았을 때 화면에 표시될 호칭입니다.</div>
+        <div class="share-name-hint">${rel.label} 받았을 때 화면에 표시될 호칭입니다.</div>
       </div>
 
       <!-- 미리보기 -->
       <div class="share-preview-section">
-        <div class="share-preview-label">📱 자녀에게 보낼 메시지 미리보기</div>
+        <div class="share-preview-label">📱 ${rel.label} 보낼 메시지 미리보기</div>
         <div class="share-preview-card">
-          ${this._renderShareMessagePreview(cardio, result, sharedName || '부모님')}
+          ${this._renderShareMessagePreview(cardio, result, sharedName || this._getDefaultSenderName(), mode, moodEntry, relation)}
         </div>
       </div>
 
@@ -6105,7 +6210,7 @@ const App = {
         <div class="share-reminder-title">⏰ 매일 같은 시간 측정 알림</div>
         <div class="share-reminder-body">
           매일 정해진 시간에 측정 알림을 받으면 빠짐없이 측정할 수 있어요.<br>
-          꾸준한 측정 데이터가 자녀에게 더 정확한 안부 신호가 됩니다.
+          꾸준한 측정 데이터가 더 정확한 안부 신호가 됩니다.
         </div>
         <button class="share-reminder-btn" type="button" onclick="App._setupDailyReminder()">
           🔔 알림 설정하기
@@ -6117,15 +6222,71 @@ const App = {
         🔒 <strong>개인정보 보호</strong>
         <ul class="share-privacy-list">
           <li>서버에 저장되지 않습니다 (링크 자체에 데이터 포함)</li>
-          <li>받는 자녀의 폰에도 저장되지 않습니다</li>
+          <li>받는 사람의 폰에도 저장되지 않습니다</li>
           <li>측정값만 공유되며, 이름·연락처는 직접 입력한 호칭만 사용됩니다</li>
         </ul>
       </div>
     `;
   },
 
-  _renderShareMessagePreview(cardio, result, name) {
+  _renderShareMessagePreview(cardio, result, name, mode, moodEntry, relation) {
+    mode = mode || 'health';
+    relation = relation || 'parent';
     const time = new Date().toLocaleString('ko-KR', { dateStyle: 'long', timeStyle: 'short' });
+
+    // ★ v17.0: 관계별 인사말
+    const greetings = {
+      parent: `${this._esc(name)}이 건강 측정을 마치셨어요 ✨`,
+      child:  `${this._esc(name)}의 오늘 안부예요 💝`,
+      friend: `${this._esc(name)} — 오늘 이래 🤝`,
+      partner:`${this._esc(name)}이 오늘 어떻게 지내는지 알려요 💕`,
+      self:   `${this._esc(name)}의 오늘이에요 💝`,
+    };
+    const greeting = greetings[relation] || greetings.self;
+
+    // 관계별 마무리 멘트
+    const closings = {
+      health: {
+        parent: '오늘도 건강하게 하루 시작 💛',
+        child:  '걱정 마세요, 잘 지내고 있어요 💛',
+        friend: '오늘도 좋은 하루 보내자 💛',
+        partner:'오늘도 함께라 든든해 💛',
+        self:   '오늘도 평안한 하루 보내세요 💛',
+      },
+      mood: {
+        parent: '오늘 마음이 이래요. 이해해주세요 💛',
+        child:  '오늘 기분 이래요. 응원해주세요 💛',
+        friend: '오늘 기분이 이래. 너에게 말하고 싶었어 💛',
+        partner:'오늘 내 마음이야. 함께해줘서 고마워 💛',
+        self:   '오늘의 내 마음을 이해해주세요 💛',
+      },
+    };
+    const closing = closings[mode]?.[relation] || closings.health.self;
+
+    // ★ v17.0: 모드별 미리보기 (감정만 모드 추가)
+    if (mode === 'mood' && moodEntry) {
+      const card = this._emotionCards?.[moodEntry.cardId];
+      const emotionName = moodEntry.cardKo || (card?.ko) || '오늘의 감정';
+      const emotionDesc = card?.desc || '소중한 하루를 보내고 있어요';
+      const emotionColor = card?.color || '#EC4899';
+
+      return `
+        <div class="smp-header">
+          <div class="smp-greeting">${greeting}</div>
+          <div class="smp-time">${time}</div>
+        </div>
+        <div class="smp-mood-hero" style="background: linear-gradient(135deg, ${emotionColor}25, ${emotionColor}40); border-color: ${emotionColor}50">
+          <div class="smp-mood-label">오늘 마음 상태</div>
+          <div class="smp-mood-word" style="color: ${emotionColor}">${emotionName}</div>
+          <div class="smp-mood-desc">${emotionDesc}</div>
+        </div>
+        <div class="smp-footer">
+          ${closing}
+        </div>
+      `;
+    }
+
+    // 기본 모드: health (측정 결과 위주)
     const score = result.score;
     const grade = result.grade;
     const stressLabels = ['', '매우 이완', '이완', '보통', '긴장', '높은 스트레스'];
@@ -6133,19 +6294,21 @@ const App = {
 
     return `
       <div class="smp-header">
-        <div class="smp-greeting">${this._esc(name)}이 건강 측정을 마치셨어요 ✨</div>
+        <div class="smp-greeting">${greeting}</div>
         <div class="smp-time">${time}</div>
       </div>
-      <div class="smp-score-row">
-        <div class="smp-score-circle" style="color:${score >= 70 ? '#22c55e' : score >= 50 ? '#3b82f6' : '#f59e0b'}">
-          <div class="smp-score-num">${score}</div>
-          <div class="smp-score-max">/100</div>
+      ${score > 0 ? `
+        <div class="smp-score-row">
+          <div class="smp-score-circle" style="color:${score >= 70 ? '#22c55e' : score >= 50 ? '#3b82f6' : '#f59e0b'}">
+            <div class="smp-score-num">${score}</div>
+            <div class="smp-score-max">/100</div>
+          </div>
+          <div class="smp-score-info">
+            <div class="smp-score-label">종합 건강 점수</div>
+            <div class="smp-score-grade">${grade}</div>
+          </div>
         </div>
-        <div class="smp-score-info">
-          <div class="smp-score-label">종합 건강 점수</div>
-          <div class="smp-score-grade">${grade}</div>
-        </div>
-      </div>
+      ` : ''}
       ${cardio ? `
         <div class="smp-vitals">
           <div class="smp-vital">
@@ -6161,17 +6324,63 @@ const App = {
         </div>
       ` : ''}
       <div class="smp-footer">
-        오늘도 건강하게 하루 시작 💛
+        ${closing}
       </div>
     `;
   },
 
   _saveShareName(name) {
     try {
-      localStorage.setItem('shareSenderName', (name || '').trim());
-      // 미리보기 갱신
-      this._renderSharePage();
+      const trimmed = (name || '').trim();
+      localStorage.setItem('shareSenderName', trimmed);
+      // ★ v17.0: 전체 리렌더링 대신 미리보기만 갱신 (입력 포커스 유지)
+      const previewEl = document.querySelector('.share-preview-card');
+      if (previewEl) {
+        const w = this.state.wellness || {};
+        const cardio = this._getUnifiedCardio(w);
+        const result = this._wellnessComputeScore();
+        const mode = this._shareMode || 'health';
+        previewEl.innerHTML = this._renderShareMessagePreview(cardio, result, trimmed || this._getDefaultSenderName(), mode);
+      }
     } catch (e) {}
+  },
+
+  // ★ v17.0: 관계별 기본 발신자 이름
+  _getDefaultSenderName() {
+    const rel = localStorage.getItem('shareRelation') || 'parent';
+    const defaults = {
+      parent: '부모님',     // 부모 → 자녀
+      child: '자녀',         // 자녀 → 부모
+      friend: '친구',         // 친구
+      partner: '나',         // 연인
+      self: '나',             // 일반
+    };
+    return defaults[rel] || '나';
+  },
+
+  // ★ v17.0: 관계별 받는 사람 호칭
+  _getReceiverName() {
+    const rel = localStorage.getItem('shareRelation') || 'parent';
+    const receivers = {
+      parent: '자녀에게',
+      child: '부모님께',
+      friend: '친구에게',
+      partner: '연인에게',
+      self: '소중한 사람에게',
+    };
+    return receivers[rel] || '소중한 사람에게';
+  },
+
+  // ★ v17.0: 관계 선택 저장 (페이지 일부만 갱신)
+  _setShareRelation(rel) {
+    localStorage.setItem('shareRelation', rel);
+    this._renderSharePage();
+  },
+
+  // ★ v17.0: 공유 모드 (health: 측정 결과 / mood: 감정만)
+  _setShareMode(mode) {
+    this._shareMode = mode;
+    this._renderSharePage();
   },
 
   // 공유 데이터를 URL-safe base64로 인코딩
@@ -6180,25 +6389,48 @@ const App = {
     const cardio = this._getUnifiedCardio(w);
     const result = this._wellnessComputeScore();
     const name = (localStorage.getItem('shareSenderName') || '').trim();
+    // ★ v17.0: 모드와 관계 포함
+    const mode = this._shareMode || 'health';
+    const relation = localStorage.getItem('shareRelation') || 'parent';
 
     const data = {
-      v: '1', // 데이터 포맷 버전
-      n: name || '부모님',
+      v: '2', // 데이터 포맷 버전 (v17.0)
+      n: name || this._getDefaultSenderName(),
       t: Date.now(),
-      s: result.score,
-      g: result.grade,
+      m: mode,        // health | mood
+      r: relation,    // parent | child | friend | partner | self
     };
-    if (cardio) {
-      data.hr = cardio.hr;
-      data.rm = cardio.rmssd;
-      data.st = cardio.stressLevel;
-      data.si = cardio.stressIndex;
-      data.src = cardio.source;
-    }
 
-    // 측정 항목 수
-    data.cnt = ['face','finger','balance','gait','tremor','reaction','posture','bodycomp']
-      .filter(k => w[k]).length;
+    // ★ v17.0: 모드별 데이터 추가
+    if (mode === 'mood') {
+      // 감정만 모드 — 최근 mood 항목 포함
+      try {
+        const moodHistory = JSON.parse(localStorage.getItem('history_mood') || '[]');
+        const latest = moodHistory[moodHistory.length - 1];
+        if (latest) {
+          data.mood = {
+            cardId: latest.cardId,
+            cardKo: latest.cardKo,
+            valence: latest.valence,
+            arousal: latest.arousal,
+          };
+        }
+      } catch (e) {}
+    } else {
+      // 건강 측정 모드 — 기존 필드
+      data.s = result.score;
+      data.g = result.grade;
+      if (cardio) {
+        data.hr = cardio.hr;
+        data.rm = cardio.rmssd;
+        data.st = cardio.stressLevel;
+        data.si = cardio.stressIndex;
+        data.src = cardio.source;
+      }
+      // 측정 항목 수
+      data.cnt = ['face','finger','balance','gait','tremor','reaction','posture','bodycomp']
+        .filter(k => w[k]).length;
+    }
 
     try {
       const json = JSON.stringify(data);
@@ -6385,7 +6617,7 @@ const App = {
         <div class="share-empty-card">
           <div class="share-empty-icon">😔</div>
           <div class="share-empty-title">공유 정보가 없어요</div>
-          <div class="share-empty-msg">부모님이 공유해주신 링크를 통해서만 확인할 수 있습니다.</div>
+          <div class="share-empty-msg">받으신 공유 링크를 통해서만 확인할 수 있습니다.</div>
         </div>
       `;
       return;
@@ -6400,6 +6632,87 @@ const App = {
     else if (ago < 24 * 60 * 60 * 1000) timeAgo = `${Math.floor(ago / 3600000)}시간 전`;
     else timeAgo = `${Math.floor(ago / 86400000)}일 전`;
 
+    // ★ v17.0: 관계 + 모드 (구버전 호환)
+    const mode = data.m || 'health';
+    const relation = data.r || 'parent';
+    const senderName = data.n || '소중한 사람';
+
+    // 관계별 헤더 (받는 사람 입장)
+    const headers = {
+      parent: { icon: '👨‍👩‍👧', greeting: `${this._esc(senderName)}이 건강 측정을 마치셨어요`, prefix: '부모님' },
+      child:  { icon: '👶',    greeting: `${this._esc(senderName)}의 오늘 안부예요`, prefix: '자녀' },
+      friend: { icon: '🤝',    greeting: `${this._esc(senderName)} — 오늘의 안부`, prefix: '친구' },
+      partner:{ icon: '💕',    greeting: `${this._esc(senderName)}이 오늘을 전해요`, prefix: '연인' },
+      self:   { icon: '💝',    greeting: `${this._esc(senderName)}의 오늘`, prefix: '소중한 사람' },
+    };
+    const h = headers[relation] || headers.self;
+
+    // ★ v17.0: 감정만 모드 렌더링
+    if (mode === 'mood' && data.mood) {
+      const mood = data.mood;
+      const card = this._emotionCards?.[mood.cardId];
+      const emotionName = mood.cardKo || card?.ko || '오늘의 감정';
+      const emotionDesc = card?.desc || '오늘의 마음을 나누고 있어요';
+      const emotionColor = card?.color || '#EC4899';
+      const lighterColor = this._lightenColor ? this._lightenColor(emotionColor, 25) : emotionColor;
+
+      // 관계별 응답 메시지
+      const moodMessages = {
+        parent: `자녀분의 오늘 마음 상태예요. 따뜻한 한마디가 큰 힘이 됩니다. 💝`,
+        child:  `${this._esc(senderName)}의 마음을 나누고 있어요. 함께 들어주세요. 💝`,
+        friend: `친구의 오늘 기분이에요. 들어주는 것만으로도 위로가 됩니다. 💝`,
+        partner:`연인의 오늘 마음을 보내왔어요. 옆에 있어주세요. 💝`,
+        self:   `소중한 사람이 오늘의 마음을 보내왔어요. 💝`,
+      };
+      const moodMsg = moodMessages[relation] || moodMessages.self;
+
+      container.innerHTML = `
+        <div class="family-view-card mood-card-warm">
+          <div class="fvc-header">
+            <div class="fvc-icon">${h.icon}</div>
+            <div class="fvc-title">${h.greeting}</div>
+            <div class="fvc-time">${timeAgo} · ${measuredTime.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+          </div>
+
+          <!-- 감정 hero 카드 -->
+          <div class="fvc-mood-hero" style="background: linear-gradient(135deg, ${lighterColor} 0%, ${emotionColor} 100%);">
+            <div class="fvc-mood-meta">오늘의 마음</div>
+            <div class="fvc-mood-word">${emotionName}</div>
+            <div class="fvc-mood-desc">${emotionDesc}</div>
+          </div>
+
+          <!-- 안부 메시지 -->
+          <div class="fvc-message">
+            ${moodMsg}
+          </div>
+
+          <!-- 행동 안내 -->
+          <div class="fvc-activity">
+            <div class="fvc-activity-icon">💞</div>
+            <div class="fvc-activity-text">
+              <strong>이해해주는 것이 가장 큰 선물입니다</strong><br>
+              <small>지금 한 통의 연락이 큰 위안이 될 수 있어요.</small>
+            </div>
+          </div>
+
+          <!-- 행동 버튼 -->
+          <div class="fvc-actions">
+            <a class="fvc-action-btn primary" href="tel:" onclick="App._toast('통화 앱이 열립니다')">
+              📞 전화하기
+            </a>
+          </div>
+
+          <!-- 면책 -->
+          <div class="fvc-disclaimer">
+            💝 이 메시지는 자기보고 기반의 감정 표현입니다.
+            받은 분의 진심을 함께 나누어주세요.
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // 기본 모드: health (측정 결과)
     const stressLabels = ['', '매우 이완', '이완', '보통', '긴장', '높은 스트레스'];
     const stressLabel = data.st ? stressLabels[data.st] : '측정됨';
     const stressColors = ['', '#16a34a', '#22c55e', '#3b82f6', '#f59e0b', '#dc2626'];
@@ -6407,35 +6720,41 @@ const App = {
 
     const scoreColor = data.s >= 70 ? '#22c55e' : data.s >= 50 ? '#3b82f6' : '#f59e0b';
 
-    // 안부 메시지 생성 (점수에 따라)
+    // 안부 메시지 — 관계 + 점수 조합
     let goodMsg;
     if (data.s >= 80) {
-      goodMsg = `${this._esc(data.n)}이 매우 건강하게 지내고 계시는 것 같아요. 안심해도 좋겠어요. 😊`;
+      goodMsg = relation === 'parent' ? `${this._esc(senderName)}이 매우 건강하게 지내고 계세요. 안심해도 좋겠어요. 😊`
+              : relation === 'child'  ? `${this._esc(senderName)}이 매우 건강하게 잘 지내고 있어요. 안심하세요. 😊`
+              : relation === 'friend' ? `${this._esc(senderName)} 컨디션이 정말 좋대요! 😊`
+              : relation === 'partner'? `${this._esc(senderName)}이 매우 건강해요. 함께 기뻐해주세요. 😊`
+              : `${this._esc(senderName)}이 매우 건강하게 지내고 계세요. 😊`;
     } else if (data.s >= 60) {
-      goodMsg = `${this._esc(data.n)}이 건강하게 잘 지내고 계세요. 따뜻한 안부 한마디 전해보세요. 💛`;
+      goodMsg = `${this._esc(senderName)}이 건강하게 잘 지내고 있어요. 따뜻한 안부 한마디 전해보세요. 💛`;
     } else if (data.s >= 40) {
-      goodMsg = `${this._esc(data.n)}이 평소대로 잘 지내고 계세요. 가볍게 안부를 여쭤보면 좋겠어요. 🌱`;
+      goodMsg = `${this._esc(senderName)}이 평소대로 잘 지내고 있어요. 가볍게 안부를 여쭤보면 좋겠어요. 🌱`;
     } else {
-      goodMsg = `${this._esc(data.n)}의 컨디션이 평소보다 낮을 수 있어요. 안부 연락 한 통이 큰 힘이 될 거예요. 💞`;
+      goodMsg = `${this._esc(senderName)}의 컨디션이 평소보다 낮을 수 있어요. 안부 연락 한 통이 큰 힘이 될 거예요. 💞`;
     }
 
     container.innerHTML = `
       <div class="family-view-card">
         <div class="fvc-header">
-          <div class="fvc-icon">💌</div>
-          <div class="fvc-title">${this._esc(data.n)}이 건강 측정을 마치셨어요</div>
+          <div class="fvc-icon">${h.icon}</div>
+          <div class="fvc-title">${h.greeting}</div>
           <div class="fvc-time">${timeAgo} · ${measuredTime.toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })}</div>
         </div>
 
         <!-- 종합 점수 -->
-        <div class="fvc-score-block">
-          <div class="fvc-score-circle" style="color:${scoreColor}">
-            <div class="fvc-score-num">${data.s}</div>
-            <div class="fvc-score-max">/100</div>
+        ${data.s !== undefined && data.s > 0 ? `
+          <div class="fvc-score-block">
+            <div class="fvc-score-circle" style="color:${scoreColor}">
+              <div class="fvc-score-num">${data.s}</div>
+              <div class="fvc-score-max">/100</div>
+            </div>
+            <div class="fvc-score-label">종합 건강 점수</div>
+            <div class="fvc-score-grade" style="color:${scoreColor}">${data.g || ''}</div>
           </div>
-          <div class="fvc-score-label">종합 건강 점수</div>
-          <div class="fvc-score-grade" style="color:${scoreColor}">${data.g}</div>
-        </div>
+        ` : ''}
 
         <!-- 안부 메시지 -->
         <div class="fvc-message">
@@ -6478,15 +6797,17 @@ const App = {
         ` : ''}
 
         <!-- 측정 활동 표시 -->
-        <div class="fvc-activity">
-          <div class="fvc-activity-icon">✨</div>
-          <div class="fvc-activity-text">
-            <strong>오늘 ${data.cnt || 1}개 항목을 측정하셨어요.</strong><br>
-            <small>건강을 스스로 챙기시는 모습이 보여요.</small>
+        ${data.cnt ? `
+          <div class="fvc-activity">
+            <div class="fvc-activity-icon">✨</div>
+            <div class="fvc-activity-text">
+              <strong>오늘 ${data.cnt}개 항목을 측정하셨어요.</strong><br>
+              <small>건강을 스스로 챙기시는 모습이 보여요.</small>
+            </div>
           </div>
-        </div>
+        ` : ''}
 
-        <!-- 안부 메시지 보내기 (전화/카톡 링크) -->
+        <!-- 안부 메시지 보내기 (전화 링크) -->
         <div class="fvc-actions">
           <a class="fvc-action-btn primary" href="tel:" onclick="App._toast('통화 앱이 열립니다')">
             📞 전화 드리기
@@ -6515,9 +6836,18 @@ const App = {
       const json = decodeURIComponent(escape(atob(padded)));
       const data = JSON.parse(json);
 
-      // 검증
-      if (!data || !data.v || !data.t || data.s === undefined) {
+      // ★ v17.0: 검증 — health(s 필수) / mood(mood 필수) 모드 구분
+      if (!data || !data.v || !data.t) {
         console.warn('Invalid share data');
+        return false;
+      }
+      const mode = data.m || 'health';
+      if (mode === 'health' && data.s === undefined) {
+        console.warn('Invalid health share data');
+        return false;
+      }
+      if (mode === 'mood' && !data.mood) {
+        console.warn('Invalid mood share data');
         return false;
       }
 
