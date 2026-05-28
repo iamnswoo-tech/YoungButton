@@ -1735,6 +1735,8 @@ const App = {
     }
     // ★ v16.2: 가족 공유 페이지
     if (page === 'share') {
+      // ★ v17.1: 진입 시 mode 초기화 → 데이터 상태에 맞게 자동 선택
+      this._shareMode = null;
       this._renderSharePage();
     }
     // ★ v16.2: 가족이 받은 공유 결과 보기 페이지
@@ -3326,6 +3328,27 @@ const App = {
       .replace(/'/g, '&#39;')
       .replace(/`/g, '&#96;');
   },
+
+  // ★ v17.1: 한국어 조사 자동 처리 (받침에 따라 이/가, 은/는, 을/를)
+  // 마지막 글자의 받침을 분석하여 적절한 조사를 선택
+  _josa(word, withFinal, withoutFinal) {
+    if (!word) return withoutFinal;
+    const last = word.charAt(word.length - 1);
+    const code = last.charCodeAt(0);
+    // 한글 음절: U+AC00(가) ~ U+D7A3(힣)
+    if (code < 0xAC00 || code > 0xD7A3) {
+      // 한글 아니면 받침 없는 것으로 처리 (영어/숫자)
+      return withoutFinal;
+    }
+    // 받침 여부 = (code - 0xAC00) % 28 !== 0
+    const hasFinalConsonant = (code - 0xAC00) % 28 !== 0;
+    return hasFinalConsonant ? withFinal : withoutFinal;
+  },
+
+  // 편의 함수
+  _jongsa_iga(word) { return this._josa(word, '이', '가'); },      // 이/가
+  _jongsa_eunneun(word) { return this._josa(word, '은', '는'); },  // 은/는
+  _jongsa_eulreul(word) { return this._josa(word, '을', '를'); },  // 을/를
 
   // ════════════════════════════════════════════════════════════════
   // ★ v15.3: 변별력 강화 시스템 — 나이·성별 보정 점수
@@ -6017,14 +6040,20 @@ const App = {
     const result = this._wellnessComputeScore();
 
     // ★ v17.0: 감정 측정 데이터 (감정만 보내기용)
+    // ★ v17.1: 통합 측정(cardId 있음) 우선 선택 — 감정 카드가 명확한 것
     let moodEntry = null;
     try {
       const moodHistory = JSON.parse(localStorage.getItem('history_mood') || '[]');
-      if (moodHistory.length > 0) {
-        const latest = moodHistory[moodHistory.length - 1];
-        // 24시간 이내
-        if (Date.now() - latest.t < 24 * 60 * 60 * 1000) {
-          moodEntry = latest;
+      const recent = moodHistory.filter(h => h && h.t && (Date.now() - h.t < 24 * 60 * 60 * 1000));
+      if (recent.length > 0) {
+        // 1순위: cardId(통합 측정) 있는 가장 최근 것
+        const withCard = recent.filter(h => h.cardId || h.cardKo);
+        if (withCard.length > 0) {
+          moodEntry = withCard[withCard.length - 1];
+        } else {
+          // 2순위: valence/arousal 있는 것
+          const withVA = recent.filter(h => h.valence !== undefined || h.arousal !== undefined);
+          moodEntry = withVA.length > 0 ? withVA[withVA.length - 1] : recent[recent.length - 1];
         }
       }
     } catch (e) {}
@@ -6044,19 +6073,36 @@ const App = {
 
     if (!hasAnyData) {
       container.innerHTML = `
-        <div class="share-empty-card">
+        <div class="share-empty-card share-empty-warm">
           <div class="share-empty-icon">💝</div>
-          <div class="share-empty-title">전할 내용이 없어요</div>
-          <div class="share-empty-msg">측정을 마치거나 감정을 기록하면 안부와 함께 전할 수 있어요.</div>
-          <button class="share-action-btn" type="button" onclick="App.goPage('mood')">
-            💝 감정 측정하기
-          </button>
-          <button class="share-action-btn secondary" type="button" onclick="App.goPage('finger')">
-            ☝️ 손가락 측정하기
-          </button>
-          <button class="share-action-btn secondary" type="button" onclick="App.goPage('face')">
-            😊 얼굴 측정하기
-          </button>
+          <div class="share-empty-title">아직 전할 내용이 없어요</div>
+          <div class="share-empty-msg">
+            건강 측정 또는 감정 측정을 마치면<br>
+            <strong>안부와 함께</strong> 전할 수 있어요.
+          </div>
+          <div class="share-empty-grid">
+            <button class="share-empty-btn primary" type="button" onclick="App.goPage('mood')">
+              <span class="seb-icon">💝</span>
+              <span class="seb-text">
+                <span class="seb-title">감정 측정</span>
+                <span class="seb-sub">3분 · 가장 빠른 방법</span>
+              </span>
+            </button>
+            <button class="share-empty-btn" type="button" onclick="App.goPage('finger')">
+              <span class="seb-icon">☝️</span>
+              <span class="seb-text">
+                <span class="seb-title">손가락 측정</span>
+                <span class="seb-sub">30초 · 심박/HRV</span>
+              </span>
+            </button>
+            <button class="share-empty-btn" type="button" onclick="App.goPage('face')">
+              <span class="seb-icon">😊</span>
+              <span class="seb-text">
+                <span class="seb-title">얼굴 측정</span>
+                <span class="seb-sub">30초 · rPPG 스캔</span>
+              </span>
+            </button>
+          </div>
         </div>
       `;
       return;
@@ -6165,7 +6211,7 @@ const App = {
                value="${this._esc(sharedName)}"
                maxlength="20"
                oninput="App._saveShareName(this.value)">
-        <div class="share-name-hint">${rel.label} 받았을 때 화면에 표시될 호칭입니다.</div>
+        <div class="share-name-hint">받는 분에게 표시될 호칭이에요.</div>
       </div>
 
       <!-- 미리보기 -->
@@ -6234,15 +6280,27 @@ const App = {
     relation = relation || 'parent';
     const time = new Date().toLocaleString('ko-KR', { dateStyle: 'long', timeStyle: 'short' });
 
-    // ★ v17.0: 관계별 인사말
-    const greetings = {
-      parent: `${this._esc(name)}이 건강 측정을 마치셨어요 ✨`,
-      child:  `${this._esc(name)}의 오늘 안부예요 💝`,
-      friend: `${this._esc(name)} — 오늘 이래 🤝`,
-      partner:`${this._esc(name)}이 오늘 어떻게 지내는지 알려요 💕`,
-      self:   `${this._esc(name)}의 오늘이에요 💝`,
+    // ★ v17.1: 관계별 인사말 — 받침 조사 자동 처리 + 모드 반영
+    const nameSafe = this._esc(name);
+    const iga = this._jongsa_iga(name);    // 이/가
+    const greetingsByMode = {
+      health: {
+        parent: `${nameSafe}${iga} 건강 측정을 마치셨어요 ✨`,
+        child:  `${nameSafe}의 건강 소식이에요 ✨`,
+        friend: `${nameSafe} — 오늘 내 건강 이래 ✨`,
+        partner:`${nameSafe}${iga} 오늘 건강을 전해요 💕`,
+        self:   `${nameSafe}의 오늘 건강이에요 ✨`,
+      },
+      mood: {
+        parent: `${nameSafe}의 오늘 마음이에요 💝`,
+        child:  `${nameSafe}의 오늘 기분이에요 💝`,
+        friend: `${nameSafe} — 오늘 내 기분이야 💝`,
+        partner:`${nameSafe}의 오늘 마음을 전해요 💕`,
+        self:   `${nameSafe}의 오늘 마음이에요 💝`,
+      },
     };
-    const greeting = greetings[relation] || greetings.self;
+    const greeting = (greetingsByMode[mode] || greetingsByMode.health)[relation]
+                  || greetingsByMode.health.self;
 
     // 관계별 마무리 멘트
     const closings = {
@@ -6264,11 +6322,48 @@ const App = {
     const closing = closings[mode]?.[relation] || closings.health.self;
 
     // ★ v17.0: 모드별 미리보기 (감정만 모드 추가)
+    // ★ v17.1: moodEntry 안전 처리 — cardId 없어도 valence/arousal로 추정
     if (mode === 'mood' && moodEntry) {
-      const card = this._emotionCards?.[moodEntry.cardId];
-      const emotionName = moodEntry.cardKo || (card?.ko) || '오늘의 감정';
-      const emotionDesc = card?.desc || '소중한 하루를 보내고 있어요';
-      const emotionColor = card?.color || '#EC4899';
+      let emotionName, emotionDesc, emotionColor;
+
+      // 1. cardId 있으면 정밀 매칭 (통합 측정 결과)
+      if (moodEntry.cardId && this._emotionCards?.[moodEntry.cardId]) {
+        const card = this._emotionCards[moodEntry.cardId];
+        emotionName = moodEntry.cardKo || card.ko;
+        emotionDesc = card.desc;
+        emotionColor = card.color;
+      }
+      // 2. cardKo만 있으면 그대로 사용
+      else if (moodEntry.cardKo) {
+        emotionName = moodEntry.cardKo;
+        emotionDesc = '오늘의 마음을 나누고 있어요';
+        emotionColor = '#EC4899';
+      }
+      // 3. valence/arousal로 폴백 추정 (기존 게임 데이터)
+      else if (moodEntry.valence !== undefined || moodEntry.arousal !== undefined) {
+        const v = moodEntry.valence || 0;
+        const a = moodEntry.arousal || 0;
+        if (v > 0.3 && a > 0.3)       { emotionName = '기쁨';  emotionDesc = '환한 기분이 마음 가득해요';     emotionColor = '#FFD54F'; }
+        else if (v > 0.3 && a < -0.1) { emotionName = '평온';  emotionDesc = '잔잔하게 편안한 상태예요';     emotionColor = '#FFE082'; }
+        else if (v < -0.3 && a > 0.3) { emotionName = '긴장';  emotionDesc = '마음 한 켠에 걱정이 있어요';   emotionColor = '#FF8A65'; }
+        else if (v < -0.3 && a < -0.1){ emotionName = '슬픔';  emotionDesc = '마음이 무겁고 쓸쓸해요';        emotionColor = '#7986CB'; }
+        else                          { emotionName = '평정';  emotionDesc = '잔잔한 일상을 보내고 있어요'; emotionColor = '#90A4AE'; }
+      }
+      // 4. 점수만 있는 단순 게임 (mirror/color/diary/reflex)
+      else if (moodEntry.score !== undefined || moodEntry.mental?.overall) {
+        const score = moodEntry.score || moodEntry.mental?.overall || 50;
+        if (score >= 75)      { emotionName = '평온';  emotionDesc = '마음이 평안한 상태예요';       emotionColor = '#FFE082'; }
+        else if (score >= 60) { emotionName = '안정';  emotionDesc = '잔잔한 일상이에요';            emotionColor = '#FFD54F'; }
+        else if (score >= 45) { emotionName = '보통';  emotionDesc = '평이한 하루를 보내고 있어요'; emotionColor = '#90A4AE'; }
+        else if (score >= 30) { emotionName = '지침';  emotionDesc = '조금 피곤한 상태예요';         emotionColor = '#9FA8DA'; }
+        else                  { emotionName = '힘듦';  emotionDesc = '마음이 무거운 상태예요';       emotionColor = '#7986CB'; }
+      }
+      // 5. 최종 폴백
+      else {
+        emotionName = '오늘의 마음';
+        emotionDesc = '소중한 하루를 보내고 있어요';
+        emotionColor = '#EC4899';
+      }
 
       return `
         <div class="smp-header">
@@ -6333,14 +6428,33 @@ const App = {
     try {
       const trimmed = (name || '').trim();
       localStorage.setItem('shareSenderName', trimmed);
-      // ★ v17.0: 전체 리렌더링 대신 미리보기만 갱신 (입력 포커스 유지)
+      // ★ v17.1: 미리보기 갱신 시 mode/moodEntry/relation 모두 전달
       const previewEl = document.querySelector('.share-preview-card');
       if (previewEl) {
         const w = this.state.wellness || {};
         const cardio = this._getUnifiedCardio(w);
         const result = this._wellnessComputeScore();
         const mode = this._shareMode || 'health';
-        previewEl.innerHTML = this._renderShareMessagePreview(cardio, result, trimmed || this._getDefaultSenderName(), mode);
+        const relation = localStorage.getItem('shareRelation') || 'parent';
+
+        // mood 모드면 moodEntry 가져오기 (cardId 우선)
+        let moodEntry = null;
+        if (mode === 'mood') {
+          try {
+            const moodHistory = JSON.parse(localStorage.getItem('history_mood') || '[]');
+            const recent = moodHistory.filter(h => h && h.t && (Date.now() - h.t < 24 * 60 * 60 * 1000));
+            if (recent.length > 0) {
+              const withCard = recent.filter(h => h.cardId || h.cardKo);
+              moodEntry = withCard.length > 0 ? withCard[withCard.length - 1] : recent[recent.length - 1];
+            }
+          } catch (e) {}
+        }
+
+        previewEl.innerHTML = this._renderShareMessagePreview(
+          cardio, result,
+          trimmed || this._getDefaultSenderName(),
+          mode, moodEntry, relation
+        );
       }
     } catch (e) {}
   },
@@ -6637,15 +6751,27 @@ const App = {
     const relation = data.r || 'parent';
     const senderName = data.n || '소중한 사람';
 
-    // 관계별 헤더 (받는 사람 입장)
-    const headers = {
-      parent: { icon: '👨‍👩‍👧', greeting: `${this._esc(senderName)}이 건강 측정을 마치셨어요`, prefix: '부모님' },
-      child:  { icon: '👶',    greeting: `${this._esc(senderName)}의 오늘 안부예요`, prefix: '자녀' },
-      friend: { icon: '🤝',    greeting: `${this._esc(senderName)} — 오늘의 안부`, prefix: '친구' },
-      partner:{ icon: '💕',    greeting: `${this._esc(senderName)}이 오늘을 전해요`, prefix: '연인' },
-      self:   { icon: '💝',    greeting: `${this._esc(senderName)}의 오늘`, prefix: '소중한 사람' },
+    // 관계별 헤더 (받는 사람 입장) — ★ v17.1: 받침 조사 + 모드 반영
+    const nameSafe = this._esc(senderName);
+    const iga = this._jongsa_iga(senderName);
+    const headersByMode = {
+      health: {
+        parent: { icon: '👨‍👩‍👧', greeting: `${nameSafe}${iga} 건강 측정을 마치셨어요` },
+        child:  { icon: '👶',    greeting: `${nameSafe}의 건강 소식이에요` },
+        friend: { icon: '🤝',    greeting: `${nameSafe} — 오늘의 건강` },
+        partner:{ icon: '💕',    greeting: `${nameSafe}${iga} 건강을 전해요` },
+        self:   { icon: '💝',    greeting: `${nameSafe}의 오늘 건강` },
+      },
+      mood: {
+        parent: { icon: '👨‍👩‍👧', greeting: `${nameSafe}의 오늘 마음이에요` },
+        child:  { icon: '👶',    greeting: `${nameSafe}의 오늘 기분이에요` },
+        friend: { icon: '🤝',    greeting: `${nameSafe} — 오늘의 기분` },
+        partner:{ icon: '💕',    greeting: `${nameSafe}의 마음을 전해요` },
+        self:   { icon: '💝',    greeting: `${nameSafe}의 오늘 마음` },
+      },
     };
-    const h = headers[relation] || headers.self;
+    const h = (headersByMode[mode] || headersByMode.health)[relation]
+           || headersByMode.health.self;
 
     // ★ v17.0: 감정만 모드 렌더링
     if (mode === 'mood' && data.mood) {
@@ -6720,20 +6846,20 @@ const App = {
 
     const scoreColor = data.s >= 70 ? '#22c55e' : data.s >= 50 ? '#3b82f6' : '#f59e0b';
 
-    // 안부 메시지 — 관계 + 점수 조합
+    // 안부 메시지 — 관계 + 점수 조합 (★ v17.1: 받침 조사)
     let goodMsg;
     if (data.s >= 80) {
-      goodMsg = relation === 'parent' ? `${this._esc(senderName)}이 매우 건강하게 지내고 계세요. 안심해도 좋겠어요. 😊`
-              : relation === 'child'  ? `${this._esc(senderName)}이 매우 건강하게 잘 지내고 있어요. 안심하세요. 😊`
-              : relation === 'friend' ? `${this._esc(senderName)} 컨디션이 정말 좋대요! 😊`
-              : relation === 'partner'? `${this._esc(senderName)}이 매우 건강해요. 함께 기뻐해주세요. 😊`
-              : `${this._esc(senderName)}이 매우 건강하게 지내고 계세요. 😊`;
+      goodMsg = relation === 'parent' ? `${nameSafe}${iga} 매우 건강하게 지내고 계세요. 안심해도 좋겠어요. 😊`
+              : relation === 'child'  ? `${nameSafe}${iga} 매우 건강하게 잘 지내고 있어요. 안심하세요. 😊`
+              : relation === 'friend' ? `${nameSafe} 컨디션이 정말 좋대요! 😊`
+              : relation === 'partner'? `${nameSafe}${iga} 매우 건강해요. 함께 기뻐해주세요. 😊`
+              : `${nameSafe}${iga} 매우 건강하게 지내고 계세요. 😊`;
     } else if (data.s >= 60) {
-      goodMsg = `${this._esc(senderName)}이 건강하게 잘 지내고 있어요. 따뜻한 안부 한마디 전해보세요. 💛`;
+      goodMsg = `${nameSafe}${iga} 건강하게 잘 지내고 있어요. 따뜻한 안부 한마디 전해보세요. 💛`;
     } else if (data.s >= 40) {
-      goodMsg = `${this._esc(senderName)}이 평소대로 잘 지내고 있어요. 가볍게 안부를 여쭤보면 좋겠어요. 🌱`;
+      goodMsg = `${nameSafe}${iga} 평소대로 잘 지내고 있어요. 가볍게 안부를 여쭤보면 좋겠어요. 🌱`;
     } else {
-      goodMsg = `${this._esc(senderName)}의 컨디션이 평소보다 낮을 수 있어요. 안부 연락 한 통이 큰 힘이 될 거예요. 💞`;
+      goodMsg = `${nameSafe}의 컨디션이 평소보다 낮을 수 있어요. 안부 연락 한 통이 큰 힘이 될 거예요. 💞`;
     }
 
     container.innerHTML = `

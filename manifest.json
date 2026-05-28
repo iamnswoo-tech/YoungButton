@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v17.0",
-  "short_name": "건강측정 v17.0",
-  "description": "v17.0 — 입력 튕김 수정 + 포괄적 관계 (부모/자녀/친구/연인) + 감정만 보내기 옵션",
+  "name": "건강 측정 v17.1",
+  "short_name": "건강측정 v17.1",
+  "description": "v17.1 — 감정 미적용/모드 손실/조사 어색함 수정",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
