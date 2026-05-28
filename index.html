@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>건강 측정 v12 — ME-rPPG</title>
+<title>건강 측정 v18 — ME-rPPG</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -8346,6 +8346,58 @@ body::before {
 }
 .rg-cmt:empty { display: none; }
 
+/* ★ v18.0: 고급 PPG 분석 카드 */
+.rg-card {
+  background: var(--card2, var(--card));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 10px 16px 0;
+}
+.rg-card-title {
+  font-size: 11px; font-weight: 800; color: var(--text);
+  letter-spacing: .05em; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.ppg-adv-badge {
+  font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff; border-radius: 6px; padding: 2px 7px;
+}
+.ppg-adv-main {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  margin-bottom: 8px;
+}
+.ppg-adv-big {
+  font-size: 2.2rem; font-weight: 900; color: var(--text);
+  line-height: 1; font-variant-numeric: tabular-nums;
+}
+.ppg-adv-unit {
+  font-size: 1rem; font-weight: 600; color: var(--muted); margin-left: 3px;
+}
+.ppg-adv-sub {
+  font-size: 10px; color: var(--muted); margin-bottom: 4px;
+}
+.ppg-adv-detail {
+  font-size: 10px; color: var(--text2);
+  background: var(--bg); border-radius: 6px;
+  padding: 5px 9px; margin: 6px 0;
+  font-variant-numeric: tabular-nums;
+}
+.ppg-adv-disclaimer {
+  font-size: 10px; color: var(--muted);
+  margin-top: 6px; font-style: italic;
+}
+.rg-comment {
+  margin-top: 8px; font-size: 12px; line-height: 1.55;
+  color: var(--text2); border-left: 3px solid var(--border2);
+  padding-left: 10px;
+}
+.ppg-adv-empty {
+  text-align: center; color: var(--muted);
+  font-size: 12px; padding: 16px 0;
+}
+
 /* CONSOLE PANEL */
 .console-card {
   margin: 14px 16px; padding: 12px;
@@ -9347,7 +9399,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v17.3 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v18.0 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -9613,6 +9665,9 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
         </div>
       </div>
     </div>
+
+    <!-- ★ v18.0: 고급 PPG 분석 카드 (혈관나이 / 부정맥 / RSA) -->
+    <div id="fr-advanced-cards" style="margin-top:12px"></div>
   </div>
 
   <!-- 측정 버튼은 카메라 위에만 (v11s10) -->
@@ -10088,7 +10143,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.fingerExit()">←</button>
     <div>
-      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v17.3</span></div>
+      <div class="page-title">☝️ 손가락 측정 <span class="page-title-sub-badge">v18.0</span></div>
       <div class="page-subtitle">단계별 진행 · 실시간 신호 확인</div>
     </div>
   </div>
@@ -10325,6 +10380,8 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
        결과 화면
        ────────────────────────────────────────────────── -->
   <div id="finger-result" class="finger-result" style="display:none"></div>
+  <!-- ★ v18.0: 손가락 고급 PPG 카드 (부정맥 리스크) -->
+  <div id="finger-advanced-cards" style="display:none"></div>
 
   <!-- ──────────────────────────────────────────────────
        디버그 로그 패널 (토글)

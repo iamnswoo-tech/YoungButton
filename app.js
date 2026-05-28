@@ -226,7 +226,7 @@ const App = {
 
   init() {
     Console.init();
-    console.log('[App v17.2] 초기화 - 모드:', APP_MODE);
+    console.log('[App v18.0] 초기화 - 모드:', APP_MODE);
 
     // 1. 핵심 렌더링 인프라 (실패 시에도 나머지 계속)
     this._safeStep('canvas', () => this._setupCanvas());
@@ -5287,6 +5287,45 @@ const App = {
 
     this._flog(`✓ [${sourceLabel}] 분석: HR=${hr} RMSSD=${rmssd.toFixed(1)} SDNN=${sdnn.toFixed(1)} pNN50=${pNN50.toFixed(1)} SI=${stressIndex} clean=${cleanIBI.length}/${allIBI.length}`);
 
+    // ★ v18.0: 손가락 PPG 부정맥 분석 (Poincaré)
+    let fingerArrhythmia = null;
+    if (cleanIBI.length >= 8) {
+      try {
+        const rr = cleanIBI;
+        const n = rr.length;
+        const meanRR_fa = rr.reduce((a, b) => a + b, 0) / n;
+        let sumSD1 = 0, sumSD2 = 0;
+        for (let i = 0; i < n - 1; i++) {
+          const x = rr[i], y = rr[i + 1];
+          sumSD1 += ((y - x) / Math.SQRT2) ** 2;
+          sumSD2 += ((y + x) / Math.SQRT2) ** 2;
+        }
+        const sd1_f = Math.round(Math.sqrt(sumSD1 / (n - 1)));
+        const sd2_f = Math.round(Math.sqrt(sumSD2 / (n - 1)));
+        let irregCount = 0;
+        for (let i = 1; i < n; i++) {
+          if (Math.abs(rr[i] - rr[i - 1]) / rr[i - 1] > 0.20) irregCount++;
+        }
+        const irregPct_f = Math.round((irregCount / (n - 1)) * 100);
+        const flags_f = [];
+        const sd_ratio_f = sd1_f > 0 ? sd2_f / sd1_f : 0;
+        if (sd_ratio_f > 0 && sd_ratio_f < 1.5) flags_f.push('sd_ratio_low');
+        if (irregPct_f > 35) flags_f.push('high_irr');
+        // 연속 점프
+        let jumpStreak_f = 0, maxJump_f = 0;
+        for (let i = 1; i < n; i++) {
+          if (Math.abs(rr[i] - rr[i - 1]) / meanRR_fa > 0.25) {
+            jumpStreak_f++; maxJump_f = Math.max(maxJump_f, jumpStreak_f);
+          } else jumpStreak_f = 0;
+        }
+        if (maxJump_f >= 3) flags_f.push('rhythm_jump');
+        const risk_f = flags_f.length <= 1 ? 'low' : flags_f.length === 2 ? 'moderate' : 'high';
+        fingerArrhythmia = { risk: risk_f, flags: flags_f, sd1: sd1_f, sd2: sd2_f,
+                             sd_ratio: Math.round(sd_ratio_f * 100) / 100, irregPct: irregPct_f };
+        this._flog(`[v18 Arrhythmia-Finger] risk=${risk_f} SD1=${sd1_f} SD2=${sd2_f} irr=${irregPct_f}%`);
+      } catch (e) { this._flog('[v18 Arrhythmia-Finger] 실패: ' + e.message, 'warn'); }
+    }
+
     return {
       ok: true,
       hr, rmssd: Math.round(rmssd * 10) / 10,
@@ -5302,6 +5341,8 @@ const App = {
       sampleCount: samples.length,
       duration: f.duration,
       score: this._fingerComputeScore(hr, rmssd, signalQuality),
+      // ★ v18.0
+      arrhythmia: fingerArrhythmia,
     };
   },
 
@@ -5540,7 +5581,11 @@ const App = {
       stressIndex: result.stressIndex, // ★ v15.9
       stressIndexLabel: result.stressIndexLabel,
       score: result.score, ageAtMeasure: profile.age,
+      arrhythmia: result.arrhythmia || null, // ★ v18.0
     });
+
+    // ★ v18.0: 손가락 부정맥 카드 삽입
+    this._renderAdvancedPPGCards(result);
 
     this._flog(`✓ 결과 저장: HR=${result.hr} RMSSD=${result.rmssd} Score=${result.score}`);
   },
@@ -5801,6 +5846,55 @@ const App = {
       }
     } catch (e) {
       console.warn('[Trends] mood chart fail:', e);
+    }
+
+    // ★ v18.0: 고급 PPG 지표 추이 (혈관나이 / 부정맥 리스크 / RSA)
+    const hasVa    = faceHistory.some(h => h.vascularAge?.estimatedAge != null);
+    const hasRsa   = faceHistory.some(h => h.rsaIndex != null);
+    const hasArr   = faceHistory.some(h => h.arrhythmia?.sd1 != null);
+    if (hasVa || hasRsa || hasArr) {
+      chartsHTML += '<div class="trends-section-title">🫀 고급 심혈관 추이 (ME-rPPG)</div>';
+      if (hasVa) {
+        const vaHistory = faceHistory.filter(h => h.vascularAge?.estimatedAge != null)
+          .map(h => ({ t: h.t, vascularAge: h.vascularAge.estimatedAge }));
+        chartsHTML += this._renderTrendChart({
+          title: '혈관 나이 추정',
+          icon: '🫀',
+          history: vaHistory,
+          field: 'vascularAge',
+          unit: '세',
+          color: '#f472b6',
+          invert: true,
+        });
+      }
+      if (hasRsa) {
+        const rsaHistory = faceHistory.filter(h => h.rsaIndex != null)
+          .map(h => ({ t: h.t, rsaIndex: h.rsaIndex }));
+        chartsHTML += this._renderTrendChart({
+          title: '미주신경 활성도 (RSA)',
+          icon: '🌬️',
+          history: rsaHistory,
+          field: 'rsaIndex',
+          unit: '/100',
+          normalMin: 30,
+          normalMax: 100,
+          color: '#34d399',
+          yMin: 0,
+          yMax: 100,
+        });
+      }
+      if (hasArr) {
+        const sd1History = faceHistory.filter(h => h.arrhythmia?.sd1 != null)
+          .map(h => ({ t: h.t, sd1: h.arrhythmia.sd1 }));
+        chartsHTML += this._renderTrendChart({
+          title: '부정맥 지표 (SD1)',
+          icon: '💓',
+          history: sd1History,
+          field: 'sd1',
+          unit: 'ms',
+          color: '#f59e0b',
+        });
+      }
     }
 
     container.innerHTML = periodTabs + summary + insightsHTML + chartsHTML;
@@ -10596,6 +10690,7 @@ const App = {
 
     let rmssd = null, lnRmssd = null, rmssdReason = null;
     let sdnn = null;
+    let cleanRRFinal = []; // ★ v18.0: outer scope — 혈관나이/부정맥 분석용
 
     if (peaks.length < 8) {
       rmssdReason = 'insufficient_peaks';
@@ -10618,6 +10713,7 @@ const App = {
       } else {
         // Kubios outlier 제거 (expectedRR 기준)
         const cleanRR = this._removeEctopicRR(rawRR, expectedRRms);
+        cleanRRFinal = cleanRR; // ★ v18.0: outer scope에 노출
         console.log('[ME-rPPG] 정제 후 RR:', cleanRR.length);
 
         if (cleanRR.length < 8) {
@@ -10715,12 +10811,228 @@ const App = {
       stressFromRMSSD = true;
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    // ★ v18.0: 부정맥 조기 감지 (Arrhythmia Early Detection)
+    // 근거: Task Force 1996, Brennan 2001 (포앵카레 플롯 SD1/SD2)
+    // rPPG 특성 고려: 임계값 완화, 다중 지표 앙상블
+    // ═══════════════════════════════════════════════════════════════
+    let arrhythmia = null; // { risk: 'low'|'moderate'|'high', flags: [], sd1, sd2, pnn50, cvi }
+    if (cleanRRFinal.length >= 8) {
+      try {
+        const rr = cleanRRFinal;
+        const n = rr.length;
+        const meanRR_arr = rr.reduce((a, b) => a + b, 0) / n;
+
+        // Poincaré Plot SD1 / SD2 (Brennan 2001)
+        let sumSD1 = 0, sumSD2 = 0;
+        for (let i = 0; i < n - 1; i++) {
+          const x = rr[i], y = rr[i + 1];
+          const d1 = (y - x) / Math.SQRT2;
+          const d2 = (y + x) / Math.SQRT2;
+          sumSD1 += d1 * d1;
+          sumSD2 += d2 * d2;
+        }
+        const sd1 = Math.round(Math.sqrt(sumSD1 / (n - 1)));
+        const sd2 = Math.round(Math.sqrt(sumSD2 / (n - 1)));
+        const sd_ratio = sd1 > 0 ? sd2 / sd1 : 0;
+
+        // pNN50 (정제된 RR 기준)
+        let nn50 = 0;
+        for (let i = 1; i < n; i++) {
+          if (Math.abs(rr[i] - rr[i - 1]) > 50) nn50++;
+        }
+        const pnn50 = Math.round((nn50 / (n - 1)) * 100);
+
+        // CVI — Cardiac Vagal Index (Task Force 1996)
+        const sdnn_arr = Math.sqrt(rr.reduce((s, v) => s + (v - meanRR_arr) ** 2, 0) / n);
+        const cvi = Math.round(Math.log(sdnn_arr * sd1) * 100) / 100;
+
+        // 불규칙성 지수 — 연속 RR 비율 변동 (rPPG 맞춤)
+        let irregCount = 0;
+        for (let i = 1; i < n; i++) {
+          if (Math.abs(rr[i] - rr[i - 1]) / rr[i - 1] > 0.20) irregCount++;
+        }
+        const irregPct = (irregCount / (n - 1)) * 100;
+
+        // 리스크 플래그 수집 (rPPG 맞춤 완화 임계값)
+        const flags = [];
+        if (sd_ratio > 0 && sd_ratio < 1.5) flags.push('sd_ratio_low'); // 교감 과활성 패턴
+        if (irregPct > 35) flags.push('high_irr');       // 높은 불규칙성
+        if (n >= 12 && pnn50 > 60) flags.push('pnn50_high'); // 심한 미주신경 변동
+        // 연속 2개 이상 큰 점프 (심방세동 패턴 힌트)
+        let jumpStreak = 0, maxJumpStreak = 0;
+        for (let i = 1; i < n; i++) {
+          if (Math.abs(rr[i] - rr[i - 1]) / meanRR_arr > 0.25) {
+            jumpStreak++;
+            maxJumpStreak = Math.max(maxJumpStreak, jumpStreak);
+          } else jumpStreak = 0;
+        }
+        if (maxJumpStreak >= 3) flags.push('rhythm_jump');
+
+        const risk = flags.length === 0 ? 'low'
+                   : flags.length === 1 ? 'low'
+                   : flags.length === 2 ? 'moderate'
+                   : 'high';
+
+        arrhythmia = { risk, flags, sd1, sd2, sd_ratio: Math.round(sd_ratio * 100) / 100,
+                       pnn50, cvi, irregPct: Math.round(irregPct), rrCount: n };
+        console.log(`[v18 Arrhythmia] risk=${risk} flags=${flags.join(',')} SD1=${sd1} SD2=${sd2} pNN50=${pnn50}% irr=${irregPct.toFixed(0)}%`);
+      } catch (e) {
+        console.warn('[v18 Arrhythmia] 계산 실패:', e.message);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ★ v18.0: 혈관 나이 추정 (Vascular Age Estimation)
+    // 근거: Millasseau 2002 (AIx), Liang 2018 (PPG 기반 혈관 탄성)
+    // PPG 파형 특성 → PWV 대리 → 혈관 나이 추정
+    // ═══════════════════════════════════════════════════════════════
+    let vascularAge = null; // { estimatedAge, delta, grade: 'young'|'normal'|'aged', confidence }
+    try {
+      if (upBvpRaw && upBvpRaw.length >= upSr * 5 && peaks && peaks.length >= 5 && hrInt) {
+        const profile = this._getUserProfile ? this._getUserProfile() : {};
+        const chronoAge = profile.age || null;
+
+        // PPG 파형 특성 추출 — 단일 비트 평균화
+        const beatSamples = [];
+        const beatLen = Math.round(upSr * (60000 / hrInt) / 1000);
+        for (let i = 0; i < peaks.length - 1; i++) {
+          const start = peaks[i], end = peaks[i + 1];
+          const len = end - start;
+          if (len < beatLen * 0.6 || len > beatLen * 1.4) continue;
+          const beat = Array.from(upBvpRaw).slice(start, end);
+          beatSamples.push(beat);
+          if (beatSamples.length >= 8) break;
+        }
+
+        if (beatSamples.length >= 4) {
+          // 비트 앙상블 평균
+          const avgLen = Math.round(beatSamples.reduce((s, b) => s + b.length, 0) / beatSamples.length);
+          const ensembled = new Array(avgLen).fill(0);
+          for (const beat of beatSamples) {
+            for (let i = 0; i < avgLen; i++) {
+              const srcIdx = Math.round(i * (beat.length - 1) / (avgLen - 1));
+              ensembled[i] += beat[Math.min(srcIdx, beat.length - 1)] / beatSamples.length;
+            }
+          }
+
+          // 수축기 피크 (주 피크, position 0)
+          let sysMax = -Infinity, sysPeakIdx = 0;
+          for (let i = 0; i < Math.round(avgLen * 0.6); i++) {
+            if (ensembled[i] > sysMax) { sysMax = ensembled[i]; sysPeakIdx = i; }
+          }
+          // 이완기 피크 / 딕로틱 노치 탐색
+          let notchIdx = -1, notchMin = Infinity;
+          const searchStart = Math.round(sysPeakIdx + avgLen * 0.15);
+          const searchEnd   = Math.round(avgLen * 0.75);
+          for (let i = searchStart; i < searchEnd; i++) {
+            if (ensembled[i] < notchMin) { notchMin = ensembled[i]; notchIdx = i; }
+          }
+          let diasPeakIdx = -1, diasMax = -Infinity;
+          if (notchIdx > 0) {
+            for (let i = notchIdx; i < Math.round(avgLen * 0.9); i++) {
+              if (ensembled[i] > diasMax) { diasMax = ensembled[i]; diasPeakIdx = i; }
+            }
+          }
+
+          // Augmentation Index (AIx) 대리 — Millasseau 2002
+          // AIx = (P2 - P1) / (P1 - P_min) × 100
+          const pMin = Math.min(...ensembled.slice(0, sysPeakIdx));
+          const p1 = sysMax;
+          const p2 = diasPeakIdx > 0 ? ensembled[diasPeakIdx] : null;
+          let aix = null;
+          if (p2 !== null && p1 > pMin) {
+            aix = Math.round(((p2 - p1) / (p1 - pMin)) * 100);
+          }
+
+          // Systolic peak time ratio — Liang 2018
+          const tSys = sysPeakIdx / avgLen; // 0~1 정규화
+          // 혈관이 딱딱할수록 tSys 작아짐 (빠른 pulse wave)
+
+          // Stiffness Score (0-100): AIx + tSys 결합
+          // 참고: AIx > 12%이면 혈관 노화, tSys < 0.20이면 경직
+          let stiffnessScore = 50; // 기본
+          if (aix !== null) {
+            // AIx: -30~+30 범위를 0~100 점수로
+            stiffnessScore += Math.min(40, Math.max(-40, aix * 1.2));
+          }
+          stiffnessScore += (0.25 - tSys) * 200; // tSys 기여
+          stiffnessScore = Math.max(0, Math.min(100, stiffnessScore));
+
+          // RMSSD 기여 (낮을수록 혈관 노화 연관)
+          if (rmssd && rmssd < 20) stiffnessScore += 8;
+          else if (rmssd && rmssd > 50) stiffnessScore -= 8;
+
+          // Stiffness → 혈관나이 매핑 (나이 보정)
+          // 기준: 30대=35, 40대=42, 50대=52 stiffness
+          const baseAge = chronoAge || 45;
+          const ageContrib = (baseAge - 35) * 0.8;
+          const estimatedAge = Math.round(baseAge + (stiffnessScore - 50 - ageContrib) * 0.35);
+          const delta = chronoAge ? estimatedAge - chronoAge : null;
+
+          const grade = delta === null ? 'normal'
+                      : delta < -5 ? 'young'
+                      : delta > 8  ? 'aged'
+                      : 'normal';
+          const confidence = beatSamples.length >= 6 && notchIdx > 0 ? 'high' : 'medium';
+          vascularAge = { estimatedAge, delta, grade, confidence, aix, tSys: Math.round(tSys * 100), stiffnessScore: Math.round(stiffnessScore) };
+          console.log(`[v18 VascAge] est=${estimatedAge} delta=${delta} grade=${grade} AIx=${aix} tSys=${tSys.toFixed(3)} stiffness=${stiffnessScore.toFixed(0)}`);
+        }
+      }
+    } catch (e) {
+      console.warn('[v18 VascAge] 계산 실패:', e.message);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // ★ v18.0: RSA (호흡성 동성 부정맥) 크로스밸리데이션
+    // 근거: Grossman 2007 — RR 간격이 호흡과 동기화되는 정도
+    // RSA 강도 ↑ = 미주신경 건강 ↑ = 심혈관 예비능 ↑
+    // ═══════════════════════════════════════════════════════════════
+    let rsaIndex = null; // 0-100 정규화
+    if (cleanRRFinal.length >= 12 && respRate) {
+      try {
+        const rr = cleanRRFinal;
+        // RSA 대역: 호흡 주파수 ±0.05Hz
+        const rsaLo = Math.max(0.12, respRate / 60 - 0.05);
+        const rsaHf = Math.min(0.5, respRate / 60 + 0.05);
+        // RR 시계열을 균등 4Hz로 보간 후 HF power 계산
+        const rrMean = rr.reduce((a, b) => a + b, 0) / rr.length;
+        const interpSr = 4;
+        const totalLen = rr.reduce((a, b) => a + b, 0) / 1000;
+        const nInterp = Math.round(totalLen * interpSr);
+        const rrInterp = new Array(nInterp).fill(0);
+        let cumT = 0;
+        let rrIdx = 0;
+        for (let i = 0; i < nInterp; i++) {
+          const t = i / interpSr;
+          while (rrIdx < rr.length - 1 && cumT + rr[rrIdx] / 1000 < t) {
+            cumT += rr[rrIdx] / 1000;
+            rrIdx++;
+          }
+          rrInterp[i] = rr[rrIdx] - rrMean;
+        }
+        // RSA 대역 BPF → 파워
+        const rsaFiltered = this._bandpass(rrInterp, interpSr, rsaLo, rsaHf);
+        const rsaPow = rsaFiltered.reduce((s, v) => s + v * v, 0) / rsaFiltered.length;
+        // 총 파워 대비 RSA 비율 (0-100)
+        const totalPow = rrInterp.reduce((s, v) => s + v * v, 0) / rrInterp.length;
+        rsaIndex = totalPow > 0 ? Math.min(100, Math.round((rsaPow / totalPow) * 100 * 3)) : null;
+        console.log(`[v18 RSA] pow=${rsaPow.toFixed(4)} total=${totalPow.toFixed(4)} rsaIndex=${rsaIndex}`);
+      } catch (e) {
+        console.warn('[v18 RSA] 계산 실패:', e.message);
+      }
+    }
+
     return {
       hr: hrInt, rmssd, lnRmssd, rmssdReason,
       sdnn, respRate, stressIdx, stressFromRMSSD, stressLevel,
       sqi: sqiEarly,
       snr: null, peakCount: peaks ? peaks.length : 0,
       engine: 'ME-rPPG',
+      // ★ v18.0 신규 지표
+      arrhythmia,
+      vascularAge,
+      rsaIndex,
     };
   },
 
@@ -11049,6 +11361,10 @@ const App = {
       score: faceScore,
       subScores: subScores, // ★ v15.3: 항목별 점수 (UI 표시용)
       ageAtMeasure: age,    // ★ v15.3: 측정 시점 나이 (재계산 시 참조)
+      // ★ v18.0 신규 지표
+      arrhythmia: r.arrhythmia || null,
+      vascularAge: r.vascularAge || null,
+      rsaIndex: r.rsaIndex || null,
     });
 
     const setArc = (id, val, min, max) => {
@@ -11289,6 +11605,127 @@ const App = {
     const gEl = document.getElementById('face-result-grade');
     gEl.textContent = `${grade} · ${score}점`;
     gEl.className = 'result-grade ' + grade;
+
+    // ★ v18.0: 혈관 나이 + 부정맥 + RSA 카드 렌더링
+    this._renderAdvancedPPGCards(r);
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // ★ v18.0: 고급 PPG 분석 카드 렌더링
+  // (혈관 나이 / 부정맥 리스크 / RSA 미주신경 지수)
+  // ════════════════════════════════════════════════════════════════
+  _renderAdvancedPPGCards(r) {
+    // fr-advanced-cards (얼굴) 또는 finger-advanced-cards (손가락) 둘 다 지원
+    const container = document.getElementById('fr-advanced-cards')
+                   || document.getElementById('finger-advanced-cards');
+    if (!container) return;
+    container.style.display = 'block';
+
+    const va = r.vascularAge;
+    const arr = r.arrhythmia;
+    const rsa = r.rsaIndex;
+
+    let html = '';
+
+    // ── 카드 1: 혈관 나이 ──
+    if (va) {
+      const gradeLabel = va.grade === 'young' ? '실제보다 젊음' : va.grade === 'aged' ? '실제보다 노화' : '나이에 맞는 수준';
+      const gradeClass = va.grade === 'young' ? 'normal' : va.grade === 'aged' ? 'bad' : 'normal';
+      const gradeIcon  = va.grade === 'young' ? '💪' : va.grade === 'aged' ? '⚠️' : '✅';
+      const deltaText  = va.delta !== null ? (va.delta > 0 ? `+${va.delta}세` : `${va.delta}세`) : '';
+      const confText   = va.confidence === 'high' ? '신호 풍부' : '신호 보통';
+
+      let cmtVa;
+      if (va.grade === 'young') {
+        cmtVa = `혈관 탄성도 분석 결과, 실제 나이보다 혈관 상태가 양호합니다. 꾸준한 운동과 좋은 식습관이 혈관 건강을 유지시켜 줍니다.`;
+      } else if (va.grade === 'aged') {
+        cmtVa = `PPG 파형 분석에서 혈관 경직도가 다소 높게 나타났습니다. 규칙적인 유산소 운동, 금연, 저염식이 혈관 건강 개선에 도움이 됩니다. ※ 의학적 진단 아님`;
+      } else {
+        cmtVa = `혈관 탄성도가 나이에 맞는 정상 범위입니다. 현재의 생활 습관을 유지하세요.`;
+      }
+      if (va.aix !== null) cmtVa += ` (혈관 증강 지수 AIx: ${va.aix}%)`;
+
+      html += `
+      <div class="rg-card ppg-adv-card" id="fr-va-card">
+        <div class="rg-card-title">🫀 혈관 나이 추정 <span class="ppg-adv-badge">ME-rPPG</span></div>
+        <div class="ppg-adv-main">
+          <div class="ppg-adv-big">${va.estimatedAge}<span class="ppg-adv-unit">세</span></div>
+          <div class="rg-badge ${gradeClass}" style="margin-top:4px">${gradeIcon} ${gradeLabel}${deltaText ? ' (' + deltaText + ')' : ''}</div>
+        </div>
+        <div class="ppg-adv-sub">신호 품질: ${confText} · 경직도 점수: ${va.stiffnessScore}/100</div>
+        <div class="rg-comment">${cmtVa}</div>
+        <div class="ppg-adv-disclaimer">※ PPG 파형 기반 추정값. 의학적 진단이 아닙니다.</div>
+      </div>`;
+    }
+
+    // ── 카드 2: 부정맥 리스크 ──
+    if (arr) {
+      const riskLabel = arr.risk === 'low' ? '낮음 (정상 리듬)' : arr.risk === 'moderate' ? '보통 (관찰 권장)' : '높음 (전문의 상담 권장)';
+      const riskClass = arr.risk === 'low' ? 'normal' : arr.risk === 'moderate' ? 'high' : 'bad';
+      const riskIcon  = arr.risk === 'low' ? '💚' : arr.risk === 'moderate' ? '🟡' : '🔴';
+
+      let cmtArr;
+      if (arr.risk === 'low') {
+        cmtArr = `심박 리듬이 규칙적입니다. 포앵카레 플롯 분석에서 부정맥 패턴이 관찰되지 않았습니다.`;
+      } else if (arr.risk === 'moderate') {
+        cmtArr = `심박 간격에 다소 불규칙한 패턴이 감지되었습니다. 피로·카페인·수면 부족으로도 나타날 수 있습니다. 지속될 경우 전문 검진을 권합니다.`;
+      } else {
+        cmtArr = `심박 리듬에 이상 패턴이 관찰되었습니다. 단순 측정 노이즈일 수 있으나, 증상(두근거림, 어지러움)이 동반된다면 심장내과 상담을 권합니다.`;
+      }
+
+      const flagMap = {
+        'sd_ratio_low': 'SD비율 이상',
+        'high_irr': '불규칙성 높음',
+        'pnn50_high': '박동 변동 과다',
+        'rhythm_jump': '리듬 점프 패턴',
+      };
+      const flagText = arr.flags.length > 0 ? arr.flags.map(f => flagMap[f] || f).join(', ') : '이상 없음';
+
+      html += `
+      <div class="rg-card ppg-adv-card" id="fr-arr-card">
+        <div class="rg-card-title">💓 부정맥 리스크 <span class="ppg-adv-badge">ME-rPPG</span></div>
+        <div class="ppg-adv-main">
+          <div class="rg-badge ${riskClass}" style="font-size:1rem;padding:6px 14px">${riskIcon} ${riskLabel}</div>
+        </div>
+        <div class="ppg-adv-sub">분석 지표: ${flagText}</div>
+        <div class="ppg-adv-detail">
+          SD1 ${arr.sd1}ms · SD2 ${arr.sd2}ms · pNN50 ${arr.pnn50}% · 불규칙도 ${arr.irregPct}%
+        </div>
+        <div class="rg-comment">${cmtArr}</div>
+        <div class="ppg-adv-disclaimer">※ rPPG 기반 선별 검사. 의학적 진단이 아닙니다. 증상이 있으면 병원을 방문하세요.</div>
+      </div>`;
+    }
+
+    // ── 카드 3: RSA 미주신경 지수 ──
+    if (rsa !== null && rsa !== undefined) {
+      const rsaGrade = rsa >= 50 ? 'normal' : rsa >= 25 ? 'high' : 'bad';
+      const rsaLabel = rsa >= 50 ? '양호' : rsa >= 25 ? '보통' : '낮음';
+      const rsaIcon  = rsa >= 50 ? '🌿' : rsa >= 25 ? '🟡' : '⚠️';
+      let cmtRsa;
+      if (rsa >= 50) {
+        cmtRsa = `호흡-심박 동기화(RSA)가 잘 이루어지고 있습니다. 미주신경이 활성화되어 심혈관 예비 능력이 양호한 상태입니다.`;
+      } else if (rsa >= 25) {
+        cmtRsa = `호흡-심박 동기화가 보통 수준입니다. 복식 호흡 연습이나 명상이 미주신경 활성화에 도움을 줄 수 있습니다.`;
+      } else {
+        cmtRsa = `호흡-심박 동기화(RSA)가 낮게 측정되었습니다. 스트레스, 피로, 불규칙한 호흡이 영향을 줄 수 있습니다. 심호흡을 통해 자율신경 균형을 회복해보세요.`;
+      }
+      html += `
+      <div class="rg-card ppg-adv-card" id="fr-rsa-card">
+        <div class="rg-card-title">🌬️ 미주신경 활성도 (RSA) <span class="ppg-adv-badge">ME-rPPG</span></div>
+        <div class="ppg-adv-main">
+          <div class="ppg-adv-big">${rsa}<span class="ppg-adv-unit">/100</span></div>
+          <div class="rg-badge ${rsaGrade}" style="margin-top:4px">${rsaIcon} ${rsaLabel}</div>
+        </div>
+        <div class="ppg-adv-sub">호흡-심박 동기화 지수 (Grossman 2007)</div>
+        <div class="rg-comment">${cmtRsa}</div>
+      </div>`;
+    }
+
+    if (!html) {
+      html = `<div class="ppg-adv-empty">💡 30초 이상 측정 시 혈관 나이·부정맥·미주신경 분석이 추가됩니다.</div>`;
+    }
+
+    container.innerHTML = html;
   },
 
   faceTab(tab) {
