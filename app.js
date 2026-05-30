@@ -5082,12 +5082,28 @@ const App = {
 
     this._flog(`총 측정 샘플: ${f.measureSamples.length}개`);
 
-    const result = this._fingerAnalyze();
+    // ★ v18.1: try-catch로 분석 에러 격리 — 어떤 예외도 UI 복구 보장
+    let result;
+    try {
+      result = this._fingerAnalyze();
+    } catch (err) {
+      this._flog(`분석 예외 발생: ${err.message}`, 'error');
+      console.error('[Finger] _fingerAnalyze 예외:', err);
+      result = {
+        ok: false,
+        reason: `분석 중 오류가 발생했습니다. 다시 측정해주세요. (${err.message})`,
+        sampleCount: f.measureSamples.length,
+      };
+    }
 
     // 카메라 정리
-    await this._fingerCleanup();
+    try {
+      await this._fingerCleanup();
+    } catch (err) {
+      console.warn('[Finger] cleanup 오류 (무시):', err.message);
+    }
 
-    // UI: result 화면으로
+    // UI: result 화면으로 — 반드시 실행
     document.getElementById('finger-stage-measuring').style.display = 'none';
     this._fingerDisplayResult(result);
   },
@@ -5113,23 +5129,28 @@ const App = {
     this._flog(`v16.1: 다채널 분석 시작 (R/G${aiAvailable ? '/AI' : ''})`);
     this._flog(`측정 모드: ${f.torchOn ? '플래시 ON (R채널 우선)' : '외부 조명 (G채널 우선)'}`);
 
-    // 1) R 채널 분석 (기존)
-    const resultR = this._fingerAnalyzeFromSignal(samples, 'r', 'R-channel');
+    // 1) R 채널 분석
+    let resultR = null;
+    try { resultR = this._fingerAnalyzeFromSignal(samples, 'r', 'R-channel'); }
+    catch (e) { this._flog(`R채널 예외: ${e.message}`, 'error'); }
 
-    // 2) G 채널 분석 (v16.1 신규 — 외부조명에서 더 좋을 수 있음)
+    // 2) G 채널 분석
     const hasG = samples.length > 0 && samples[0].g !== undefined;
     let resultG = null;
     if (hasG) {
-      // G 채널 데이터를 r 키로 매핑해서 같은 분석 함수 사용
-      const gSamples = samples.map(s => ({ t: s.t, r: s.g }));
-      resultG = this._fingerAnalyzeFromSignal(gSamples, 'r', 'G-channel');
+      try {
+        const gSamples = samples.map(s => ({ t: s.t, r: s.g }));
+        resultG = this._fingerAnalyzeFromSignal(gSamples, 'r', 'G-channel');
+      } catch (e) { this._flog(`G채널 예외: ${e.message}`, 'error'); }
     }
 
     // 3) AI 분석
     let resultAI = null;
     if (aiAvailable) {
-      const aiNorm = f.aiSamples.map(s => ({ t: s.t, r: s.v * 100 + 128 }));
-      resultAI = this._fingerAnalyzeFromSignal(aiNorm, 'r', 'AI-channel');
+      try {
+        const aiNorm = f.aiSamples.map(s => ({ t: s.t, r: s.v * 100 + 128 }));
+        resultAI = this._fingerAnalyzeFromSignal(aiNorm, 'r', 'AI-channel');
+      } catch (e) { this._flog(`AI채널 예외: ${e.message}`, 'error'); }
     }
 
     // 4) 각 결과 점수 계산 — 신뢰도 + HR 합리성 복합
@@ -5270,26 +5291,31 @@ const App = {
       };
     }
 
-    // IBI 추출
+    // IBI 추출 — ★ v18.1: peaks[i]가 범위 초과 시 안전 처리
     const allIBI = [];
     for (let i = 1; i < peaks.length; i++) {
-      const dt = samples[peaks[i]].t - samples[peaks[i - 1]].t;
-      allIBI.push(dt);
+      const pi  = Math.round(peaks[i]);
+      const pim = Math.round(peaks[i - 1]);
+      if (pi >= samples.length || pim >= samples.length) continue;
+      const s1 = samples[pi], s0 = samples[pim];
+      if (!s1 || !s0) continue;
+      const dt = s1.t - s0.t;
+      if (dt > 0) allIBI.push(dt);
     }
 
     // ★ v18.1: IBI 필터 강화
-    // - 하한: 300ms(200BPM) → 370ms(162BPM) — 안정 시 측정에서 162BPM 초과는 운동 아니면 오측정
-    // - 상한: 1714ms(35BPM) 유지
-    // - 연속 변동: 30% → 20% (의학 표준 Kubios 기준)
+    // - 하한: 370ms(162BPM), 상한: 1714ms(35BPM)
+    // - 연속 변동 20% 이내 (Kubios 기준)
     const cleanIBI = [];
     for (let i = 0; i < allIBI.length; i++) {
       const ibi = allIBI[i];
-      if (ibi < 370 || ibi > 1714) continue;  // ★ 하한 강화
-      if (i > 0) {
-        // 이전 채택된 IBI와 비교 (채택된 것 기준 — 더 안정적)
-        const ref = cleanIBI.length > 0 ? cleanIBI[cleanIBI.length - 1] : allIBI[i - 1];
-        if (Math.abs(ibi - ref) / ref > 0.20) continue;  // ★ 20%로 축소
+      if (ibi < 370 || ibi > 1714) continue;
+      if (cleanIBI.length > 0) {
+        // 이전 채택된 IBI와 비교
+        const ref = cleanIBI[cleanIBI.length - 1];
+        if (Math.abs(ibi - ref) / ref > 0.20) continue;
       }
+      // 첫 번째 유효 IBI는 범위만 통과하면 무조건 채택
       cleanIBI.push(ibi);
     }
 
@@ -5306,19 +5332,18 @@ const App = {
     const meanIBI = cleanIBI.reduce((s, v) => s + v, 0) / cleanIBI.length;
     const hr = Math.round(60000 / meanIBI);
 
-    // ★ v18.1: HR 합리성 검증 — 안정 측정에서 150 초과는 오측정 가능성 높음
-    // IBI 중앙값으로 2차 검증
+    // ★ v18.1: HR 합리성 검증 — 중앙값으로 2차 검증
     const sortedIBI = [...cleanIBI].sort((a, b) => a - b);
     const medianIBI = sortedIBI[Math.floor(sortedIBI.length / 2)];
     const hrFromMedian = Math.round(60000 / medianIBI);
+    let refinedHR = null;
     // 평균 vs 중앙값 HR 차이가 15BPM 이상이면 이상치 왜곡 의심
     if (Math.abs(hr - hrFromMedian) > 15) {
       this._flog(`[v18.1] HR 왜곡 감지: mean=${hr} median=${hrFromMedian} → 중앙값 채택`, 'warn');
-      // 중앙값 기반으로 재계산
       const medIBIs = cleanIBI.filter(v => Math.abs(v - medianIBI) / medianIBI <= 0.20);
       if (medIBIs.length >= 6) {
         const refinedMeanIBI = medIBIs.reduce((s, v) => s + v, 0) / medIBIs.length;
-        Object.defineProperty(cleanIBI, '_refinedHR', { value: Math.round(60000 / refinedMeanIBI), configurable: true });
+        refinedHR = Math.round(60000 / refinedMeanIBI);
       }
     }
 
@@ -5435,7 +5460,7 @@ const App = {
     return {
       ok: true,
       // ★ v18.1: 중앙값 기반 정제 HR이 있으면 우선 사용
-      hr: cleanIBI._refinedHR || hr,
+      hr: refinedHR || hr,
       rmssd: Math.round(rmssd * 10) / 10,
       sdnn: Math.round(sdnn * 10) / 10,
       pNN50: Math.round(pNN50 * 10) / 10,
