@@ -4839,7 +4839,8 @@ const App = {
 
     const avgIBI = intervals.reduce((s, v) => s + v, 0) / intervals.length;
     const bpm = Math.round(60000 / avgIBI);
-    if (bpm > 35 && bpm < 200) {
+    // ★ v18.1: 실시간 표시도 합리성 범위 적용
+    if (bpm > 35 && bpm < 155) {
       f.lastBPM = bpm;
       const liveHr = document.getElementById('finger-live-hr');
       if (liveHr) liveHr.textContent = bpm;
@@ -4855,11 +4856,30 @@ const App = {
   _fingerDetectPeaks(samples) {
     if (samples.length < 60) return [];
 
+    // ★ v18.1: 실제 FPS 측정 (하드코딩 30Hz 제거)
+    // samples[].t 는 ms 단위 타임스탬프
+    let actualFps = 30; // 기본값
+    if (samples.length >= 60) {
+      const first = samples[0].t, last = samples[samples.length - 1].t;
+      const elapsed = last - first; // ms
+      if (elapsed > 500) {
+        actualFps = (samples.length - 1) / (elapsed / 1000);
+      }
+    }
+    // 합리적 범위 고정 (24~120 Hz)
+    actualFps = Math.max(24, Math.min(120, actualFps));
+
+    // ★ v18.1: minDist 동적 계산 — HR 최대 130BPM 보장
+    // 130BPM = 462ms IBI → minDist = round(0.462 * fps)
+    // 여유 있게 150BPM = 400ms 기준: minDist = 0.4 * fps
+    const minDist = Math.round(0.40 * actualFps); // 400ms @ 실제 FPS
+
     // 1) Raw 빨강 채널
     let raw = samples.map(s => s.r);
 
     // 2) Detrend (이동평균 45 = 1.5초 window @ 30Hz, DC 제거)
-    const win = 45;
+    // ★ v18.1: detrend window = 1.5초 @ 실제 FPS (30Hz에선 45, 60Hz에선 90)
+    const win = Math.round(1.5 * actualFps);
     const detrended = [];
     for (let i = 0; i < raw.length; i++) {
       const start = Math.max(0, i - Math.floor(win / 2));
@@ -4869,11 +4889,8 @@ const App = {
       detrended.push(raw[i] - sum / c);
     }
 
-    // 3) Butterworth 2차 bandpass 근사 [0.7 - 3.0 Hz] (HR 42 ~ 180 BPM)
-    // 30 Hz 샘플링, 정규화 주파수 = freq / (sampleRate/2)
-    // low = 0.7/15 = 0.047, high = 3.0/15 = 0.2
-    // 간단한 IIR 구현
-    const filtered = this._fingerBandpass(detrended, 30, 0.7, 3.0);
+    // 3) Butterworth 2차 bandpass — ★ v18.1: 실제 FPS 사용
+    const filtered = this._fingerBandpass(detrended, actualFps, 0.7, 3.0);
 
     // 4) 진폭 정규화 (RMS 기반)
     let sumSq = 0;
@@ -4897,7 +4914,7 @@ const App = {
     // 더 변동성 큰 방향을 채택
     const usePositive = posMax > Math.abs(negMax);
 
-    const minDist = 12; // 400ms = HR 150 max (안정 시 보통 HR < 100)
+    // minDist: 이미 위에서 실제 FPS 기반으로 동적 계산됨 (400ms 기준)
     const peaks = [];
     let lastPeak = -minDist;
 
@@ -5115,11 +5132,14 @@ const App = {
       resultAI = this._fingerAnalyzeFromSignal(aiNorm, 'r', 'AI-channel');
     }
 
-    // 4) 각 결과 점수 계산 — 신뢰도 우선
+    // 4) 각 결과 점수 계산 — 신뢰도 + HR 합리성 복합
     const scoreOf = (r) => {
       if (!r || !r.ok) return 0;
       // 학술적으로 비정상적 RMSSD/SDNN은 신호 오류
       if (r.rmssd > 100 && r.sdnn > 150) return 0; // 비정상치 패널티
+      // ★ v18.1: HR 합리성 패널티 — 150BPM 초과는 오측정 가능성
+      if (r.hr > 150) return 0;
+      if (r.hr > 130) return (r.ibiCount * (r.cleanRate / 100)) * 0.2; // 심한 감점
       // 점수: 채택률 × IBI 수
       let s = r.ibiCount * (r.cleanRate / 100);
       // RMSSD가 너무 높으면 감점 (정상 0-80ms)
@@ -5190,9 +5210,16 @@ const App = {
   _fingerValidateResult(result) {
     if (!result || !result.ok) return { valid: false, reason: '분석 결과 없음' };
 
-    // HR 범위 검증
+    // ★ v18.1: HR 범위 검증 강화
     if (result.hr < 30 || result.hr > 200) {
       return { valid: false, reason: `HR ${result.hr} BPM은 비현실적입니다` };
+    }
+    // 안정 시 측정에서 150BPM 초과는 오측정 경고 (운동 직후 등 예외 있음)
+    if (result.hr > 150) {
+      return {
+        valid: false,
+        reason: `HR ${result.hr} BPM은 안정 시 범위를 크게 벗어납니다. 손가락이 카메라를 완전히 덮지 않았을 수 있습니다. 다시 측정해주세요.`
+      };
     }
 
     // RMSSD 비정상치 — 정상인 20-60ms, 운동선수 60-80ms, >100ms는 측정 오류
@@ -5250,14 +5277,18 @@ const App = {
       allIBI.push(dt);
     }
 
-    // Kubios outlier 제거
+    // ★ v18.1: IBI 필터 강화
+    // - 하한: 300ms(200BPM) → 370ms(162BPM) — 안정 시 측정에서 162BPM 초과는 운동 아니면 오측정
+    // - 상한: 1714ms(35BPM) 유지
+    // - 연속 변동: 30% → 20% (의학 표준 Kubios 기준)
     const cleanIBI = [];
     for (let i = 0; i < allIBI.length; i++) {
       const ibi = allIBI[i];
-      if (ibi < 300 || ibi > 1714) continue;
+      if (ibi < 370 || ibi > 1714) continue;  // ★ 하한 강화
       if (i > 0) {
-        const prev = allIBI[i - 1];
-        if (Math.abs(ibi - prev) / prev > 0.30) continue;
+        // 이전 채택된 IBI와 비교 (채택된 것 기준 — 더 안정적)
+        const ref = cleanIBI.length > 0 ? cleanIBI[cleanIBI.length - 1] : allIBI[i - 1];
+        if (Math.abs(ibi - ref) / ref > 0.20) continue;  // ★ 20%로 축소
       }
       cleanIBI.push(ibi);
     }
@@ -5274,6 +5305,22 @@ const App = {
     // HR, RMSSD, SDNN, pNN50 계산
     const meanIBI = cleanIBI.reduce((s, v) => s + v, 0) / cleanIBI.length;
     const hr = Math.round(60000 / meanIBI);
+
+    // ★ v18.1: HR 합리성 검증 — 안정 측정에서 150 초과는 오측정 가능성 높음
+    // IBI 중앙값으로 2차 검증
+    const sortedIBI = [...cleanIBI].sort((a, b) => a - b);
+    const medianIBI = sortedIBI[Math.floor(sortedIBI.length / 2)];
+    const hrFromMedian = Math.round(60000 / medianIBI);
+    // 평균 vs 중앙값 HR 차이가 15BPM 이상이면 이상치 왜곡 의심
+    if (Math.abs(hr - hrFromMedian) > 15) {
+      this._flog(`[v18.1] HR 왜곡 감지: mean=${hr} median=${hrFromMedian} → 중앙값 채택`, 'warn');
+      // 중앙값 기반으로 재계산
+      const medIBIs = cleanIBI.filter(v => Math.abs(v - medianIBI) / medianIBI <= 0.20);
+      if (medIBIs.length >= 6) {
+        const refinedMeanIBI = medIBIs.reduce((s, v) => s + v, 0) / medIBIs.length;
+        Object.defineProperty(cleanIBI, '_refinedHR', { value: Math.round(60000 / refinedMeanIBI), configurable: true });
+      }
+    }
 
     let sumSquaredDiff = 0, diffCount = 0;
     for (let i = 1; i < cleanIBI.length; i++) {
@@ -5344,7 +5391,7 @@ const App = {
     const recoveryRate = cleanIBI.length / Math.max(allIBI.length, 1);
     const signalQuality = Math.round(Math.min(99, f.quality * 0.5 + recoveryRate * 50));
 
-    this._flog(`✓ [${sourceLabel}] 분석: HR=${hr} RMSSD=${rmssd.toFixed(1)} SDNN=${sdnn.toFixed(1)} pNN50=${pNN50.toFixed(1)} SI=${stressIndex} clean=${cleanIBI.length}/${allIBI.length}`);
+    this._flog(`✓ [${sourceLabel}] 분석: HR=${hr} RMSSD=${rmssd.toFixed(1)} SDNN=${sdnn.toFixed(1)} pNN50=${pNN50.toFixed(1)} SI=${stressIndex} clean=${cleanIBI.length}/${allIBI.length} fps=${actualFps.toFixed(1)}`);
 
     // ★ v18.0: 손가락 PPG 부정맥 분석 (Poincaré)
     let fingerArrhythmia = null;
@@ -5387,7 +5434,9 @@ const App = {
 
     return {
       ok: true,
-      hr, rmssd: Math.round(rmssd * 10) / 10,
+      // ★ v18.1: 중앙값 기반 정제 HR이 있으면 우선 사용
+      hr: cleanIBI._refinedHR || hr,
+      rmssd: Math.round(rmssd * 10) / 10,
       sdnn: Math.round(sdnn * 10) / 10,
       pNN50: Math.round(pNN50 * 10) / 10,
       stressLevel, stressLabel,
@@ -9985,16 +10034,32 @@ const App = {
     }
 
     let { hr } = event.data;
-    // 실제 FPS 보정
-    if (m.timestampArray.length > 300) {
-      const recent = m.timestampArray.slice(-301);
+    // ★ v18.1: 실제 FPS 보정 개선 — 모델이 30Hz 가정으로 훈련됨
+    if (m.timestampArray.length > 60) {
+      const recent = m.timestampArray.slice(-121);
       let total = 0, valid = 0;
       for (let i = 1; i < recent.length; i++) {
-        const dt = recent[i] - recent[i - 1];
-        if (dt <= 0.5) { total += dt; valid++; }
+        const dt = recent[i] - recent[i - 1]; // 초 단위
+        if (dt > 0 && dt <= 0.2) { total += dt; valid++; }
       }
       const avgFps = total > 0 ? (valid / total) : 0;
-      if (avgFps > 0) hr = (hr / 30) * avgFps;
+      if (avgFps > 0 && Math.abs(avgFps - 30) > 3) {
+        hr = (hr / 30) * avgFps;
+        // ★ v18.1: FPS 보정 후 HR 합리성 클램프 (35~150 BPM — 안정 측정 범위)
+        hr = Math.max(35, Math.min(150, hr));
+      }
+    }
+    // ★ v18.1: HR 이상값 직접 클램프 (보정 여부와 무관)
+    if (hr > 160) {
+      console.warn('[ME-rPPG v18.1] HR 이상값 감지:', hr.toFixed(1), '→ FPS 보정 재시도');
+      // FPS 보정 없이 들어온 경우: 2배 과잉 추정 패턴 의심 → 절반 적용 시도
+      const halvHr = hr / 2;
+      if (halvHr >= 40 && halvHr <= 120) {
+        hr = halvHr;
+        console.warn('[ME-rPPG v18.1] HR 절반 보정 적용:', hr.toFixed(1));
+      } else {
+        hr = Math.min(hr, 150);
+      }
     }
 
     // Kalman 필터 (HR 안정화)
@@ -10499,11 +10564,21 @@ const App = {
   // ─── 실시간 HR 추정 ───
   _faceEstimateHR() {
     const f = this.state.face;
-    const sr = this.config.face.targetSR;
-    if (f.samples.length < sr * this.config.face.minWarmupSec) return;
+    const srConfig = this.config.face.targetSR;
+    if (f.samples.length < srConfig * this.config.face.minWarmupSec) return;
 
-    const win = Math.min(sr * 12, f.samples.length);
+    const win = Math.min(srConfig * 12, f.samples.length);
     const recent = f.samples.slice(-win);
+
+    // ★ v18.1: 실제 SR 측정 (타임스탬프 기반)
+    let sr = srConfig;
+    if (recent.length >= 30 && recent[0].t && recent[recent.length - 1].t) {
+      const elapsed = recent[recent.length - 1].t - recent[0].t; // ms
+      if (elapsed > 500) {
+        sr = Math.round((recent.length - 1) / (elapsed / 1000));
+        sr = Math.max(20, Math.min(90, sr)); // 합리적 범위 고정
+      }
+    }
 
     const reds = recent.map(s => s.r);
     const greens = recent.map(s => s.g);
@@ -10521,17 +10596,19 @@ const App = {
       pos = this._posAlgorithm(reds, greens, blues);
     }
 
-    // BPF + Goertzel
+    // BPF + Goertzel — ★ v18.1: 실제 sr 사용, 탐색 상한 130BPM으로 축소
     const detrended = this._detrend(pos);
     const filtered = this._bandpass(detrended, sr, 0.7, 3.0);
     const stdF = this._stdDev(filtered);
     if (stdF < 0.001) return;
 
-    const { freq: hrHz, snr } = this._goertzelPeak(filtered, sr, 45/60, 180/60);
+    // ★ v18.1: Goertzel 탐색 범위 40~130BPM (180 → 130으로 축소)
+    // 안정 시 측정에서 130BPM 초과는 오측정 가능성 높음
+    const { freq: hrHz, snr } = this._goertzelPeak(filtered, sr, 40/60, 130/60);
     if (!hrHz || snr < 2.5) return;
 
     const hr = Math.round(hrHz * 60);
-    if (hr < 45 || hr > 180 || hr === 45 || hr === 180) return;
+    if (hr < 40 || hr > 130) return;
 
     f.lastHR = hr;
     document.getElementById('fr-hr-val').textContent = hr;
@@ -10741,7 +10818,8 @@ const App = {
     try {
       const filtered = this._bandpass(upBvp, upSr, 0.7, 3.0);
       if (filtered && filtered.length > 0) {
-        const peakResult = this._goertzelPeak(filtered, upSr, 45/60, 180/60);
+        // ★ v18.1: 탐색 상한 130BPM으로 축소
+        const peakResult = this._goertzelPeak(filtered, upSr, 40/60, 130/60);
         if (peakResult && typeof peakResult.snr === 'number' && !isNaN(peakResult.snr)) {
           snrV = peakResult.snr;
         }
@@ -11297,15 +11375,15 @@ const App = {
 
   // === RR 이상치 제거 (Tarvainen 2014, Kubios 의료기기 표준) ===
   // v12.3 개선: expectedRR 기준 사전 필터 + 더 관대한 인접 차이 규칙
-  // 1. 절대 범위: 300~2000ms (HR 30~200bpm)
+  // 1. 절대 범위: 370~2000ms (HR 30~162bpm) ★ v18.1: 300→370으로 강화
   // 2. expectedRR 기준 ±35% 마진 (가짜 피크/누락 피크 자동 배제)
   // 3. 인접 RR과 ±25% 차이 (Karolinska ±20%에서 약간 완화 — rPPG 노이즈 감안)
   // 4. 평균 RR 기준 ±3 SD 규칙
   _removeEctopicRR(rawRR, expectedRRms) {
     if (rawRR.length < 4) return rawRR.slice();
 
-    // Step 1: 절대 범위 필터
-    let rr = rawRR.filter(v => v >= 300 && v <= 2000);
+    // ★ v18.1: 절대 범위 하한 370ms (162BPM) — 안정 측정 범위
+    let rr = rawRR.filter(v => v >= 370 && v <= 2000);
     if (rr.length < 4) return [];
 
     // ★ v12.3 Step 1.5: expectedRR 기준 ±35% 마진 사전 필터
