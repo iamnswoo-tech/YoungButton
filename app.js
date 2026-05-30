@@ -5303,19 +5303,18 @@ const App = {
       if (dt > 0) allIBI.push(dt);
     }
 
-    // ★ v18.1: IBI 필터 강화
-    // - 하한: 370ms(162BPM), 상한: 1714ms(35BPM)
-    // - 연속 변동 20% 이내 (Kubios 기준)
+    // ★ v18.1: IBI 필터
+    // - 하한: 300ms(200BPM) — 370ms는 외부조명 환경에서 유효 피크 손실 과다
+    // - 상한: 1714ms(35BPM)
+    // - 연속 변동 20% (Kubios 기준)
     const cleanIBI = [];
     for (let i = 0; i < allIBI.length; i++) {
       const ibi = allIBI[i];
-      if (ibi < 370 || ibi > 1714) continue;
+      if (ibi < 300 || ibi > 1714) continue;
       if (cleanIBI.length > 0) {
-        // 이전 채택된 IBI와 비교
         const ref = cleanIBI[cleanIBI.length - 1];
         if (Math.abs(ibi - ref) / ref > 0.20) continue;
       }
-      // 첫 번째 유효 IBI는 범위만 통과하면 무조건 채택
       cleanIBI.push(ibi);
     }
 
@@ -5416,7 +5415,7 @@ const App = {
     const recoveryRate = cleanIBI.length / Math.max(allIBI.length, 1);
     const signalQuality = Math.round(Math.min(99, f.quality * 0.5 + recoveryRate * 50));
 
-    this._flog(`✓ [${sourceLabel}] 분석: HR=${hr} RMSSD=${rmssd.toFixed(1)} SDNN=${sdnn.toFixed(1)} pNN50=${pNN50.toFixed(1)} SI=${stressIndex} clean=${cleanIBI.length}/${allIBI.length} fps=${actualFps.toFixed(1)}`);
+    this._flog(`✓ [${sourceLabel}] 분석: HR=${hr} RMSSD=${rmssd.toFixed(1)} SDNN=${sdnn.toFixed(1)} pNN50=${pNN50.toFixed(1)} SI=${stressIndex} clean=${cleanIBI.length}/${allIBI.length}`);
 
     // ★ v18.0: 손가락 PPG 부정맥 분석 (Poincaré)
     let fingerArrhythmia = null;
@@ -11400,15 +11399,15 @@ const App = {
 
   // === RR 이상치 제거 (Tarvainen 2014, Kubios 의료기기 표준) ===
   // v12.3 개선: expectedRR 기준 사전 필터 + 더 관대한 인접 차이 규칙
-  // 1. 절대 범위: 370~2000ms (HR 30~162bpm) ★ v18.1: 300→370으로 강화
+  // 1. 절대 범위: 300~2000ms (HR 30~200bpm)
   // 2. expectedRR 기준 ±35% 마진 (가짜 피크/누락 피크 자동 배제)
-  // 3. 인접 RR과 ±25% 차이 (Karolinska ±20%에서 약간 완화 — rPPG 노이즈 감안)
+  // 3. 인접 RR과 ±25% 차이
   // 4. 평균 RR 기준 ±3 SD 규칙
   _removeEctopicRR(rawRR, expectedRRms) {
     if (rawRR.length < 4) return rawRR.slice();
 
-    // ★ v18.1: 절대 범위 하한 370ms (162BPM) — 안정 측정 범위
-    let rr = rawRR.filter(v => v >= 370 && v <= 2000);
+    // 절대 범위 필터
+    let rr = rawRR.filter(v => v >= 300 && v <= 2000);
     if (rr.length < 4) return [];
 
     // ★ v12.3 Step 1.5: expectedRR 기준 ±35% 마진 사전 필터
