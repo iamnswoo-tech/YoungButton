@@ -8244,6 +8244,139 @@ body::before {
   color: #B45309; letter-spacing: -.02em;
 }
 
+/* ★ v19.1: 신체측정 페이지 게이미피케이션 카드 */
+
+/* 히어로 배너 */
+.body-page-hero {
+  margin: 14px 16px 0;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 60%, #D1FAE5 100%);
+  border-radius: 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 4px 16px rgba(16,185,129,.12);
+  position: relative; overflow: hidden;
+}
+.body-page-hero::before {
+  content: ''; position: absolute;
+  top: -30px; right: 40px; width: 100px; height: 100px; border-radius: 50%;
+  background: rgba(16,185,129,.08); pointer-events: none;
+}
+.bph-left { display: flex; align-items: center; gap: 14px; flex: 1; }
+.bph-emoji { font-size: 40px; flex-shrink: 0; }
+.bph-title { font-size: 15px; font-weight: 900; color: #064E3B; letter-spacing: -.02em; margin-bottom: 3px; }
+.bph-sub   { font-size: 11px; font-weight: 600; color: #065F46; opacity: .85; }
+.bph-mascot { font-size: 36px; flex-shrink: 0; position: relative; z-index: 1; }
+
+/* 가이드 스트립 */
+.body-guide-strip {
+  margin: 10px 16px 0;
+  padding: 10px 14px;
+  background: #FFFBEB;
+  border-radius: 12px;
+  border: 1px solid #FDE68A;
+  display: flex; align-items: flex-start; gap: 8px;
+}
+.bgs-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.bgs-text { font-size: 11px; font-weight: 600; color: #92400E; line-height: 1.5; }
+
+/* 섹션 타이틀 */
+.body-section-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 14px; font-weight: 900; color: var(--text-strong);
+  margin: 16px 16px 10px; letter-spacing: -.02em;
+}
+.bst-icon { font-size: 16px; }
+.bst-sub  { font-size: 11px; font-weight: 600; color: var(--text-soft); margin-left: 4px; }
+
+/* 카드 컨테이너 */
+.body-measure-cards {
+  padding: 0 16px;
+  display: flex; flex-direction: column; gap: 0;
+}
+
+/* 신체측정 게이미피케이션 카드 공통 */
+.body-card-game {
+  display: flex; flex-direction: column;
+  width: 100%; border: none; cursor: pointer;
+  font-family: var(--sans); text-align: left;
+  border-radius: 22px; margin-bottom: 12px;
+  padding: 0; overflow: hidden; position: relative;
+  box-shadow: 0 4px 18px rgba(0,0,0,.08), 0 1px 4px rgba(0,0,0,.04);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.body-card-game:active { transform: scale(.98); box-shadow: 0 2px 10px rgba(0,0,0,.10); }
+
+/* 카드별 배경색 */
+.bc-balance  { background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%); }
+.bc-gait     { background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); }
+.bc-reaction { background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); }
+.bc-tremor   { background: linear-gradient(135deg, #FFF1F5 0%, #FFE0E8 100%); }
+.bc-posture  { background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%); }
+.bc-bodycomp { background: linear-gradient(135deg, #EFF6FF 0%, #E0F2FE 100%); }
+
+/* 배지 행 */
+.bcg-badge-row { padding: 12px 16px 0; }
+.bcg-badge {
+  display: inline-block; font-size: 10px; font-weight: 900;
+  padding: 4px 12px; border-radius: 999px; letter-spacing: .04em;
+}
+.bal-badge  { background: #059669; color: #fff; }
+.gait-badge { background: #2563EB; color: #fff; }
+.react-badge{ background: #7C3AED; color: #fff; }
+.trem-badge { background: #EF4444; color: #fff; }
+.post-badge { background: #059669; color: #fff; }
+.comp-badge { background: #0EA5E9; color: #fff; }
+
+/* 카드 본문 */
+.bcg-body {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 16px 14px;
+}
+.bcg-icon {
+  width: 58px; height: 58px; flex-shrink: 0; border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; box-shadow: 0 4px 12px rgba(0,0,0,.10);
+}
+.bal-icon  { background: linear-gradient(145deg, #D1FAE5, #A7F3D0); }
+.gait-icon { background: linear-gradient(145deg, #DBEAFE, #BFDBFE); }
+.react-icon{ background: linear-gradient(145deg, #FEF3C7, #FDE68A); }
+.trem-icon { background: linear-gradient(145deg, #FFE4E6, #FECACA); }
+.post-icon { background: linear-gradient(145deg, #EDE9FE, #DDD6FE); }
+.comp-icon { background: linear-gradient(145deg, #E0F2FE, #BAE6FD); }
+
+.bcg-content { flex: 1; min-width: 0; }
+.bcg-title {
+  font-size: 16px; font-weight: 900; color: #1a1a2e;
+  letter-spacing: -.02em; margin-bottom: 3px; line-height: 1.2;
+}
+.bcg-desc  { font-size: 11px; color: #4B5563; line-height: 1.45; font-weight: 500; margin-bottom: 4px; }
+.bcg-time  { font-size: 11px; font-weight: 700; color: #6B7280; background: rgba(255,255,255,.70); padding: 2px 9px; border-radius: 999px; display: inline-block; }
+
+/* 우측 액션 */
+.bcg-action-wrap {
+  display: flex; flex-direction: column;
+  align-items: flex-end; gap: 6px;
+  flex-shrink: 0; min-width: 88px;
+}
+.bcg-btn {
+  font-size: 12px; font-weight: 800;
+  padding: 8px 13px; border-radius: 999px;
+  white-space: nowrap; letter-spacing: -.01em;
+}
+.bal-btn  { background: #059669; color: #fff; }
+.gait-btn { background: #2563EB; color: #fff; }
+.react-btn{ background: #7C3AED; color: #fff; }
+.trem-btn { background: #EF4444; color: #fff; }
+.post-btn { background: #7C3AED; color: #fff; }
+.comp-btn { background: #0EA5E9; color: #fff; }
+
+.bcg-tip {
+  font-size: 10px; font-weight: 600;
+  color: #6B7280; text-align: right; line-height: 1.4;
+  background: rgba(255,255,255,.65);
+  padding: 4px 9px; border-radius: 10px; max-width: 100px;
+}
+
 /* INFO CARD */
 .info-card {
   margin: 16px; padding: 16px 18px;
@@ -9541,19 +9674,19 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </svg>
     </div>
     <div>
-      <div class="hd-title">건강 측정</div>
-      <div class="hd-sub">FACE + BODY</div>
+      <div class="hd-title">오늘의 활력 버튼</div>
+      <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v18.0 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v19.0 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
 <div class="page on" id="page-home">
   <div class="hero">
-    <div class="hero-emoji">💜</div>
-    <div class="hero-title">얼굴과 신체로<br>건강을 측정하세요</div>
-    <div class="hero-sub">의료기기 없이 카메라와 센서만으로<br>활력 징후, 균형, 보행 패턴을 분석합니다.</div>
+    <div class="hero-emoji">👨‍⚕️🩺</div>
+    <div class="hero-title">매일 좋은 건강습관,<br>내 몸과 마음의 리셋버튼.</div>
+    <div class="hero-sub"><strong>ME-rPPG 딥러닝 AI</strong>가 10초 만에<br>심박·혈관·감정·자율신경을 분석합니다.</div>
   </div>
 
   <!-- ★ v13: 종합 Wellness Score 카드 (측정 후 자동 표시) -->
@@ -9590,8 +9723,8 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </div>
     </div>
     <div class="mood-card-content-v2">
-      <div class="mood-card-eyebrow-v2"><span class="mc-dot"></span> 오늘의 감정</div>
-      <div class="mood-card-title-v2" id="mood-card-title">오늘 마음은 어떠세요?</div>
+      <div class="mood-card-eyebrow-v2"><span class="mc-dot"></span>마음의 깊이, 여기서 가만히 마주해 보세요."</div>
+      <div class="mood-card-title-v2" id="mood-card-title">내 감정 들여다보기.</div>
       <div class="mood-card-game-v2" id="mood-card-game">
         <span class="mood-card-icon">🎨</span>
         <span class="mood-card-game-name">색으로 표현하는 오늘</span>
@@ -9599,7 +9732,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="mood-card-meta-v2">
         <span class="mood-card-time-v2" id="mood-card-time">약 1분</span>
         <span class="mood-card-dot-sep">·</span>
-        <span class="mood-card-replay-hint">매일 새로운 게임 · 재측정 가능</span>
+        <span class="mood-card-replay-hint">학술 검증된 4가지 심리 도구·감정단어</span>
       </div>
       <button type="button" class="mood-card-btn-v2">
         <span class="mc-btn-text" id="mood-card-btn-text">지금 시작하기</span>
@@ -9690,7 +9823,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
         </div>
         <div class="mcg-action-wrap">
           <div class="mcg-action-btn results-btn">확인하기 ›</div>
-          <div class="mcg-tip">변화 추이를 확인하며<br>동기부여를 받아요! 😊</div>
+          <div class="mcg-tip">변화 추이 확인하고<br>동기부여 받아요! 😊</div>
         </div>
       </div>
     </button>
@@ -9724,11 +9857,11 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
         <span class="care-deco care-deco-3">🤍</span>
       </div>
       <div class="care-card-inner">
-        <div class="care-badge">💌 안부 · 따뜻함</div>
-        <div class="care-title">안부를 보내세요</div>
+        <div class="care-badge">💌 따뜻한 안부.</div>
+        <div class="care-title">"오늘의 내 안부을 보내세요."</div>
         <div class="care-subtitle">
-          단순한 측정 결과가 아니라<br>
-          <strong>안심을 전하는 마음</strong>이 됩니다
+          단순한 측정 결과가 아닌<br>
+          <strong>안심을 전하는 마음</strong>입니다.
         </div>
         <div class="care-features">
           <span class="cf-item">👨‍👩‍👧 부모 · 자녀 · 친구 · 연인 모두</span>
@@ -9901,69 +10034,151 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="back-bar">
     <button class="back-btn" type="button" onclick="App.goPage('home')">←</button>
     <div>
-      <div class="page-title">🏃 신체 측정</div>
+      <div class="page-title">신체 측정</div>
       <div class="page-subtitle">균형 · 보행 · 자세 · 반응속도 · 손떨림</div>
     </div>
   </div>
 
-  <div class="info-card">
-    <div class="info-row">
-      <span class="info-icon">📱</span>
-      <span class="info-text"><strong>측정 시 휴대폰 위치 안내</strong><br>균형/보행/손떨림은 휴대폰을 손이나 주머니에 두고 측정합니다. 자세/반응속도는 화면 터치로 진행됩니다.</span>
+  <!-- 신체측정 히어로 배너 -->
+  <div class="body-page-hero">
+    <div class="bph-left">
+      <div class="bph-emoji">🏃</div>
+      <div>
+        <div class="bph-title">오늘도 건강한 하루 보내세요!</div>
+        <div class="bph-sub">작은 습관이 큰 변화를 만듭니다.</div>
+      </div>
     </div>
+    <div class="bph-mascot">🌟</div>
   </div>
 
-  <div class="section-title">측정 항목 선택</div>
-  <div class="measure-cards">
-    <button type="button" class="measure-card body" onclick="App.startBodyTest('balance')">
-      <div class="mc-icon body">⚖️</div>
-      <div class="mc-content">
-        <div class="mc-title">균형 검사 (Romberg)</div>
-        <div class="mc-desc">눈 뜨고/감고 각 15초 · 가속도 흔들림 분석</div>
+  <!-- 가이드 안내 (접힘 형태) -->
+  <div class="body-guide-strip">
+    <span class="bgs-icon">📱</span>
+    <span class="bgs-text">균형·보행·손떨림은 손에 들고, 자세·반응속도는 화면 터치로 측정</span>
+  </div>
+
+  <!-- 신체 측정 항목 카드들 -->
+  <div class="body-section-title">
+    <span class="bst-icon">📊</span> 나의 건강 체크
+    <span class="bst-sub">지금 상태를 확인해보세요</span>
+  </div>
+
+  <div class="body-measure-cards">
+
+    <!-- 균형 검사 -->
+    <button type="button" class="body-card-game bc-balance" onclick="App.startBodyTest('balance')">
+      <div class="bcg-badge-row">
+        <span class="bcg-badge bal-badge">추천</span>
       </div>
-      <div class="mc-arrow">›</div>
-    </button>
-    <button type="button" class="measure-card body" onclick="App.startBodyTest('gait')">
-      <div class="mc-icon body">🚶</div>
-      <div class="mc-content">
-        <div class="mc-title">보행 분석</div>
-        <div class="mc-desc">30초간 평지 걷기 · 스텝/케이던스 측정</div>
+      <div class="bcg-body">
+        <div class="bcg-icon bal-icon">⚖️</div>
+        <div class="bcg-content">
+          <div class="bcg-title">균형 검사</div>
+          <div class="bcg-desc">눈 뜨고/감고 흔들림 분석</div>
+          <div class="bcg-time">⏱ 약 30초</div>
+        </div>
+        <div class="bcg-action-wrap">
+          <div class="bcg-btn bal-btn">측정하기 ›</div>
+          <div class="bcg-tip">낙상 위험을<br>미리 확인! ⭐</div>
+        </div>
       </div>
-      <div class="mc-arrow">›</div>
     </button>
-    <button type="button" class="measure-card body" onclick="App.startBodyTest('reaction')">
-      <div class="mc-icon body">⚡</div>
-      <div class="mc-content">
-        <div class="mc-title">반응속도</div>
-        <div class="mc-desc">5회 시각 자극 · 평균 반응시간</div>
+
+    <!-- 보행 분석 -->
+    <button type="button" class="body-card-game bc-gait" onclick="App.startBodyTest('gait')">
+      <div class="bcg-badge-row">
+        <span class="bcg-badge gait-badge">인기</span>
       </div>
-      <div class="mc-arrow">›</div>
-    </button>
-    <button type="button" class="measure-card body" onclick="App.startBodyTest('tremor')">
-      <div class="mc-icon body">✋</div>
-      <div class="mc-content">
-        <div class="mc-title">손떨림 측정</div>
-        <div class="mc-desc">손에 들고 15초 · 진폭/주파수 분석</div>
+      <div class="bcg-body">
+        <div class="bcg-icon gait-icon">🚶</div>
+        <div class="bcg-content">
+          <div class="bcg-title">보행 분석</div>
+          <div class="bcg-desc">30초 평지 걷기 · 케이던스 측정</div>
+          <div class="bcg-time">⏱ 약 30초</div>
+        </div>
+        <div class="bcg-action-wrap">
+          <div class="bcg-btn gait-btn">측정하기 ›</div>
+          <div class="bcg-tip">걸음 패턴으로<br>건강 확인! 🚶</div>
+        </div>
       </div>
-      <div class="mc-arrow">›</div>
     </button>
-    <button type="button" class="measure-card body" onclick="App.startBodyTest('posture')">
-      <div class="mc-icon body">🧍</div>
-      <div class="mc-content">
-        <div class="mc-title">자세 평가</div>
-        <div class="mc-desc">정면 사진 · 어깨/머리 균형 분석</div>
+
+    <!-- 반응속도 -->
+    <button type="button" class="body-card-game bc-reaction" onclick="App.startBodyTest('reaction')">
+      <div class="bcg-badge-row">
+        <span class="bcg-badge react-badge">신규</span>
       </div>
-      <div class="mc-arrow">›</div>
-    </button>
-    <!-- ★ v13.1: BMI / ABSI -->
-    <button type="button" class="measure-card body" onclick="App.openBodyComposition()">
-      <div class="mc-icon body">📏</div>
-      <div class="mc-content">
-        <div class="mc-title">신체 지수 <span class="mc-badge new">신규</span></div>
-        <div class="mc-desc">키·체중·허리둘레 · BMI / ABSI 계산</div>
+      <div class="bcg-body">
+        <div class="bcg-icon react-icon">⚡</div>
+        <div class="bcg-content">
+          <div class="bcg-title">반응속도</div>
+          <div class="bcg-desc">5회 시각 자극 · 평균 반응시간</div>
+          <div class="bcg-time">⏱ 약 1분</div>
+        </div>
+        <div class="bcg-action-wrap">
+          <div class="bcg-btn react-btn">측정하기 ›</div>
+          <div class="bcg-tip">신경계 민첩성<br>체크하기! ⚡</div>
+        </div>
       </div>
-      <div class="mc-arrow">›</div>
     </button>
+
+    <!-- 손떨림 -->
+    <button type="button" class="body-card-game bc-tremor" onclick="App.startBodyTest('tremor')">
+      <div class="bcg-badge-row">
+        <span class="bcg-badge trem-badge">정밀</span>
+      </div>
+      <div class="bcg-body">
+        <div class="bcg-icon trem-icon">✋</div>
+        <div class="bcg-content">
+          <div class="bcg-title">손떨림 측정</div>
+          <div class="bcg-desc">손에 들고 15초 · 진폭/주파수 분석</div>
+          <div class="bcg-time">⏱ 약 15초</div>
+        </div>
+        <div class="bcg-action-wrap">
+          <div class="bcg-btn trem-btn">측정하기 ›</div>
+          <div class="bcg-tip">진전 여부를<br>확인하세요! ✋</div>
+        </div>
+      </div>
+    </button>
+
+    <!-- 자세 평가 -->
+    <button type="button" class="body-card-game bc-posture" onclick="App.startBodyTest('posture')">
+      <div class="bcg-badge-row">
+        <span class="bcg-badge post-badge">추천</span>
+      </div>
+      <div class="bcg-body">
+        <div class="bcg-icon post-icon">🧍</div>
+        <div class="bcg-content">
+          <div class="bcg-title">자세 평가</div>
+          <div class="bcg-desc">정면 사진 · 어깨/머리 균형 분석</div>
+          <div class="bcg-time">⏱ 약 30초</div>
+        </div>
+        <div class="bcg-action-wrap">
+          <div class="bcg-btn post-btn">측정하기 ›</div>
+          <div class="bcg-tip">바른 자세로<br>건강을 지켜요! 🧍</div>
+        </div>
+      </div>
+    </button>
+
+    <!-- 신체 지수 -->
+    <button type="button" class="body-card-game bc-bodycomp" onclick="App.openBodyComposition()">
+      <div class="bcg-badge-row">
+        <span class="bcg-badge comp-badge">종합</span>
+      </div>
+      <div class="bcg-body">
+        <div class="bcg-icon comp-icon">📏</div>
+        <div class="bcg-content">
+          <div class="bcg-title">신체 지수</div>
+          <div class="bcg-desc">키·체중·허리둘레 · BMI / ABSI 계산</div>
+          <div class="bcg-time">⏱ 즉시 결과</div>
+        </div>
+        <div class="bcg-action-wrap">
+          <div class="bcg-btn comp-btn">확인하기 ›</div>
+          <div class="bcg-tip">내 신체 나이를<br>확인해보세요! 📏</div>
+        </div>
+      </div>
+    </button>
+
   </div>
 
   <!-- 화면 콘솔 -->
