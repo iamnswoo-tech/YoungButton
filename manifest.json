@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v18.0",
-  "short_name": "건강측정 v18.0",
-  "description": "v18.0 — 혈관 나이 추정 · 부정맥 조기 감지 · RSA 미주신경 지수 (ME-rPPG 고도화)",
+  "name": "건강 측정 v19.1",
+  "short_name": "건강측정 v19.1",
+  "description": "v19.1 — 게이미피케이션 메인 메뉴 + 주간 목표 카드",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

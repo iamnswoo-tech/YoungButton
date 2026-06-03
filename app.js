@@ -258,6 +258,7 @@ const App = {
 
     // 5. 홈 카드
     this._safeStep('moodHomeCard', () => this._renderMoodHomeCard());
+    this._safeStep('weeklyGoalCard', () => this._renderWeeklyGoalCard()); // ★ v19.1
 
     // 6. 알림 재예약
     this._safeStep('reminder', () => this._scheduleNextReminder());
@@ -995,6 +996,7 @@ const App = {
       console.warn('[Wellness] 저장 실패:', e);
     }
     this._wellnessRender();
+    this._safeStep('weeklyGoalRefresh', () => this._renderWeeklyGoalCard());
   },
 
   // ★ v14.3: 측정 히스토리 누적 저장
@@ -7380,6 +7382,60 @@ const App = {
     } catch (e) {
       console.error('Share URL parse failed:', e);
       return false;
+    }
+  },
+
+  // ★ v19.1: 주간 목표 진행 카드 렌더링
+  _renderWeeklyGoalCard() {
+    try {
+      // 이번 주 월~일 기준 측정 횟수 집계
+      const now = new Date();
+      const dayOfWeek = now.getDay(); // 0=일,1=월...
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+      monday.setHours(0, 0, 0, 0);
+
+      let measured = 0;
+      const keys = ['history_face', 'history_finger', 'history_balance', 'history_gait', 'history_tremor', 'history_reaction', 'history_posture', 'history_bodycomp', 'history_mood'];
+      const measuredDays = new Set();
+      keys.forEach(key => {
+        try {
+          const arr = JSON.parse(localStorage.getItem(key) || '[]');
+          arr.forEach(item => {
+            const t = item.t || 0;
+            if (t >= monday.getTime()) {
+              measuredDays.add(new Date(t).toDateString());
+            }
+          });
+        } catch(e) {}
+      });
+      measured = measuredDays.size;
+
+      const goal = 5; // 주 5일 목표
+      const pct = Math.min(100, Math.round((measured / goal) * 100));
+      const remain = Math.max(0, goal - measured);
+
+      // 링 업데이트 (circumference = 2π×18 ≈ 113.1)
+      const circ = 113;
+      const offset = circ - (pct / 100) * circ;
+      const ringFill = document.getElementById('wgc-ring-fill');
+      const pctEl = document.getElementById('wgc-pct');
+      const titleEl = document.getElementById('wgc-title');
+
+      if (ringFill) {
+        ringFill.style.strokeDashoffset = offset;
+        ringFill.style.strokeDasharray = circ;
+      }
+      if (pctEl) pctEl.textContent = pct + '%';
+      if (titleEl) {
+        if (remain === 0) {
+          titleEl.innerHTML = '이번 주 목표 달성! 🎉';
+        } else {
+          titleEl.innerHTML = `이번 주 목표까지 <span class="wgc-highlight">${remain}일 남았어요!</span>`;
+        }
+      }
+    } catch(e) {
+      console.warn('[v19.1] WeeklyGoal 렌더 실패:', e.message);
     }
   },
 

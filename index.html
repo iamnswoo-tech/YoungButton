@@ -8110,6 +8110,140 @@ body::before {
 }
 .mc-arrow { color: var(--text-soft); font-size: 24px; flex-shrink: 0; font-weight: 700; }
 
+/* ★ v19.1: 게이미피케이션 메인 측정 카드 */
+.measure-cards { padding: 0 16px; display: flex; flex-direction: column; gap: 0; }
+
+.measure-card-game {
+  display: flex; flex-direction: column;
+  width: 100%; border: none; cursor: pointer;
+  font-family: var(--sans); text-align: left;
+  border-radius: 22px;
+  margin-bottom: 12px;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 18px rgba(0,0,0,.08), 0 1px 4px rgba(0,0,0,.04);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.measure-card-game:active { transform: scale(.98); box-shadow: 0 2px 10px rgba(0,0,0,.10); }
+
+/* 카드별 배경색 */
+.measure-card-game.face   { background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%); }
+.measure-card-game.finger { background: linear-gradient(135deg, #FFF1F5 0%, #FFE0E8 100%); }
+.measure-card-game.body   { background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%); }
+.measure-card-game.results{ background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); }
+
+/* 상단 배지 행 */
+.mcg-badge-row {
+  padding: 12px 16px 0;
+}
+.mcg-badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 900;
+  padding: 4px 12px; border-radius: 999px;
+  letter-spacing: .04em;
+}
+.face-badge   { background: #7C3AED; color: #fff; }
+.finger-badge { background: #EF4444; color: #fff; }
+.body-badge   { background: #059669; color: #fff; }
+.results-badge{ background: #2563EB; color: #fff; }
+
+/* 카드 본문 */
+.mcg-body {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 16px 14px;
+}
+.mcg-icon {
+  width: 60px; height: 60px; flex-shrink: 0;
+  border-radius: 18px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.10);
+}
+.mcg-icon.face   { background: linear-gradient(145deg, #EDE9FE, #DDD6FE); }
+.mcg-icon.finger { background: linear-gradient(145deg, #FFE4E6, #FECACA); }
+.mcg-icon.body   { background: linear-gradient(145deg, #D1FAE5, #A7F3D0); }
+.mcg-icon.results{ background: linear-gradient(145deg, #DBEAFE, #BFDBFE); }
+
+.mcg-content { flex: 1; min-width: 0; }
+.mcg-title {
+  font-size: 17px; font-weight: 900;
+  color: #1a1a2e; letter-spacing: -.02em;
+  margin-bottom: 3px; line-height: 1.2;
+}
+.mcg-desc {
+  font-size: 12px; color: #4B5563;
+  line-height: 1.45; font-weight: 500;
+  margin-bottom: 5px;
+}
+.mcg-meta { display: flex; align-items: center; gap: 6px; }
+.mcg-time {
+  font-size: 11px; font-weight: 700;
+  color: #6B7280; background: rgba(255,255,255,.70);
+  padding: 2px 9px; border-radius: 999px;
+}
+
+/* 우측 액션 영역 */
+.mcg-action-wrap {
+  display: flex; flex-direction: column;
+  align-items: flex-end; gap: 6px;
+  flex-shrink: 0; min-width: 90px;
+}
+.mcg-action-btn {
+  font-size: 12px; font-weight: 800;
+  padding: 8px 14px; border-radius: 999px;
+  white-space: nowrap; letter-spacing: -.01em;
+}
+.face-btn   { background: #7C3AED; color: #fff; }
+.finger-btn { background: #EF4444; color: #fff; }
+.body-btn   { background: #059669; color: #fff; }
+.results-btn{ background: #2563EB; color: #fff; }
+
+.mcg-tip {
+  font-size: 10px; font-weight: 600;
+  color: #6B7280; text-align: right;
+  line-height: 1.4; background: rgba(255,255,255,.65);
+  padding: 4px 9px; border-radius: 10px;
+  max-width: 100px;
+}
+
+/* ★ v19.1: 주간 목표 진행 카드 */
+.weekly-goal-card {
+  margin: 4px 16px 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+  border-radius: 20px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 4px 14px rgba(245,158,11,.15);
+  cursor: default;
+}
+.wgc-left { display: flex; align-items: center; gap: 10px; flex: 1; }
+.wgc-trophy { font-size: 28px; flex-shrink: 0; }
+.wgc-title {
+  font-size: 13px; font-weight: 800;
+  color: #92400E; margin-bottom: 2px; line-height: 1.35;
+}
+.wgc-highlight { color: #EF4444; }
+.wgc-sub { font-size: 11px; color: #B45309; font-weight: 500; }
+
+/* 원형 링 */
+.wgc-ring-wrap {
+  position: relative; flex-shrink: 0;
+  width: 52px; height: 52px;
+  display: flex; align-items: center; justify-content: center;
+}
+.wgc-ring { width: 52px; height: 52px; transform: rotate(-90deg); }
+.wgc-ring-bg { fill: none; stroke: rgba(245,158,11,.20); stroke-width: 5; }
+.wgc-ring-fill {
+  fill: none; stroke: #F59E0B; stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset .8s cubic-bezier(.16,1,.3,1);
+}
+.wgc-pct {
+  position: absolute; font-size: 11px; font-weight: 900;
+  color: #B45309; letter-spacing: -.02em;
+}
+
 /* INFO CARD */
 .info-card {
   margin: 16px; padding: 16px 18px;
@@ -9474,47 +9608,115 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     </div>
   </div>
 
-  <div class="section-title">건강 측정</div>
+  <div class="section-title">🏥 건강 측정</div>
   <div class="measure-cards">
-    <button type="button" class="measure-card face" onclick="App.goPage('face')">
-      <div class="mc-icon face">😊</div>
-      <div class="mc-content">
-        <div class="mc-title">얼굴 측정 <span class="mc-badge new">신규</span></div>
-        <div class="mc-desc">rPPG로 심박수·HRV·호흡수 측정 (30초)</div>
+
+    <!-- 얼굴 측정 -->
+    <button type="button" class="measure-card-game face" onclick="App.goPage('face')">
+      <div class="mcg-badge-row">
+        <span class="mcg-badge face-badge">신규</span>
       </div>
-      <div class="mc-arrow">›</div>
+      <div class="mcg-body">
+        <div class="mcg-icon face">😊</div>
+        <div class="mcg-content">
+          <div class="mcg-title">얼굴 측정</div>
+          <div class="mcg-desc">rPPG로 심박수·HRV·호흡수 측정</div>
+          <div class="mcg-meta">
+            <span class="mcg-time">⏱ 약 30초</span>
+          </div>
+        </div>
+        <div class="mcg-action-wrap">
+          <div class="mcg-action-btn face-btn">측정하기 ›</div>
+          <div class="mcg-tip">매일 기록하면<br>변화를 볼 수 있어요! 😊</div>
+        </div>
+      </div>
     </button>
 
-    <!-- ★ v15.5: 손가락 측정 — 임상급 HRV -->
-    <button type="button" class="measure-card finger" onclick="App.goPage('finger')">
-      <div class="mc-icon finger">☝️</div>
-      <div class="mc-content">
-        <div class="mc-title">손가락 측정 <span class="mc-badge clinical">임상급</span></div>
-        <div class="mc-desc">플래시 + 카메라로 정밀 HRV 측정 (30초)</div>
+    <!-- 손가락 측정 -->
+    <button type="button" class="measure-card-game finger" onclick="App.goPage('finger')">
+      <div class="mcg-badge-row">
+        <span class="mcg-badge finger-badge">인기</span>
       </div>
-      <div class="mc-arrow">›</div>
+      <div class="mcg-body">
+        <div class="mcg-icon finger">☝️</div>
+        <div class="mcg-content">
+          <div class="mcg-title">손가락 측정</div>
+          <div class="mcg-desc">플래시 + 카메라로 정밀 HRV 측정</div>
+          <div class="mcg-meta">
+            <span class="mcg-time">⏱ 약 30초</span>
+          </div>
+        </div>
+        <div class="mcg-action-wrap">
+          <div class="mcg-action-btn finger-btn">측정하기 ›</div>
+          <div class="mcg-tip">스트레스·피로를<br>더 정확하게! ❤️</div>
+        </div>
+      </div>
     </button>
 
-    <button type="button" class="measure-card body" onclick="App.goPage('body')">
-      <div class="mc-icon body">🏃</div>
-      <div class="mc-content">
-        <div class="mc-title">신체 측정 <span class="mc-badge beta">베타</span></div>
-        <div class="mc-desc">균형·보행·자세·반응속도·손떨림 분석</div>
+    <!-- 신체 측정 -->
+    <button type="button" class="measure-card-game body" onclick="App.goPage('body')">
+      <div class="mcg-badge-row">
+        <span class="mcg-badge body-badge">추천</span>
       </div>
-      <div class="mc-arrow">›</div>
+      <div class="mcg-body">
+        <div class="mcg-icon body">🏃</div>
+        <div class="mcg-content">
+          <div class="mcg-title">신체 측정</div>
+          <div class="mcg-desc">균형·보행·자세·반응속도 분석</div>
+          <div class="mcg-meta">
+            <span class="mcg-time">⏱ 약 2분</span>
+          </div>
+        </div>
+        <div class="mcg-action-wrap">
+          <div class="mcg-action-btn body-btn">측정하기 ›</div>
+          <div class="mcg-tip">내 몸의 균형을<br>한눈에 확인하세요! ⭐</div>
+        </div>
+      </div>
     </button>
 
-    <!-- ★ v14.0: 손가락 측정 제거 → "건강 측정 결과" 카드로 대체 -->
-    <button type="button" class="measure-card results" onclick="App._scrollToWellness()">
-      <div class="mc-icon results">📊</div>
-      <div class="mc-content">
-        <div class="mc-title">건강 측정 결과 <span class="mc-badge results">종합</span></div>
-        <div class="mc-desc">전체 측정 결과를 한 화면에서 확인하세요</div>
+    <!-- 건강 측정 결과 -->
+    <button type="button" class="measure-card-game results" onclick="App._scrollToWellness()">
+      <div class="mcg-badge-row">
+        <span class="mcg-badge results-badge">종합</span>
       </div>
-      <div class="mc-arrow">›</div>
+      <div class="mcg-body">
+        <div class="mcg-icon results">📊</div>
+        <div class="mcg-content">
+          <div class="mcg-title">건강 측정 결과</div>
+          <div class="mcg-desc">전체 측정 결과를 한 화면에서 확인</div>
+          <div class="mcg-meta">
+            <span class="mcg-time" id="mcg-last-measured">누적 분석</span>
+          </div>
+        </div>
+        <div class="mcg-action-wrap">
+          <div class="mcg-action-btn results-btn">확인하기 ›</div>
+          <div class="mcg-tip">변화 추이를 확인하며<br>동기부여를 받아요! 😊</div>
+        </div>
+      </div>
     </button>
 
-    <!-- ★ v17.0: 안부 카드 - 포괄적 관계 (자녀/부모/친구/연인/소중한 사람) -->
+  </div>
+
+  <!-- 주간 목표 진행 카드 -->
+  <div class="weekly-goal-card" id="weekly-goal-card">
+    <div class="wgc-left">
+      <div class="wgc-trophy">🏆</div>
+      <div class="wgc-text">
+        <div class="wgc-title" id="wgc-title">이번 주 목표까지 <span class="wgc-highlight" id="wgc-remain">—</span></div>
+        <div class="wgc-sub">꾸준한 기록이 건강한 나를 만듭니다 💪</div>
+      </div>
+    </div>
+    <div class="wgc-ring-wrap">
+      <svg class="wgc-ring" viewBox="0 0 44 44">
+        <circle class="wgc-ring-bg" cx="22" cy="22" r="18" />
+        <circle class="wgc-ring-fill" id="wgc-ring-fill" cx="22" cy="22" r="18"
+          stroke-dasharray="113" stroke-dashoffset="113" />
+      </svg>
+      <div class="wgc-pct" id="wgc-pct">0%</div>
+    </div>
+  </div>
+
+    <!-- ★ v17.0: 안부 카드 -->
     <button type="button" class="care-card" onclick="App.goPage('share')">
       <div class="care-card-deco">
         <span class="care-deco care-deco-1">💝</span>
@@ -9539,7 +9741,6 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
         </div>
       </div>
     </button>
-  </div>
 
   <div class="info-card">
     <div class="info-row"><span class="info-icon">⚠️</span><span class="info-text">이 앱은 의료기기가 아닙니다. 건강 참고용으로만 사용하세요.</span></div>
