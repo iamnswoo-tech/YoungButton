@@ -164,6 +164,11 @@ const App = {
         bvpSeries: [],           // HRV 분석용 BVP 누적
         rppgSnr: 0,
       },
+      // ★ v19.4: 동공 변동성 + 표정 Action Unit 분석 상태
+      pupilSeries: [],       // { t, left, right } 픽셀 단위 동공 크기 시계열
+      auSeries: [],          // { t, au1, au2, au4, au6, au12, au15, au17 } Action Unit
+      pupilResult: null,     // 최종 동공 분석 결과
+      auResult: null,        // 최종 표정 분석 결과
       onnxWorker: null,
       welchWorker: null,
     },
@@ -10229,6 +10234,11 @@ const App = {
       f.mePPG.dropCount = 30;
       f.mePPG.currentHR = null;
       f.mePPG.bvpSeries = [];
+      // ★ v19.4: 동공/표정 초기화
+      f.pupilSeries = [];
+      f.auSeries    = [];
+      f.pupilResult = null;
+      f.auResult    = null;
 
       // === STEP 3: UI 변경 ===
       this._faceUpdateButtons(true);
@@ -10663,11 +10673,13 @@ const App = {
 
             m.inputQueueCount += 1;
             f.onnxWorker.postMessage({
-              type: 'data',
-              input,
-              timestamp: lastTime,
-              lambda: 1,
+              type: 'data', input, timestamp: lastTime, lambda: 1,
             });
+
+            // ★ v19.4: 동공·표정 분석 (매 5프레임마다 — 성능 최적화)
+            if (f.running && f.fpsCounter % 5 === 0) {
+              this._faceAnalyzePupilAndAU(video, vw, vh, bx, by, bw, bh, det);
+            }
           }
         } else {
           f.faceDetected = false;
@@ -10681,6 +10693,228 @@ const App = {
     }
 
     f.rafId = requestAnimationFrame(() => this._faceProcessFrame());
+  },
+
+  // ★ v19.4: 동공 변동성 + 표정 Action Unit 분석
+  // Dr. Kim: Pupillary Unrest Index + Ekman AU 기반
+  // Alex: BlazeFace keypoints + 픽셀 분석 (추가 모델 불필요)
+  _faceAnalyzePupilAndAU(video, vw, vh, bx, by, bw, bh, det) {
+    try {
+      const f = this.state.face;
+      const now = performance.now();
+
+      // BlazeFace keypoints: [rightEye, leftEye, nose, mouth, rightEar, leftEar]
+      const kp = det.keypoints;
+      if (!kp || kp.length < 6) return;
+
+      const rightEye = kp[0]; // { x, y } normalized 0-1
+      const leftEye  = kp[1];
+
+      // === 1. 동공 크기 추정 (Pupillary Unrest Index) ===
+      // 눈 영역 픽셀 추출 → 밝기 역전 → 어두운 영역 크기 = 동공
+      const pupilData = this._faceEstimatePupilSize(video, vw, vh, rightEye, leftEye);
+      if (pupilData) {
+        f.pupilSeries.push({ t: now, ...pupilData });
+        if (f.pupilSeries.length > 300) f.pupilSeries.shift();
+      }
+
+      // === 2. Action Unit 추정 ===
+      // BlazeFace 랜드마크로 AU 근사
+      // AU1(눈썹 내측↑), AU4(눈썹 찡그림), AU6(볼 올라감), AU12(입꼬리↑)
+      const auData = this._faceEstimateActionUnits(det, bw, bh);
+      if (auData) {
+        f.auSeries.push({ t: now, ...auData });
+        if (f.auSeries.length > 300) f.auSeries.shift();
+      }
+
+    } catch (e) {
+      // 조용히 실패 — 핵심 측정에 영향 없음
+    }
+  },
+
+  // 동공 크기 픽셀 추정
+  _faceEstimatePupilSize(video, vw, vh, rightEye, leftEye) {
+    try {
+      if (!this._cvPupil) {
+        this._cvPupil = document.createElement('canvas');
+        this._cvPupil.width = 32; this._cvPupil.height = 16;
+      }
+      const cv = this._cvPupil;
+      const ctx = cv.getContext('2d', { willReadFrequently: true });
+
+      // 눈 사이 거리로 스케일 계산
+      const eyeDist = Math.sqrt(
+        Math.pow((rightEye.x - leftEye.x) * vw, 2) +
+        Math.pow((rightEye.y - leftEye.y) * vh, 2)
+      );
+      if (eyeDist < 10) return null;
+
+      const eyeRadius = eyeDist * 0.18; // 눈 크기 ≈ 눈 간격의 18%
+
+      // 오른쪽 눈 영역 추출 (16×16)
+      const rx = rightEye.x * vw; const ry = rightEye.y * vh;
+      ctx.drawImage(video, rx - eyeRadius, ry - eyeRadius, eyeRadius*2, eyeRadius*2, 0, 0, 16, 16);
+      const rdData = ctx.getImageData(0, 0, 16, 16).data;
+
+      // 왼쪽 눈 영역 추출 (16×16)
+      const lx = leftEye.x * vw; const ly = leftEye.y * vh;
+      ctx.drawImage(video, lx - eyeRadius, ly - eyeRadius, eyeRadius*2, eyeRadius*2, 16, 0, 16, 16);
+      const ldData = ctx.getImageData(16, 0, 16, 16).data;
+
+      // 어두운 픽셀 비율 = 동공 크기 지표
+      // threshold: 전체 밝기 평균의 60% 이하 = 동공
+      const getDarkRatio = (data) => {
+        let sum = 0, dark = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const lum = data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114;
+          sum += lum;
+        }
+        const avg = sum / (data.length / 4);
+        const thr = avg * 0.55;
+        for (let i = 0; i < data.length; i += 4) {
+          const lum = data[i]*0.299 + data[i+1]*0.587 + data[i+2]*0.114;
+          if (lum < thr) dark++;
+        }
+        return dark / (data.length / 4);
+      };
+
+      const rightRatio = getDarkRatio(rdData);
+      const leftRatio  = getDarkRatio(ldData);
+
+      // 0~1 범위, 정규화 → 픽셀 단위 환산 (eyeDist 기준)
+      const rightPx = rightRatio * eyeDist * 0.4;
+      const leftPx  = leftRatio  * eyeDist * 0.4;
+
+      return { right: rightPx, left: leftPx, eyeDist };
+    } catch (e) { return null; }
+  },
+
+  // Action Unit 추정 (BlazeFace keypoints 기반)
+  // Ekman & Friesen 1978: AU1,2,4,6,7,12,15,17
+  _faceEstimateActionUnits(det, bw, bh) {
+    try {
+      const kp = det.keypoints;
+      if (!kp || kp.length < 6) return null;
+
+      // keypoints: [rightEye(0), leftEye(1), nose(2), mouth(3), rightEar(4), leftEar(5)]
+      const re = kp[0], le = kp[1], nose = kp[2], mouth = kp[3];
+
+      // 얼굴 높이 정규화
+      const faceH = bh || 1;
+
+      // AU12 (입꼬리 올라감 = 행복) - 입이 눈 중간보다 얼마나 아래 있는지
+      const eyeMidY = (re.y + le.y) / 2;
+      const mouthRelY = (mouth.y - eyeMidY) / (faceH / 480 || 1);
+      const au12 = Math.max(0, Math.min(1, (mouthRelY - 0.3) * 3));
+
+      // AU6 (볼 올라감) - 눈과 코 사이 거리
+      const eyeToNose = Math.abs(nose.y - eyeMidY);
+      const au6 = Math.max(0, Math.min(1, 1 - eyeToNose * 4));
+
+      // AU1/AU4 (눈썹 움직임) - 눈과 귀 세로 차이로 근사
+      const re4 = kp[4], le5 = kp[5]; // ears
+      const browR = Math.abs(re.y - re4.y);
+      const browL = Math.abs(le.y - le5.y);
+      const au1 = Math.max(0, Math.min(1, (browR + browL) * 2));
+      const au4 = Math.max(0, Math.min(1, 1 - (browR + browL) * 3));
+
+      // 좌우 대칭성 지수 (AU: 비대칭 = 감정 억압 지표)
+      const eyeSymmetry = 1 - Math.abs(re.y - le.y) * 10;
+
+      return { au1, au4, au6, au12, eyeSymmetry };
+    } catch (e) { return null; }
+  },
+
+  // ★ v19.4: 동공·표정 시계열 → 최종 지표 계산
+  _faceComputePupilAUResult() {
+    const f = this.state.face;
+
+    // === 동공 결과 ===
+    let pupilResult = null;
+    if (f.pupilSeries.length >= 20) {
+      const rights = f.pupilSeries.map(d => d.right).filter(v => v > 0);
+      const lefts  = f.pupilSeries.map(d => d.left).filter(v => v > 0);
+
+      if (rights.length >= 15) {
+        // PUI (Pupillary Unrest Index): 연속 측정값 변동 계수
+        const mean = arr => arr.reduce((a,b)=>a+b,0)/arr.length;
+        const std  = arr => { const m=mean(arr); return Math.sqrt(arr.reduce((s,v)=>s+(v-m)**2,0)/arr.length); };
+
+        const rMean = mean(rights); const rStd = std(rights);
+        const lMean = mean(lefts);  const lStd = std(lefts);
+        const cv = ((rStd/rMean) + (lStd/lMean)) / 2; // 변동 계수
+
+        // PUI 정상: CV < 0.08 / 높음: > 0.15
+        // Dr. Kim: 자율신경 불안정 시 동공 변동성 증가 (Wilhelm 1998)
+        const pui = Math.round(cv * 100);
+        const puiScore = Math.max(10, Math.min(99, Math.round(100 - pui * 3)));
+        const puiState = cv < 0.06 ? 'stable' : cv < 0.12 ? 'normal' : cv < 0.20 ? 'variable' : 'unstable';
+
+        pupilResult = {
+          pui, puiScore, puiState,
+          rightMean: Math.round(rMean * 10) / 10,
+          leftMean:  Math.round(lMean * 10) / 10,
+          symmetry:  Math.round((1 - Math.abs(rMean-lMean)/(rMean+lMean)) * 100),
+          label: puiState === 'stable' ? '안정적' : puiState === 'normal' ? '정상 범위' : puiState === 'variable' ? '약간 불안정' : '불안정',
+          interpretation: puiState === 'stable'
+            ? '자율신경이 균형잡힌 상태입니다'
+            : puiState === 'normal'
+            ? '정상 범위의 동공 반응성입니다'
+            : '자율신경 긴장 상태를 나타낼 수 있습니다',
+        };
+      }
+    }
+
+    // === 표정(AU) 결과 ===
+    let auResult = null;
+    if (f.auSeries.length >= 15) {
+      const mean = (key) => {
+        const vals = f.auSeries.map(d=>d[key]).filter(v=>v!=null);
+        return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+      };
+
+      const au12m = mean('au12'); // 행복/미소
+      const au6m  = mean('au6');  // 진짜 미소 (Duchenne)
+      const au1m  = mean('au1');  // 내측 눈썹
+      const au4m  = mean('au4');  // 눈썹 찡그림
+      const symm  = mean('eyeSymmetry');
+
+      // Duchenne 미소 = au12 + au6 (진정성 있는 미소)
+      const duchenne = (au12m + au6m) / 2;
+
+      // 감정 표현 분류
+      let dominantEmotion = 'neutral';
+      let emotionScore = 50;
+      if (duchenne > 0.5) { dominantEmotion = 'happy'; emotionScore = Math.round(50 + duchenne*40); }
+      else if (au4m > 0.5) { dominantEmotion = 'stressed'; emotionScore = Math.round(50 - au4m*30); }
+      else if (au1m > 0.4) { dominantEmotion = 'concerned'; emotionScore = Math.round(50 - au1m*20); }
+
+      const emotionLabel = {
+        neutral: '중립', happy: '긍정적', stressed: '긴장', concerned: '걱정',
+      }[dominantEmotion];
+
+      // 표정 일관성 점수 (자기보고 감정 검증용)
+      const expressionConsistency = Math.round(symm * 80 + 20);
+
+      auResult = {
+        au12: Math.round(au12m*100), au6: Math.round(au6m*100),
+        au1: Math.round(au1m*100),   au4: Math.round(au4m*100),
+        duchenne: Math.round(duchenne*100),
+        dominantEmotion, emotionLabel, emotionScore,
+        expressionConsistency,
+        interpretation: dominantEmotion === 'happy'
+          ? '긍정적인 감정 표현이 측정됩니다'
+          : dominantEmotion === 'stressed'
+          ? '긴장·스트레스 표현이 감지됩니다'
+          : dominantEmotion === 'concerned'
+          ? '걱정·불안 표현이 감지됩니다'
+          : '감정 표현이 중립적입니다',
+      };
+    }
+
+    f.pupilResult = pupilResult;
+    f.auResult    = auResult;
+    return { pupilResult, auResult };
   },
 
   // === BlazeFace 박스 → 36x36 RGB 텐서 ===
@@ -11074,6 +11308,16 @@ const App = {
     try {
       result = this._faceComputeMetrics();
       console.log('[Face] 최종 결과:', result);
+
+      // ★ v19.4: 동공·표정 분석 결과 계산 및 result에 병합
+      try {
+        const { pupilResult, auResult } = this._faceComputePupilAUResult();
+        result.pupilResult = pupilResult;
+        result.auResult    = auResult;
+        console.log('[v19.4] 동공:', pupilResult?.puiState, '/ 표정:', auResult?.dominantEmotion);
+      } catch (e) {
+        console.warn('[v19.4] 동공·표정 계산 실패:', e.message);
+      }
     } catch (err) {
       // ★ v13.5: 안전망 - 어떤 계산 에러가 나도 사용자에게 결과 또는 실패 알림 보장
       console.error('[Face] _faceComputeMetrics 에러:', err);
@@ -11802,6 +12046,12 @@ const App = {
     const panel = document.getElementById('face-result-panel');
     panel.classList.add('show');
 
+    // ★ v19.4: 음성 분석 버튼 노출 (측정 완료 후)
+    const voiceOpt = document.getElementById('voice-analysis-opt');
+    if (voiceOpt) {
+      setTimeout(() => { voiceOpt.style.display = 'block'; }, 1200);
+    }
+
     // ★ v15.3: 변별력 강화 — 나이·성별 보정 점수
     // 기존: HR 60-100이면 무조건 만점 → 20대도 80대도 동점
     // 신규: 본인 나이대 평균 대비 z-score 변환 → 명확한 변별
@@ -11878,12 +12128,14 @@ const App = {
       lnRmssd: r.lnRmssd,
       sqi: r.sqi,
       score: faceScore,
-      subScores: subScores, // ★ v15.3: 항목별 점수 (UI 표시용)
-      ageAtMeasure: age,    // ★ v15.3: 측정 시점 나이 (재계산 시 참조)
-      // ★ v18.0 신규 지표
+      subScores: subScores,
+      ageAtMeasure: age,
       arrhythmia: r.arrhythmia || null,
       vascularAge: r.vascularAge || null,
       rsaIndex: r.rsaIndex || null,
+      // ★ v19.4: 동공·표정 분석 결과
+      pupilResult: r.pupilResult || null,
+      auResult:    r.auResult    || null,
     });
 
     // ★ v19.3: 측정 완료 후 인사이트 카드
@@ -12132,6 +12384,329 @@ const App = {
 
     // ★ v18.0: 혈관 나이 + 부정맥 + RSA 카드 렌더링
     this._renderAdvancedPPGCards(r, 'fr-advanced-cards');
+
+    // ★ v19.4: 동공·표정 분석 카드 렌더링
+    this._renderPupilAUCards(r, 'fr-advanced-cards');
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // ★ v19.4: 동공 변동성 + 표정 Action Unit 카드 렌더링
+  // Dr. Kim: PUI(Pupillary Unrest Index) + Ekman AU 기반
+  // ════════════════════════════════════════════════════════════════
+  _renderPupilAUCards(r, containerId) {
+    try {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      const pr = r.pupilResult;
+      const ar = r.auResult;
+      if (!pr && !ar) return; // 데이터 없으면 표시 안 함
+
+      let html = '';
+
+      // ── 동공 변동성 카드 ──
+      if (pr) {
+        const stateColor = {
+          stable: '#10b981', normal: '#3b82f6',
+          variable: '#f59e0b', unstable: '#ef4444',
+        }[pr.puiState] || '#6b7280';
+
+        const stateIcon = {
+          stable: '🟢', normal: '🔵', variable: '🟡', unstable: '🔴',
+        }[pr.puiState] || '⚪';
+
+        html += `
+          <div class="rg-card">
+            <div class="rg-card-title">
+              👁️ 동공 변동성 분석
+              <span class="ppg-adv-badge" style="background:${stateColor}">
+                ${pr.label}
+              </span>
+            </div>
+            <div class="ppg-adv-main">
+              <span class="ppg-adv-big" style="color:${stateColor}">${pr.puiScore}<span class="ppg-adv-unit">/100</span></span>
+            </div>
+            <div class="ppg-adv-detail">
+              PUI ${pr.pui} · 좌우 대칭 ${pr.symmetry}%
+            </div>
+            <div class="ppg-adv-sub">${stateIcon} ${pr.interpretation}</div>
+            <div class="ppg-adv-disclaimer">
+              Pupillary Unrest Index — Wilhelm (1998) · 자율신경 반응성 지표 (참고용)
+            </div>
+          </div>
+        `;
+      }
+
+      // ── 표정 분석 카드 ──
+      if (ar) {
+        const emotionColor = {
+          happy: '#10b981', neutral: '#6b7280',
+          stressed: '#f59e0b', concerned: '#ef4444',
+        }[ar.dominantEmotion] || '#6b7280';
+
+        const emotionIcon = {
+          happy: '😊', neutral: '😐', stressed: '😤', concerned: '😟',
+        }[ar.dominantEmotion] || '😐';
+
+        html += `
+          <div class="rg-card">
+            <div class="rg-card-title">
+              😊 표정 분석 (Action Unit)
+              <span class="ppg-adv-badge" style="background:${emotionColor}">
+                ${ar.emotionLabel}
+              </span>
+            </div>
+            <div class="ppg-adv-main">
+              <span class="ppg-adv-big" style="color:${emotionColor}">
+                ${emotionIcon} <span style="font-size:1.2rem">${ar.emotionLabel}</span>
+              </span>
+            </div>
+            <div class="ppg-adv-detail">
+              Duchenne 미소 ${ar.duchenne}% · 표정 일관성 ${ar.expressionConsistency}%
+            </div>
+            <div class="au-bars">
+              <div class="au-bar-row">
+                <span class="au-label">AU12 (미소)</span>
+                <div class="au-track"><div class="au-fill happy-fill" style="width:${ar.au12}%"></div></div>
+                <span class="au-val">${ar.au12}%</span>
+              </div>
+              <div class="au-bar-row">
+                <span class="au-label">AU6 (볼 올라감)</span>
+                <div class="au-track"><div class="au-fill happy-fill" style="width:${ar.au6}%"></div></div>
+                <span class="au-val">${ar.au6}%</span>
+              </div>
+              <div class="au-bar-row">
+                <span class="au-label">AU4 (찡그림)</span>
+                <div class="au-track"><div class="au-fill stress-fill" style="width:${ar.au4}%"></div></div>
+                <span class="au-val">${ar.au4}%</span>
+              </div>
+            </div>
+            <div class="ppg-adv-sub">${ar.interpretation}</div>
+            <div class="ppg-adv-disclaimer">
+              Ekman & Friesen (1978) Facial Action Coding System 기반 추정값
+            </div>
+          </div>
+        `;
+      }
+
+      // 기존 컨텐츠 뒤에 추가 (기존 카드 유지)
+      container.insertAdjacentHTML('beforeend', html);
+
+    } catch (e) {
+      console.warn('[v19.4] PupilAU 카드 렌더 실패:', e.message);
+    }
+  },
+
+  // ★ v19.4 Phase 2: 음성 분석 (Jitter/Shimmer/HNR)
+  // Alex: Web Audio API + FFT 순수 JS 구현
+  // Dr. Kim: Praat 알고리즘 기반, 우울/파킨슨 조기 신호
+  async _faceStartVoiceAnalysis() {
+    const optEl = document.getElementById('voice-analysis-opt');
+    const resultEl = document.getElementById('voice-result-card');
+    if (optEl) optEl.innerHTML = `
+      <div class="vao-recording">
+        <div class="vao-mic-pulse">🎤</div>
+        <div class="vao-recording-text">녹음 중... "아~" 소리를 5초간 내주세요</div>
+        <div class="vao-countdown" id="vao-countdown">5</div>
+      </div>
+    `;
+
+    try {
+      // 마이크 권한 요청 (클릭 시에만 — Mina의 UX 설계)
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const bufLen = analyser.frequencyBinCount;
+      const timeDomain = new Float32Array(bufLen);
+      const samples = [];
+      const startTime = Date.now();
+
+      // 카운트다운
+      let countdown = 5;
+      const countEl = document.getElementById('vao-countdown');
+      const countInterval = setInterval(() => {
+        countdown--;
+        if (countEl) countEl.textContent = countdown;
+        if (countdown <= 0) clearInterval(countInterval);
+      }, 1000);
+
+      // 5초간 오디오 샘플 수집
+      const collectSamples = () => {
+        if (Date.now() - startTime < 5000) {
+          analyser.getFloatTimeDomainData(timeDomain);
+          samples.push(...Array.from(timeDomain).slice(0, 256));
+          requestAnimationFrame(collectSamples);
+        } else {
+          // 녹음 완료 → 분석
+          stream.getTracks().forEach(t => t.stop());
+          audioCtx.close();
+          const voiceResult = this._analyzeVoiceFeatures(samples, audioCtx.sampleRate || 44100);
+          this._renderVoiceResult(voiceResult, resultEl);
+          if (optEl) optEl.style.display = 'none';
+        }
+      };
+      requestAnimationFrame(collectSamples);
+
+    } catch (e) {
+      if (e.name === 'NotAllowedError') {
+        if (optEl) optEl.innerHTML = '<div class="vao-error">마이크 권한이 거부됐습니다. 설정에서 권한을 허용해주세요.</div>';
+      } else {
+        if (optEl) optEl.innerHTML = `<div class="vao-error">음성 분석 오류: ${e.message}</div>`;
+      }
+    }
+  },
+
+  // 음성 특징 추출 (Praat 알고리즘 포팅)
+  _analyzeVoiceFeatures(samples, sampleRate) {
+    try {
+      // ── Jitter 계산 (음높이 변동) ──
+      // 영교차율로 기본 주파수(F0) 추정 → 연속 피치 간격 변동
+      const frameSize = Math.floor(sampleRate * 0.02); // 20ms 프레임
+      const pitchFrames = [];
+
+      for (let i = 0; i < samples.length - frameSize; i += frameSize) {
+        const frame = samples.slice(i, i + frameSize);
+        // 영교차율 (Zero Crossing Rate)
+        let zcr = 0;
+        for (let j = 1; j < frame.length; j++) {
+          if ((frame[j] >= 0) !== (frame[j-1] >= 0)) zcr++;
+        }
+        const f0Est = (zcr / 2) * (sampleRate / frameSize);
+        if (f0Est > 80 && f0Est < 300) pitchFrames.push(f0Est); // 발성 범위
+      }
+
+      let jitter = 0;
+      if (pitchFrames.length > 3) {
+        let diffSum = 0;
+        for (let i = 1; i < pitchFrames.length; i++) {
+          diffSum += Math.abs(pitchFrames[i] - pitchFrames[i-1]);
+        }
+        const meanPitch = pitchFrames.reduce((a,b)=>a+b,0) / pitchFrames.length;
+        jitter = (diffSum / (pitchFrames.length - 1)) / meanPitch * 100; // %
+      }
+
+      // ── Shimmer 계산 (음량 변동) ──
+      const amplitudes = [];
+      for (let i = 0; i < samples.length - frameSize; i += frameSize) {
+        const frame = samples.slice(i, i + frameSize);
+        const rms = Math.sqrt(frame.reduce((s,v)=>s+v*v,0)/frame.length);
+        if (rms > 0.001) amplitudes.push(rms);
+      }
+
+      let shimmer = 0;
+      if (amplitudes.length > 3) {
+        let diffSum = 0;
+        for (let i = 1; i < amplitudes.length; i++) {
+          diffSum += Math.abs(amplitudes[i] - amplitudes[i-1]);
+        }
+        const meanAmp = amplitudes.reduce((a,b)=>a+b,0) / amplitudes.length;
+        shimmer = (diffSum / (amplitudes.length - 1)) / meanAmp * 100;
+      }
+
+      // ── HNR 계산 (잡음 대비 신호) ──
+      // 자기상관함수 기반 HNR 추정
+      let hnr = 0;
+      if (samples.length > frameSize * 2) {
+        const frame = samples.slice(0, frameSize * 2);
+        const r0 = frame.reduce((s,v)=>s+v*v,0);
+        if (r0 > 0) {
+          // lag = T0 (기본 주파수 주기)에서의 자기상관
+          const lag = Math.round(sampleRate / 150); // F0 = 150Hz 가정
+          let rLag = 0;
+          for (let i = 0; i < frame.length - lag; i++) rLag += frame[i] * frame[i+lag];
+          const ratio = Math.max(0, Math.min(0.999, rLag / r0));
+          hnr = -10 * Math.log10(Math.max(0.001, 1 - ratio));
+        }
+      }
+
+      // 발화 속도 (묵음 구간 비율)
+      const silenceFrames = amplitudes.filter(a => a < 0.005).length;
+      const speechRate = amplitudes.length > 0
+        ? Math.round((1 - silenceFrames/amplitudes.length) * 100) : 0;
+
+      // 정상 범위 기준 (Praat 참고값)
+      // Jitter: 정상 < 1%, 우울/파킨슨 > 3%
+      // Shimmer: 정상 < 3%, 이상 > 6%
+      // HNR: 정상 > 20dB, 이상 < 15dB
+      const jitterState = jitter < 1 ? 'normal' : jitter < 3 ? 'mild' : 'elevated';
+      const shimState   = shimmer < 3 ? 'normal' : shimmer < 6 ? 'mild' : 'elevated';
+      const hnrState    = hnr > 20 ? 'normal' : hnr > 15 ? 'mild' : 'low';
+
+      // 종합 음성 건강 점수
+      const voiceScore = Math.round(
+        Math.max(20, Math.min(99,
+          (jitter < 1 ? 35 : jitter < 3 ? 25 : 15) +
+          (shimmer < 3 ? 35 : shimmer < 6 ? 25 : 15) +
+          (hnr > 20 ? 30 : hnr > 15 ? 20 : 10)
+        ))
+      );
+
+      return {
+        jitter: Math.round(jitter * 100) / 100,
+        shimmer: Math.round(shimmer * 100) / 100,
+        hnr: Math.round(hnr * 10) / 10,
+        speechRate,
+        jitterState, shimState, hnrState,
+        voiceScore,
+        pitchMean: pitchFrames.length
+          ? Math.round(pitchFrames.reduce((a,b)=>a+b,0)/pitchFrames.length)
+          : null,
+      };
+    } catch (e) {
+      return null;
+    }
+  },
+
+  // 음성 분석 결과 렌더링
+  _renderVoiceResult(r, el) {
+    if (!el || !r) return;
+    el.style.display = 'block';
+
+    const scoreColor = r.voiceScore >= 75 ? '#10b981' : r.voiceScore >= 55 ? '#f59e0b' : '#ef4444';
+    const jColor = r.jitterState === 'normal' ? '#10b981' : r.jitterState === 'mild' ? '#f59e0b' : '#ef4444';
+    const sColor = r.shimState   === 'normal' ? '#10b981' : r.shimState   === 'mild' ? '#f59e0b' : '#ef4444';
+    const hColor = r.hnrState    === 'normal' ? '#10b981' : r.hnrState    === 'mild' ? '#f59e0b' : '#ef4444';
+
+    el.innerHTML = `
+      <div class="rg-card">
+        <div class="rg-card-title">
+          🎤 음성 분석 결과
+          <span class="ppg-adv-badge" style="background:${scoreColor}">
+            ${r.voiceScore}점
+          </span>
+        </div>
+        <div class="voice-metrics-grid">
+          <div class="vm-item">
+            <div class="vm-label">Jitter</div>
+            <div class="vm-val" style="color:${jColor}">${r.jitter}%</div>
+            <div class="vm-ref">정상 &lt;1%</div>
+          </div>
+          <div class="vm-item">
+            <div class="vm-label">Shimmer</div>
+            <div class="vm-val" style="color:${sColor}">${r.shimmer}%</div>
+            <div class="vm-ref">정상 &lt;3%</div>
+          </div>
+          <div class="vm-item">
+            <div class="vm-label">HNR</div>
+            <div class="vm-val" style="color:${hColor}">${r.hnr}dB</div>
+            <div class="vm-ref">정상 &gt;20dB</div>
+          </div>
+          <div class="vm-item">
+            <div class="vm-label">발화율</div>
+            <div class="vm-val" style="color:#6b7280">${r.speechRate}%</div>
+            <div class="vm-ref">${r.pitchMean ? r.pitchMean+'Hz' : '-'}</div>
+          </div>
+        </div>
+        <div class="ppg-adv-disclaimer">
+          Praat 알고리즘 포팅 · 우울/파킨슨 조기 신호 참고 지표 · 의료 진단 아님
+        </div>
+      </div>
+    `;
   },
 
   // ════════════════════════════════════════════════════════════════

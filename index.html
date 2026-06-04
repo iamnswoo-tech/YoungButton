@@ -8465,6 +8465,60 @@ body::before {
   font-size: 13px; font-weight: 700; color: #94A3B8; cursor: pointer;
 }
 
+/* ★ v19.4: 동공·표정 AU 바 차트 */
+.au-bars { display: flex; flex-direction: column; gap: 5px; margin: 8px 0; }
+.au-bar-row { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+.au-label { width: 80px; flex-shrink: 0; color: var(--text-soft); font-weight: 600; }
+.au-track {
+  flex: 1; height: 6px; background: var(--bg-soft);
+  border-radius: 3px; overflow: hidden;
+}
+.au-fill { height: 100%; border-radius: 3px; transition: width .6s var(--ease-out); }
+.happy-fill  { background: linear-gradient(90deg, #10b981, #34d399); }
+.stress-fill { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.au-val { width: 30px; text-align: right; color: var(--text-soft); font-weight: 700; font-size: 9px; }
+
+/* ★ v19.4: 음성 분석 옵션 */
+.voice-analysis-opt {
+  margin: 10px 14px 0;
+  padding: 14px;
+  background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(16,185,129,.20);
+  box-shadow: 0 2px 10px rgba(16,185,129,.10);
+  animation: fadeSlideUp .4s var(--ease-out);
+}
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.vao-header { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
+.vao-icon { font-size: 26px; flex-shrink: 0; }
+.vao-title { font-size: 14px; font-weight: 800; color: #065F46; margin-bottom: 2px; }
+.vao-sub   { font-size: 11px; color: #047857; font-weight: 500; }
+.vao-btn {
+  width: 100%; padding: 12px; border: none; border-radius: var(--radius);
+  background: #059669; color: #fff;
+  font-family: var(--sans); font-size: 13px; font-weight: 800;
+  cursor: pointer; transition: transform var(--dur-fast);
+  box-shadow: 0 4px 12px rgba(5,150,105,.25);
+}
+.vao-btn:active { transform: scale(.97); }
+.vao-note { font-size: 10px; color: #059669; text-align: center; margin-top: 6px; font-weight: 500; }
+.vao-recording { text-align: center; padding: 8px 0; }
+.vao-mic-pulse { font-size: 32px; animation: pulse 1s ease infinite; }
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
+.vao-recording-text { font-size: 13px; font-weight: 700; color: #065F46; margin: 8px 0 4px; }
+.vao-countdown { font-size: 36px; font-weight: 900; color: #059669; font-variant-numeric: tabular-nums; }
+.vao-error { font-size: 12px; color: #EF4444; padding: 8px; text-align: center; }
+
+/* 음성 분석 결과 그리드 */
+.voice-metrics-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin: 10px 0; }
+.vm-item { text-align: center; background: var(--bg-soft); border-radius: var(--radius); padding: 9px 6px; }
+.vm-label { font-size: 9px; font-weight: 700; color: var(--text-soft); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+.vm-val   { font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; margin-bottom: 2px; }
+.vm-ref   { font-size: 9px; color: var(--muted); font-weight: 500; }
+
 /* INFO CARD */
 .info-card {
   margin: 16px; padding: 16px 18px;
@@ -10102,6 +10156,22 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
     <!-- ★ v18.0: 고급 PPG 분석 카드 (혈관나이 / 부정맥 / RSA) -->
     <div id="fr-advanced-cards" style="margin-top:12px"></div>
+
+    <!-- ★ v19.4: 음성 분석 선택 버튼 (Phase 2) -->
+    <div class="voice-analysis-opt" id="voice-analysis-opt" style="display:none">
+      <div class="vao-header">
+        <span class="vao-icon">🎤</span>
+        <div class="vao-text">
+          <div class="vao-title">음성으로 추가 분석</div>
+          <div class="vao-sub">5초 발성으로 자율신경 추가 확인 (선택)</div>
+        </div>
+      </div>
+      <button class="vao-btn" type="button" onclick="App._faceStartVoiceAnalysis()">
+        음성 분석 시작 →
+      </button>
+      <div class="vao-note">Jitter·Shimmer·HNR 분석 · 마이크 권한 필요</div>
+    </div>
+    <div id="voice-result-card" style="display:none"></div>
   </div>
 
   <!-- 측정 버튼은 카메라 위에만 (v11s10) -->

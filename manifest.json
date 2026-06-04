@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v19.3",
-  "short_name": "건강측정 v19.3",
-  "description": "v19.3 — 또래 백분위·어제 대비·ANS 나이·측정 후 인사이트 카드",
+  "name": "건강 측정 v19.4",
+  "short_name": "건강측정 v19.4",
+  "description": "v19.4 — 동공 변동성+표정 AU 분석+음성 분석(선택) 추가",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
