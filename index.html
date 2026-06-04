@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>건강 측정 v18 — ME-rPPG</title>
+<title>건강 측정 v19 — ME-rPPG</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -8512,6 +8512,22 @@ body::before {
 .vao-countdown { font-size: 36px; font-weight: 900; color: #059669; font-variant-numeric: tabular-nums; }
 .vao-error { font-size: 12px; color: #EF4444; padding: 8px; text-align: center; }
 
+/* ★ v19.5: 음성 권한 허용 안내 배너 */
+.vao-tag {
+  display: inline-block; font-size: 9px; font-weight: 800;
+  background: rgba(245,158,11,.15); color: var(--amber);
+  padding: 2px 7px; border-radius: 999px; margin-left: 5px;
+  letter-spacing: .04em; vertical-align: middle;
+}
+.vao-permission-notice {
+  display: flex; align-items: flex-start; gap: 8px;
+  background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.20);
+  border-radius: var(--radius); padding: 10px 12px;
+  margin-bottom: 10px; font-size: 12px; color: #92400E; line-height: 1.55;
+}
+.vao-notice-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+.vao-notice-text strong { color: #7C2D12; font-weight: 800; }
+
 /* ★ v19.5: 마이크 권한 안내 UI */
 .vao-permission-guide {
   padding: 16px; background: #FFF7ED;
@@ -9860,7 +9876,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 <div class="page on" id="page-home">
   <div class="hero">
     <div class="hero-emoji">👨‍⚕️🩺</div>
-    <div class="hero-title">매일 좋은 건강습관,<br>내 몸과 마음의 리셋버튼.</div>
+    <div class="hero-title">나를 찾는 건강습관,<br>내 몸과 마음의 리셋버튼.</div>
     <div class="hero-sub"><strong>ME-rPPG 딥러닝 AI</strong>가 10초 만에<br>심박·혈관·감정·자율신경을 분석합니다.</div>
   </div>
 
@@ -9898,7 +9914,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </div>
     </div>
     <div class="mood-card-content-v2">
-      <div class="mood-card-eyebrow-v2"><span class="mc-dot"></span>마음의 깊이, 여기서 가만히 마주해 보세요."</div>
+      <div class="mood-card-eyebrow-v2"><span class="mc-dot"></span>마음의 깊이, 가만히 마주해 보세요."</div>
       <div class="mood-card-title-v2" id="mood-card-title">내 감정 들여다보기.</div>
       <div class="mood-card-game-v2" id="mood-card-game">
         <span class="mood-card-icon">🎨</span>
@@ -10195,14 +10211,23 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="vao-header">
         <span class="vao-icon">🎤</span>
         <div class="vao-text">
-          <div class="vao-title">음성으로 추가 분석</div>
-          <div class="vao-sub">5초 발성으로 자율신경 추가 확인 (선택)</div>
+          <div class="vao-title">음성으로 추가 분석 <span class="vao-tag">선택</span></div>
+          <div class="vao-sub">5초 발성 → Jitter·Shimmer·HNR 자율신경 추가 확인</div>
         </div>
       </div>
-      <button class="vao-btn" type="button" onclick="App._faceStartVoiceAnalysis()">
-        음성 분석 시작 →
-      </button>
-      <div class="vao-note">Jitter·Shimmer·HNR 분석 · 마이크 권한 필요</div>
+      <!-- 권한 상태별 영역 -->
+      <div id="vao-state-ready">
+        <div class="vao-permission-notice">
+          <span class="vao-notice-icon">🔒</span>
+          <span class="vao-notice-text">버튼을 누르면 <strong>마이크 권한 허용 팝업</strong>이 나타납니다. <strong>허용</strong>을 눌러주세요.</span>
+        </div>
+        <button class="vao-btn" type="button" onclick="App._faceCheckMicPermission()">
+          🎤 마이크 권한 허용 후 분석 시작
+        </button>
+        <div class="vao-note">마이크 권한은 음성 분석 시에만 사용 · 측정 후 즉시 해제</div>
+      </div>
+      <div id="vao-state-denied" style="display:none"></div>
+      <div id="vao-state-recording" style="display:none"></div>
     </div>
     <div id="voice-result-card" style="display:none"></div>
   </div>
@@ -11053,7 +11078,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>
 
-  v17.0 · 얼굴/손가락/심리 + 신체 측정 분리<br>
+  v19.0 · 얼굴/손가락/심리 + 신체 측정 분리<br>
   ✉ Reset Button 문의: iamnsw@naver.com
 </footer>
 

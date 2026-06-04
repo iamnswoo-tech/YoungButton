@@ -12062,7 +12062,26 @@ const App = {
     // ★ v19.4: 음성 분석 버튼 노출 (측정 완료 후)
     const voiceOpt = document.getElementById('voice-analysis-opt');
     if (voiceOpt) {
-      setTimeout(() => { voiceOpt.style.display = 'block'; }, 1200);
+      setTimeout(async () => {
+        voiceOpt.style.display = 'block';
+
+        // Permissions API로 권한 상태 사전 확인
+        const deniedEl = document.getElementById('vao-state-denied');
+        const readyEl  = document.getElementById('vao-state-ready');
+
+        if (navigator.permissions && navigator.permissions.query) {
+          try {
+            const status = await navigator.permissions.query({ name: 'microphone' });
+            if (status.state === 'denied') {
+              // 이미 거부 상태 → 즉시 설정 안내 표시
+              this._faceShowMicDeniedGuide(deniedEl, readyEl);
+            }
+            // granted/prompt 상태면 기본 ready UI 유지
+          } catch (e) {
+            // Permissions API 미지원 → ready UI 유지
+          }
+        }
+      }, 1200);
     }
 
     // ★ v15.3: 변별력 강화 — 나이·성별 보정 점수
@@ -12510,22 +12529,157 @@ const App = {
     }
   },
 
-  // ★ v19.4 Phase 2: 음성 분석 (Jitter/Shimmer/HNR)
-  // Alex: Web Audio API + FFT 순수 JS 구현
-  // Dr. Kim: Praat 알고리즘 기반, 우울/파킨슨 조기 신호
+  // ★ v19.5: 마이크 권한 사전 체크 (Permissions API 활용)
+  // 삼성 브라우저: getUserMedia 없이 먼저 권한 상태 확인
+  async _faceCheckMicPermission() {
+    const readyEl  = document.getElementById('vao-state-ready');
+    const deniedEl = document.getElementById('vao-state-denied');
+    const recEl    = document.getElementById('vao-state-recording');
+
+    // Permissions API 지원 여부 확인
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const status = await navigator.permissions.query({ name: 'microphone' });
+
+        if (status.state === 'denied') {
+          // 이미 거부된 상태 → 시스템 설정 안내
+          this._faceShowMicDeniedGuide(deniedEl, readyEl);
+          return;
+        }
+
+        // granted 또는 prompt → 바로 getUserMedia 진행
+        if (readyEl) readyEl.style.display = 'none';
+        if (recEl)   recEl.style.display = 'block';
+        await this._faceStartVoiceAnalysis();
+
+        // 권한 상태 변경 감지 (허용/거부 변경 시 자동 대응)
+        status.onchange = () => {
+          if (status.state === 'denied') {
+            this._faceShowMicDeniedGuide(deniedEl, readyEl);
+          }
+        };
+        return;
+      } catch (e) {
+        // Permissions API 에러 → 직접 getUserMedia 시도
+      }
+    }
+
+    // Permissions API 미지원 브라우저 → 바로 시도
+    if (readyEl) readyEl.style.display = 'none';
+    if (recEl)   recEl.style.display = 'block';
+    await this._faceStartVoiceAnalysis();
+  },
+
+  // 권한 거부 시 시스템 설정 안내 UI
+  _faceShowMicDeniedGuide(deniedEl, readyEl) {
+    if (readyEl) readyEl.style.display = 'none';
+    if (!deniedEl) return;
+    deniedEl.style.display = 'block';
+
+    // 기기/브라우저 감지
+    const ua = navigator.userAgent;
+    const isSamsung = /SamsungBrowser/i.test(ua);
+    const isChrome  = /Chrome/i.test(ua) && !isSamsung;
+    const isIOS     = /iPhone|iPad/i.test(ua);
+    const isFirefox = /Firefox/i.test(ua);
+
+    let guideSteps = '';
+    if (isSamsung) {
+      guideSteps = `
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">1</span>
+          <span>삼성 인터넷 하단 <strong>탭 바 → ⋮ 메뉴</strong> 탭</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">2</span>
+          <span><strong>설정 → 사이트 및 다운로드 → 사이트 권한 → 마이크</strong></span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">3</span>
+          <span>현재 사이트를 찾아 <strong>허용</strong> 변경 후 새로고침</span>
+        </div>`;
+    } else if (isChrome) {
+      guideSteps = `
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">1</span>
+          <span>주소창 왼쪽 <strong>자물쇠 🔒</strong> 또는 <strong>ⓘ</strong> 아이콘 탭</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">2</span>
+          <span><strong>사이트 설정 → 마이크 → 허용</strong> 선택</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">3</span>
+          <span>페이지 <strong>새로고침</strong> 후 다시 시도</span>
+        </div>`;
+    } else if (isIOS) {
+      guideSteps = `
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">1</span>
+          <span>iPhone <strong>설정</strong> 앱 열기</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">2</span>
+          <span><strong>Safari → 마이크 → 허용</strong> 선택</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">3</span>
+          <span>Safari로 돌아와 <strong>새로고침</strong> 후 다시 시도</span>
+        </div>`;
+    } else {
+      guideSteps = `
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">1</span>
+          <span>주소창 옆 <strong>자물쇠 🔒</strong> 또는 <strong>ⓘ</strong> 아이콘 탭</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">2</span>
+          <span><strong>마이크 → 허용</strong> 변경</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">3</span>
+          <span><strong>새로고침</strong> 후 다시 시도</span>
+        </div>`;
+    }
+
+    // 안드로이드 시스템 설정 경로 (브라우저 앱 권한)
+    const androidSystemGuide = isIOS ? '' : `
+      <div class="vao-pg-alt">
+        📱 위 방법으로 안 될 경우:<br>
+        <strong>안드로이드 설정 → 앱 → ${isSamsung ? '인터넷' : '브라우저'} → 권한 → 마이크 → 허용</strong>
+      </div>`;
+
+    deniedEl.innerHTML = `
+      <div class="vao-permission-guide">
+        <div class="vao-pg-icon">🎤</div>
+        <div class="vao-pg-title">마이크 권한이 필요합니다</div>
+        <div class="vao-pg-desc">음성 분석을 위해 마이크 접근 권한을 허용해주세요.</div>
+        <div class="vao-pg-steps">${guideSteps}</div>
+        ${androidSystemGuide}
+        <button class="vao-pg-retry" type="button" onclick="App._faceCheckMicPermission()">
+          🔄 권한 허용 후 다시 시도
+        </button>
+      </div>
+    `;
+  },
+
   async _faceStartVoiceAnalysis() {
-    const optEl = document.getElementById('voice-analysis-opt');
+    const optEl    = document.getElementById('voice-analysis-opt');
     const resultEl = document.getElementById('voice-result-card');
-    if (optEl) optEl.innerHTML = `
+    const recEl    = document.getElementById('vao-state-recording');
+    const deniedEl = document.getElementById('vao-state-denied');
+    const readyEl  = document.getElementById('vao-state-ready');
+
+    // 녹음 중 UI
+    if (recEl) recEl.innerHTML = `
       <div class="vao-recording">
         <div class="vao-mic-pulse">🎤</div>
-        <div class="vao-recording-text">녹음 중... "아~" 소리를 5초간 내주세요</div>
+        <div class="vao-recording-text">"아~" 소리를 5초간 내주세요</div>
         <div class="vao-countdown" id="vao-countdown">5</div>
       </div>
     `;
 
     try {
-      // 마이크 권한 요청 (클릭 시에만 — Mina의 UX 설계)
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
 
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -12539,25 +12693,24 @@ const App = {
       const samples = [];
       const startTime = Date.now();
 
-      // 카운트다운
       let countdown = 5;
       const countEl = document.getElementById('vao-countdown');
       const countInterval = setInterval(() => {
         countdown--;
-        if (countEl) countEl.textContent = countdown;
+        if (countEl) countEl.textContent = Math.max(0, countdown);
         if (countdown <= 0) clearInterval(countInterval);
       }, 1000);
 
-      // 5초간 오디오 샘플 수집
       const collectSamples = () => {
         if (Date.now() - startTime < 5000) {
           analyser.getFloatTimeDomainData(timeDomain);
           samples.push(...Array.from(timeDomain).slice(0, 256));
           requestAnimationFrame(collectSamples);
         } else {
-          // 녹음 완료 → 분석
+          clearInterval(countInterval);
           stream.getTracks().forEach(t => t.stop());
           audioCtx.close();
+          if (recEl) recEl.style.display = 'none';
           const voiceResult = this._analyzeVoiceFeatures(samples, audioCtx.sampleRate || 44100);
           this._renderVoiceResult(voiceResult, resultEl);
           if (optEl) optEl.style.display = 'none';
@@ -12566,39 +12719,34 @@ const App = {
       requestAnimationFrame(collectSamples);
 
     } catch (e) {
-      if (e.name === 'NotAllowedError') {
-        if (optEl) optEl.innerHTML = `
-          <div class="vao-permission-guide">
-            <div class="vao-pg-icon">🎤</div>
-            <div class="vao-pg-title">마이크 권한이 필요합니다</div>
-            <div class="vao-pg-desc">음성 분석을 위해 마이크 접근 권한을 허용해주세요.</div>
-            <div class="vao-pg-steps">
-              <div class="vao-pg-step">
-                <span class="vao-pg-num">1</span>
-                <span>주소창 왼쪽 <strong>자물쇠 🔒</strong> 또는 <strong>ⓘ</strong> 아이콘 탭</span>
-              </div>
-              <div class="vao-pg-step">
-                <span class="vao-pg-num">2</span>
-                <span><strong>사이트 설정</strong> → <strong>마이크</strong> → <strong>허용</strong> 선택</span>
-              </div>
-              <div class="vao-pg-step">
-                <span class="vao-pg-num">3</span>
-                <span>페이지를 새로고침 후 다시 시도</span>
-              </div>
-            </div>
-            <div class="vao-pg-alt">
-              💡 <strong>안드로이드</strong>: 설정 → 앱 → 브라우저 → 권한 → 마이크 허용<br>
-              💡 <strong>iPhone</strong>: 설정 → Safari → 마이크 → 허용
-            </div>
-            <button class="vao-pg-retry" type="button" onclick="App._faceStartVoiceAnalysis()">
-              🔄 권한 허용 후 다시 시도
-            </button>
-          </div>
-        `;
-      } else if (e.name === 'NotFoundError') {
-        if (optEl) optEl.innerHTML = `<div class="vao-error">마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.</div>`;
+      if (recEl) recEl.style.display = 'none';
+
+      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+        // 거부 → 안내 UI 표시
+        this._faceShowMicDeniedGuide(deniedEl, readyEl);
+      } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
+        if (deniedEl) {
+          deniedEl.style.display = 'block';
+          deniedEl.innerHTML = `
+            <div class="vao-permission-guide">
+              <div class="vao-pg-icon">⚠️</div>
+              <div class="vao-pg-title">마이크를 찾을 수 없습니다</div>
+              <div class="vao-pg-desc">기기에 마이크가 없거나 연결이 필요합니다.</div>
+            </div>`;
+        }
       } else {
-        if (optEl) optEl.innerHTML = `<div class="vao-error">음성 분석을 시작할 수 없습니다. (${e.message})<br>잠시 후 다시 시도해주세요.</div>`;
+        if (deniedEl) {
+          deniedEl.style.display = 'block';
+          deniedEl.innerHTML = `
+            <div class="vao-permission-guide">
+              <div class="vao-pg-icon">⚠️</div>
+              <div class="vao-pg-title">음성 분석을 시작할 수 없습니다</div>
+              <div class="vao-pg-desc">${e.message || '잠시 후 다시 시도해주세요.'}</div>
+              <button class="vao-pg-retry" type="button" onclick="App._faceCheckMicPermission()">
+                🔄 다시 시도
+              </button>
+            </div>`;
+        }
       }
     }
   },
