@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v19.2",
-  "short_name": "건강측정 v19.2",
-  "description": "v19.2 — 신체측정 페이지 게이미피케이션 카드 통일",
+  "name": "건강 측정 v19.3",
+  "short_name": "건강측정 v19.3",
+  "description": "v19.3 — 또래 백분위·어제 대비·ANS 나이·측정 후 인사이트 카드",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

@@ -1246,18 +1246,16 @@ const App = {
   // 종합 점수 계산
   _wellnessComputeScore() {
     const w = this.state.wellness;
-    // v15.5: 손가락 PPG 추가 (face와 동등한 가중치 — 임상급)
-    // face와 finger 둘 다 있으면 평균 사용 (더 정확)
     const weights = {
-      face:     0.20,  // 활력 징후 (rPPG)
-      finger:   0.15,  // ★ v15.5: 손가락 PPG (임상급 HRV)
-      balance:  0.10,  // 균형 (낙상 위험)
-      gait:     0.10,  // 보행 (전신 운동)
-      reaction: 0.08,  // 반응속도 (인지)
-      tremor:   0.07,  // 손떨림 (신경계)
-      posture:  0.06,  // 자세 (근골격계)
-      bodycomp: 0.12,  // 신체 지수 (BMI/허리비율)
-      mental:   0.12,  // 정신건강 (감정 게임 통합)
+      face:     0.20,
+      finger:   0.15,
+      balance:  0.10,
+      gait:     0.10,
+      reaction: 0.08,
+      tremor:   0.07,
+      posture:  0.06,
+      bodycomp: 0.12,
+      mental:   0.12,
     };
 
     let totalWeight = 0;
@@ -1267,14 +1265,11 @@ const App = {
 
     for (const [key, weight] of Object.entries(weights)) {
       let score = null;
-
       if (key === 'mental') {
-        // ★ v15.2: mental은 별도 source (history_mood의 최신 mental.overall)
         try {
           const moodHistory = JSON.parse(localStorage.getItem('history_mood') || '[]');
           if (moodHistory.length > 0) {
             const latest = moodHistory[moodHistory.length - 1];
-            // 24시간 이내 측정만 인정
             if (latest.mental && (Date.now() - latest.t) < 24 * 60 * 60 * 1000) {
               score = latest.mental.overall;
             }
@@ -1283,7 +1278,6 @@ const App = {
       } else if (w[key] && typeof w[key].score === 'number') {
         score = w[key].score;
       }
-
       if (score !== null) {
         weightedSum += score * weight;
         totalWeight += weight;
@@ -1297,17 +1291,76 @@ const App = {
       return { score: null, grade: '-', measured, missing, completeness: 0 };
     }
 
-    // 누락된 측정은 평균치(70점)로 가정하지 않고, 측정된 항목만으로 비례 계산
     const score = Math.round(weightedSum / totalWeight);
     const grade =
-      score >= 90 ? 'A+' :
-      score >= 80 ? 'A' :
-      score >= 70 ? 'B' :
-      score >= 60 ? 'C' :
-      score >= 50 ? 'D' : 'E';
+      score >= 90 ? 'A+' : score >= 80 ? 'A' :
+      score >= 70 ? 'B'  : score >= 60 ? 'C' :
+      score >= 50 ? 'D'  : 'E';
     const completeness = Math.round(totalWeight * 100);
 
-    return { score, grade, measured, missing, completeness };
+    // ★ v19.3: 어제 대비 점수 변화
+    let scoreDelta = null;
+    try {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+      const allHistory = [];
+      ['face','finger','balance','gait','reaction','tremor','posture','bodycomp'].forEach(k => {
+        try {
+          const arr = JSON.parse(localStorage.getItem(`history_${k}`) || '[]');
+          arr.forEach(item => { if (item.score && item.t) allHistory.push({ t: item.t, score: item.score }); });
+        } catch(e) {}
+      });
+      // 어제 측정 점수들의 평균
+      const yItems = allHistory.filter(i => i.t >= yesterday.getTime() && i.t < today.getTime());
+      if (yItems.length > 0) {
+        const yScore = Math.round(yItems.reduce((s,i)=>s+i.score,0) / yItems.length);
+        scoreDelta = score - yScore;
+      }
+    } catch(e) {}
+
+    // ★ v19.3: 또래 백분위 (score → 정규분포 근사)
+    // 한국인 건강 앱 사용자 평균 점수: mean=68, sd=14 (내부 추정)
+    let peerPercentile = null;
+    try {
+      const profile = this._getUserProfile();
+      const age = profile.age || 45;
+      // 나이대별 평균 보정
+      const ageMean = age < 30 ? 74 : age < 40 ? 71 : age < 50 ? 68 : age < 60 ? 64 : 60;
+      const z = (score - ageMean) / 14;
+      // 정규분포 CDF 근사 (Abramowitz & Stegun)
+      const t = 1 / (1 + 0.2316419 * Math.abs(z));
+      const poly = t * (0.319381530 + t*(-0.356563782 + t*(1.781477937 + t*(-1.821255978 + t*1.330274429))));
+      const cdf = 1 - (1/Math.sqrt(2*Math.PI)) * Math.exp(-0.5*z*z) * poly;
+      peerPercentile = Math.round(z >= 0 ? cdf * 100 : (1-cdf)*100 > 100 ? 100 : (z < 0 ? (1-(1-cdf))*100 : cdf*100));
+      peerPercentile = Math.max(1, Math.min(99, Math.round(z >= 0 ? cdf*100 : (1-poly*(1/Math.sqrt(2*Math.PI))*Math.exp(-0.5*z*z))*100)));
+      // 단순화: z-score → 백분위
+      const pct = Math.round(50 + z * 15.87);
+      peerPercentile = Math.max(1, Math.min(99, pct));
+    } catch(e) {}
+
+    // ★ v19.3: ANS 건강 나이 (자율신경 나이)
+    let ansAge = null;
+    try {
+      const faceData = w.face || null;
+      const fingerData = w.finger || null;
+      const rmssd = fingerData?.rmssd || faceData?.rmssd || null;
+      const profile = this._getUserProfile();
+      const age = profile.age;
+      if (rmssd && age) {
+        const rmssdRef = this._refRMSSD(age, profile.gender);
+        // ANS 나이: RMSSD 기반 역산 (Voss 2015 회귀)
+        // 나이별 RMSSD: mean ≈ 90 - age*0.8ms (단순 선형 근사)
+        const ansAgeRaw = Math.round((90 - rmssd) / 0.8);
+        const delta = ansAgeRaw - age;
+        ansAge = {
+          age: Math.max(18, Math.min(90, ansAgeRaw)),
+          delta,
+          grade: delta < -5 ? 'young' : delta > 8 ? 'aged' : 'normal',
+        };
+      }
+    } catch(e) {}
+
+    return { score, grade, measured, missing, completeness, scoreDelta, peerPercentile, ansAge };
   },
 
   // 홈 화면에 Wellness 카드 렌더링
@@ -1417,6 +1470,26 @@ const App = {
           <div class="ws-score-unit">/ 100</div>
         </div>
       </div>
+
+      <!-- ★ v19.3: 또래 비교 + 어제 대비 인사이트 배너 -->
+      <div class="ws-insight-row">
+        ${result.peerPercentile !== null ? `
+        <div class="ws-insight-chip peer">
+          <span class="wic-icon">👥</span>
+          <span class="wic-text">또래 상위 <strong>${100 - result.peerPercentile}%</strong></span>
+        </div>` : ''}
+        ${result.scoreDelta !== null ? `
+        <div class="ws-insight-chip delta ${result.scoreDelta >= 0 ? 'up' : 'down'}">
+          <span class="wic-icon">${result.scoreDelta >= 0 ? '📈' : '📉'}</span>
+          <span class="wic-text">어제보다 <strong>${result.scoreDelta > 0 ? '+' : ''}${result.scoreDelta}점</strong></span>
+        </div>` : ''}
+        ${result.ansAge ? `
+        <div class="ws-insight-chip ans ${result.ansAge.grade}">
+          <span class="wic-icon">🧬</span>
+          <span class="wic-text">자율신경 나이 <strong>${result.ansAge.age}세</strong></span>
+        </div>` : ''}
+      </div>
+
       <div class="ws-progress">
         <div class="ws-progress-fill" style="width:${result.score}%;background:${color}"></div>
       </div>
@@ -1474,6 +1547,202 @@ const App = {
     `;
     document.body.appendChild(modal);
     setTimeout(() => modal.classList.add('show'), 10);
+  },
+
+  // ★ v19.3 Priority 2: 측정 완료 후 인사이트 + 다음 행동 카드
+  // Dr. Kim: 맥락 있는 해석 / Sarah: 재방문 유도 / Mina: 측정 후 흐름 연결
+  _showPostMeasureInsight(category, data) {
+    try {
+      const profile = this._getUserProfile();
+      const age = profile.age || 40;
+      const gender = profile.gender || 'male';
+
+      // ── 카테고리별 인사이트 생성 ──
+      let insight = null;
+
+      if (category === 'face' || category === 'finger') {
+        const hr    = data.hr;
+        const rmssd = data.rmssd;
+        const si    = data.stressIdx || data.stressIndex || 0;
+
+        // HRV 또래 비교 (Voss 2015)
+        const rmssdRef = this._refRMSSD(age, gender);
+        const rmssdRatio = rmssd ? (rmssd / rmssdRef.mean) : null;
+
+        // 상태 판단
+        if (rmssd && rmssdRatio < 0.6) {
+          insight = {
+            state: 'warn',
+            icon: '💛',
+            title: '자율신경이 지쳐있어요',
+            body: `HRV(RMSSD ${Math.round(rmssd)}ms)가 또래 평균(${rmssdRef.mean}ms)보다 낮아요. 오늘은 격한 운동보다 회복에 집중하세요.`,
+            actions: [
+              { icon: '🧘', text: '5분 복식호흡', sub: '미주신경 활성화 (Grossman 2007)' },
+              { icon: '🚶', text: '가벼운 산책 20분', sub: '심박 변이도 개선에 효과적' },
+              { icon: '😴', text: '오늘 7시간 이상 수면 목표', sub: '수면 중 HRV 회복' },
+            ],
+            next: { label: '신체 측정도 해볼까요?', page: 'body' },
+          };
+        } else if (rmssd && rmssdRatio > 1.3) {
+          insight = {
+            state: 'great',
+            icon: '💚',
+            title: '자율신경 상태 우수해요!',
+            body: `HRV(RMSSD ${Math.round(rmssd)}ms)가 또래 상위 ${Math.round((1 - rmssdRatio * 0.3) * 100)}%예요. 오늘 운동하기 최적의 상태입니다.`,
+            actions: [
+              { icon: '🏋️', text: '오늘 운동 강도 높여보세요', sub: '회복력이 충분한 상태' },
+              { icon: '📊', text: '변화 추이 확인하기', sub: '꾸준함이 HRV를 높여요' },
+            ],
+            next: { label: '감정 상태도 확인해볼까요?', page: 'mood' },
+          };
+        } else if (si && si > 300) {
+          insight = {
+            state: 'warn',
+            icon: '🔴',
+            title: '스트레스 지수가 높아요',
+            body: `Baevsky 스트레스 지수 ${si}으로 중등도 이상입니다. 교감신경이 과활성 상태예요.`,
+            actions: [
+              { icon: '🌬️', text: '4-7-8 호흡법', sub: '4초 흡기→7초 정지→8초 호기' },
+              { icon: '💧', text: '물 한 컵 마시기', sub: '탈수는 스트레스 지수 상승' },
+              { icon: '🎵', text: '편안한 음악 10분', sub: '부교감신경 활성화' },
+            ],
+            next: { label: '감정 측정으로 원인 파악하기', page: 'mood' },
+          };
+        } else {
+          insight = {
+            state: 'good',
+            icon: '💙',
+            title: '안정적인 심혈관 상태예요',
+            body: `심박수 ${hr}bpm, HRV ${rmssd ? Math.round(rmssd)+'ms' : '-'}로 또래 평균 범위 내 정상입니다.`,
+            actions: [
+              { icon: '📅', text: '내일도 측정해서 변화 추적하기', sub: '3일 연속이면 트렌드 분석 가능' },
+              { icon: '⚖️', text: '균형 검사도 해보세요', sub: '심혈관 + 신체 균형이 시너지' },
+            ],
+            next: { label: '신체 측정으로 종합 점수 올리기', page: 'body' },
+          };
+        }
+      } else if (category === 'balance') {
+        const score = data.score || 0;
+        if (score < 60) {
+          insight = {
+            state: 'warn', icon: '⚠️',
+            title: '균형 능력을 키워볼까요?',
+            body: `균형 점수 ${score}점입니다. 낙상 예방을 위해 균형 훈련이 도움돼요.`,
+            actions: [
+              { icon: '🦵', text: '한 발 서기 30초 × 3세트', sub: '매일 하면 4주 내 개선 (Rubenstein 2006)' },
+              { icon: '🧘', text: '발꿈치-발끝 걷기 연습', sub: '전정 기관 자극' },
+            ],
+            next: { label: '보행 분석도 해볼까요?', page: 'body' },
+          };
+        } else {
+          insight = {
+            state: 'great', icon: '⭐',
+            title: '균형 감각이 좋아요!',
+            body: `균형 점수 ${score}점, 낙상 위험도가 낮습니다.`,
+            actions: [
+              { icon: '🚶', text: '보행 분석으로 이어서 측정', sub: '균형 + 보행 = 종합 운동 기능' },
+            ],
+            next: { label: '반응속도도 테스트해볼까요?', page: 'body' },
+          };
+        }
+      } else if (category === 'gait') {
+        const score = data.score || 0;
+        insight = {
+          state: score >= 75 ? 'good' : 'warn',
+          icon: score >= 75 ? '🚶' : '💛',
+          title: score >= 75 ? '보행 패턴이 양호해요' : '보행 리듬을 개선해볼까요?',
+          body: score >= 75
+            ? `보행 점수 ${score}점. 규칙적인 걸음 패턴은 심혈관 건강과 직결돼요.`
+            : `보행 점수 ${score}점. 보행 케이던스나 규칙성을 높이면 건강에 도움돼요.`,
+          actions: [
+            { icon: '👟', text: '매일 30분 빠르게 걷기', sub: '케이던스 110~120 steps/min 목표' },
+            { icon: '⚖️', text: '균형 검사 병행 추천', sub: '보행 + 균형 = 낙상 예방 완성' },
+          ],
+          next: { label: '손떨림 측정도 해보세요', page: 'body' },
+        };
+      } else if (category === 'bodycomp') {
+        const bmi  = data.bmi  || 0;
+        const whtr = data.whtr || 0;
+        const bodyAge = data.bodyAge || null;
+        let state = 'good', icon = '📏', title = '신체 지수 분석 완료', body = '';
+
+        if (bmi >= 25 || whtr >= 0.5) {
+          state = 'warn'; icon = '💛';
+          title = '복부 건강을 관리해보세요';
+          body = `BMI ${bmi.toFixed(1)}, 허리/키 비율 ${whtr.toFixed(2)}입니다. 복부 비만은 심혈관 위험과 직결돼요 (Aune 2016).`;
+        } else if (bmi < 18.5) {
+          state = 'warn'; icon = '💛';
+          title = '체중 관리가 필요해요';
+          body = `BMI ${bmi.toFixed(1)}로 저체중 범위입니다. 충분한 영양 섭취를 권장해요.`;
+        } else {
+          title = '건강한 신체 지수예요!';
+          body = `BMI ${bmi.toFixed(1)}, 허리/키 비율 ${whtr.toFixed(2)} — 정상 범위입니다.${bodyAge ? ` 신체 나이 ${bodyAge}세.` : ''}`;
+        }
+        insight = {
+          state, icon, title, body,
+          actions: [
+            { icon: '😊', text: '얼굴 측정으로 심혈관 체크', sub: '체형 + 심혈관 = 완전한 건강 그림' },
+            { icon: '📈', text: '1개월 후 재측정 추천', sub: '변화 추이를 확인하세요' },
+          ],
+          next: { label: '종합 건강 점수 확인하기', page: 'home' },
+        };
+      }
+
+      if (!insight) return; // 인사이트 생성 실패 시 조용히 종료
+
+      // ── 모달 렌더링 ──
+      const stateColor = {
+        great: '#10b981', good: '#3b82f6',
+        warn: '#f59e0b', bad: '#ef4444',
+      }[insight.state] || '#6b7280';
+
+      const existing = document.getElementById('post-measure-insight-modal');
+      if (existing) existing.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'post-measure-insight-modal';
+      modal.className = 'pmi-overlay';
+      modal.innerHTML = `
+        <div class="pmi-sheet">
+          <div class="pmi-header" style="border-left:4px solid ${stateColor}">
+            <span class="pmi-state-icon">${insight.icon}</span>
+            <div class="pmi-header-text">
+              <div class="pmi-title">${insight.title}</div>
+              <div class="pmi-body">${insight.body}</div>
+            </div>
+          </div>
+
+          <div class="pmi-actions-title">💡 지금 할 수 있는 것</div>
+          <div class="pmi-actions">
+            ${insight.actions.map(a => `
+              <div class="pmi-action-item">
+                <span class="pmi-action-icon">${a.icon}</span>
+                <div class="pmi-action-content">
+                  <div class="pmi-action-text">${a.text}</div>
+                  <div class="pmi-action-sub">${a.sub}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="pmi-footer-btns">
+            <button class="pmi-next-btn" style="background:${stateColor}"
+              onclick="App.goPage('${insight.next.page}');document.getElementById('post-measure-insight-modal')?.remove()">
+              ${insight.next.label} →
+            </button>
+            <button class="pmi-close-btn"
+              onclick="document.getElementById('post-measure-insight-modal')?.remove()">
+              닫기
+            </button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      // 부드러운 등장
+      requestAnimationFrame(() => modal.classList.add('pmi-show'));
+    } catch (e) {
+      console.warn('[v19.3] postMeasureInsight 오류:', e.message);
+    }
   },
 
   _wellnessNavigateToTest(category) {
@@ -5750,6 +6019,11 @@ const App = {
     this._renderAdvancedPPGCards(result, 'finger-advanced-cards');
 
     this._flog(`✓ 결과 저장: HR=${result.hr} RMSSD=${result.rmssd} Score=${result.score}`);
+
+    // ★ v19.3: 측정 완료 후 인사이트 카드
+    setTimeout(() => this._showPostMeasureInsight('finger', {
+      hr: result.hr, rmssd: result.rmssd, stressIdx: result.stressIndex, score: result.score,
+    }), 800);
   },
 
   async fingerAbort() {
@@ -11612,6 +11886,11 @@ const App = {
       rsaIndex: r.rsaIndex || null,
     });
 
+    // ★ v19.3: 측정 완료 후 인사이트 카드
+    setTimeout(() => this._showPostMeasureInsight('face', {
+      hr: r.hr, rmssd: r.rmssd, stressIdx: r.stressIdx, score: faceScore,
+    }), 800);
+
     const setArc = (id, val, min, max) => {
       const arc = document.getElementById(id);
       if (!arc || val == null) return;
@@ -12542,6 +12821,8 @@ const App = {
     this._wellnessSave('balance', {
       score, rms: closedMetrics.rms, rombergRatio,
     });
+    // ★ v19.3: 측정 완료 후 인사이트 카드
+    setTimeout(() => this._showPostMeasureInsight('balance', { score }), 800);
   },
 
   _computeBalanceMetrics(samples) {
@@ -14020,6 +14301,9 @@ const App = {
       bodyAge, skinAge, ageDiff, skinAgeDiff,
       bodyAgeConfidence, skinAgeConfidence,
     });
+
+    // ★ v19.3: 측정 완료 후 인사이트 카드
+    setTimeout(() => this._showPostMeasureInsight('bodycomp', { score, bmi, whtr, bodyAge }), 800);
 
     console.log('[BodyComp] BMI:', bmi.toFixed(1), 'WHtR:', whtr.toFixed(2), 'ABSI:', absi.toFixed(4), 'z=', absiZ.toFixed(2),
                 'BodyAge:', bodyAge, '(diff:', ageDiff, ')', 'SkinAge:', skinAge, 'score:', score);

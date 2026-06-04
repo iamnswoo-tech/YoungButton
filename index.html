@@ -8377,6 +8377,94 @@ body::before {
   padding: 4px 9px; border-radius: 10px; max-width: 100px;
 }
 
+/* ★ v19.3: wellness 인사이트 배너 칩 */
+.ws-insight-row {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin: 10px 0 8px;
+}
+.ws-insight-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px; border-radius: 999px;
+  font-size: 11px; font-weight: 700;
+  border: 1px solid transparent;
+}
+.ws-insight-chip.peer  { background: #EEF2FF; color: #4338CA; border-color: #C7D2FE; }
+.ws-insight-chip.delta.up   { background: #F0FDF4; color: #166534; border-color: #BBF7D0; }
+.ws-insight-chip.delta.down { background: #FFF7ED; color: #9A3412; border-color: #FED7AA; }
+.ws-insight-chip.ans.young  { background: #F0FDF4; color: #166534; border-color: #BBF7D0; }
+.ws-insight-chip.ans.normal { background: #EFF6FF; color: #1D4ED8; border-color: #BFDBFE; }
+.ws-insight-chip.ans.aged   { background: #FFF7ED; color: #9A3412; border-color: #FED7AA; }
+.wic-icon { font-size: 13px; }
+.wic-text strong { font-weight: 900; }
+
+/* ★ v19.3: 측정 완료 후 인사이트 모달 */
+.pmi-overlay {
+  position: fixed; inset: 0; z-index: 9500;
+  background: rgba(10, 14, 26, .55);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: flex-end;
+  opacity: 0; transition: opacity 240ms ease;
+}
+.pmi-overlay.pmi-show { opacity: 1; }
+.pmi-overlay.pmi-show .pmi-sheet { transform: translateY(0); }
+.pmi-sheet {
+  width: 100%; background: #fff;
+  border-radius: 24px 24px 0 0;
+  padding: 20px 18px max(20px, env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 32px rgba(0,0,0,.15);
+  transform: translateY(100%);
+  transition: transform 320ms cubic-bezier(0.16,1,0.3,1);
+  max-height: 85dvh; overflow-y: auto;
+}
+.pmi-header {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px 14px 14px 16px;
+  background: #F8FAFC; border-radius: 16px;
+  margin-bottom: 16px;
+}
+.pmi-state-icon { font-size: 30px; flex-shrink: 0; line-height: 1; }
+.pmi-header-text { flex: 1; }
+.pmi-title {
+  font-size: 16px; font-weight: 900;
+  color: #0F172A; letter-spacing: -.02em;
+  margin-bottom: 5px;
+}
+.pmi-body {
+  font-size: 12px; color: #475569;
+  line-height: 1.6; font-weight: 500;
+}
+.pmi-actions-title {
+  font-size: 12px; font-weight: 800;
+  color: #64748B; margin-bottom: 10px;
+  letter-spacing: .02em;
+}
+.pmi-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.pmi-action-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px;
+  background: #F8FAFC; border-radius: 14px;
+  border: 1px solid #E2E8F0;
+}
+.pmi-action-icon { font-size: 22px; flex-shrink: 0; }
+.pmi-action-content { flex: 1; }
+.pmi-action-text  { font-size: 13px; font-weight: 800; color: #0F172A; margin-bottom: 2px; letter-spacing: -.01em; }
+.pmi-action-sub   { font-size: 10px; font-weight: 500; color: #94A3B8; }
+.pmi-footer-btns  { display: flex; flex-direction: column; gap: 8px; }
+.pmi-next-btn {
+  width: 100%; padding: 14px;
+  border: none; border-radius: 14px;
+  font-family: var(--sans); font-size: 14px; font-weight: 800;
+  color: #fff; cursor: pointer; letter-spacing: -.01em;
+  transition: transform .12s;
+}
+.pmi-next-btn:active { transform: scale(.97); }
+.pmi-close-btn {
+  width: 100%; padding: 12px;
+  border: 1.5px solid #E2E8F0; border-radius: 14px;
+  background: none; font-family: var(--sans);
+  font-size: 13px; font-weight: 700; color: #94A3B8; cursor: pointer;
+}
+
 /* INFO CARD */
 .info-card {
   margin: 16px; padding: 16px 18px;
