@@ -4444,8 +4444,8 @@ const App = {
       // 실시간 모니터링 시작 (측정과 별개 — 손가락 댔는지 확인용)
       this._fingerStartMonitor();
 
-      // 음성 안내
-      this._speak('카메라가 준비되었습니다. 플래시를 켜고 검지를 카메라에 가볍게 대주세요.');
+      // 음성 안내 — 밝은 환경에서는 플래시 없이도 측정 가능
+      this._speak('카메라가 준비되었습니다. 검지를 카메라 렌즈에 가볍게 대주세요.');
 
     } catch (err) {
       this._flog('카메라 시작 실패: ' + err.message, 'error');
@@ -4812,7 +4812,7 @@ const App = {
     // 타이머
     this._fingerStartTimer();
 
-    this._speak('측정을 시작합니다. 30초간 손가락을 그대로 유지하세요.');
+    this._speak('측정을 시작합니다. 30초간 손가락을 렌즈에 살짝 대고 유지하세요.');
   },
 
   // ★ v15.9: ME-rPPG 워커 초기화 (얼굴 측정 워커 재사용)
@@ -11668,7 +11668,7 @@ const App = {
           if (beatSamples.length >= 8) break;
         }
 
-        if (beatSamples.length >= 4) {
+        if (beatSamples.length >= 6) {  // ★ v19.5: 4→6으로 강화 (더 안정적 앙상블)
           // 비트 앙상블 평균
           const avgLen = Math.round(beatSamples.reduce((s, b) => s + b.length, 0) / beatSamples.length);
           const ensembled = new Array(avgLen).fill(0);
@@ -11730,7 +11730,20 @@ const App = {
           // 기준: 30대=35, 40대=42, 50대=52 stiffness
           const baseAge = chronoAge || 45;
           const ageContrib = (baseAge - 35) * 0.8;
-          const estimatedAge = Math.round(baseAge + (stiffnessScore - 50 - ageContrib) * 0.35);
+          let estimatedAge = Math.round(baseAge + (stiffnessScore - 50 - ageContrib) * 0.35);
+
+          // ★ v19.5: 혈관나이 안정화
+          // 1) 실제 나이 ±25세 이내로 클램핑 (극단값 억제)
+          if (chronoAge) {
+            estimatedAge = Math.max(chronoAge - 25, Math.min(chronoAge + 25, estimatedAge));
+          }
+          // 2) 절대 범위 클램핑
+          estimatedAge = Math.max(15, Math.min(90, estimatedAge));
+          // 3) AIx가 null이거나 notchIdx 탐색 실패 시 신뢰도 낮음 → 추정 억제
+          if (aix === null || notchIdx < 0) {
+            // notch 없으면 혈관나이 = 실제 나이 근방으로 회귀
+            estimatedAge = Math.round(estimatedAge * 0.35 + (chronoAge || 45) * 0.65);
+          }
           const delta = chronoAge ? estimatedAge - chronoAge : null;
 
           const grade = delta === null ? 'normal'
@@ -12554,9 +12567,38 @@ const App = {
 
     } catch (e) {
       if (e.name === 'NotAllowedError') {
-        if (optEl) optEl.innerHTML = '<div class="vao-error">마이크 권한이 거부됐습니다. 설정에서 권한을 허용해주세요.</div>';
+        if (optEl) optEl.innerHTML = `
+          <div class="vao-permission-guide">
+            <div class="vao-pg-icon">🎤</div>
+            <div class="vao-pg-title">마이크 권한이 필요합니다</div>
+            <div class="vao-pg-desc">음성 분석을 위해 마이크 접근 권한을 허용해주세요.</div>
+            <div class="vao-pg-steps">
+              <div class="vao-pg-step">
+                <span class="vao-pg-num">1</span>
+                <span>주소창 왼쪽 <strong>자물쇠 🔒</strong> 또는 <strong>ⓘ</strong> 아이콘 탭</span>
+              </div>
+              <div class="vao-pg-step">
+                <span class="vao-pg-num">2</span>
+                <span><strong>사이트 설정</strong> → <strong>마이크</strong> → <strong>허용</strong> 선택</span>
+              </div>
+              <div class="vao-pg-step">
+                <span class="vao-pg-num">3</span>
+                <span>페이지를 새로고침 후 다시 시도</span>
+              </div>
+            </div>
+            <div class="vao-pg-alt">
+              💡 <strong>안드로이드</strong>: 설정 → 앱 → 브라우저 → 권한 → 마이크 허용<br>
+              💡 <strong>iPhone</strong>: 설정 → Safari → 마이크 → 허용
+            </div>
+            <button class="vao-pg-retry" type="button" onclick="App._faceStartVoiceAnalysis()">
+              🔄 권한 허용 후 다시 시도
+            </button>
+          </div>
+        `;
+      } else if (e.name === 'NotFoundError') {
+        if (optEl) optEl.innerHTML = `<div class="vao-error">마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.</div>`;
       } else {
-        if (optEl) optEl.innerHTML = `<div class="vao-error">음성 분석 오류: ${e.message}</div>`;
+        if (optEl) optEl.innerHTML = `<div class="vao-error">음성 분석을 시작할 수 없습니다. (${e.message})<br>잠시 후 다시 시도해주세요.</div>`;
       }
     }
   },
@@ -14388,13 +14430,40 @@ const App = {
 
     // ★ v18.1: 심혈관 나이 보정 (얼굴 + 손가락 측정 통합)
     // Levine PhenoAge + Xiao 2020 HRV-생물학적나이 회귀 기반
-    const w_state = this.state.wellness;
+
+    // ★ v19.5: localStorage에서 최신 face/finger 데이터를 직접 참조
+    // (this.state.wellness는 앱 메모리 캐시 — 오래된 값일 수 있음)
+    let w_state = this.state.wellness;
+    try {
+      const raw = localStorage.getItem('wellness_data');
+      if (raw) {
+        const stored = JSON.parse(raw);
+        const now = Date.now();
+        const MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7일
+        // 더 최신 데이터가 있으면 우선 사용
+        ['face', 'finger', 'balance', 'gait', 'tremor', 'reaction'].forEach(k => {
+          if (stored[k]?.t && (now - stored[k].t) < MAX_AGE) {
+            // 저장된 것이 메모리보다 최신이거나, 메모리에 없으면 사용
+            if (!w_state[k] || stored[k].t >= (w_state[k].t || 0)) {
+              w_state = { ...w_state, [k]: stored[k] };
+            }
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[v19.5 BodyAge] localStorage 참조 실패, 메모리 사용:', e.message);
+    }
+
     let cvAdj = 0; // 심혈관 보정값
     let cvMeasured = false;
 
     // 얼굴 및 손가락 측정에서 HR/HRV 추출 (더 최근 것 우선)
     const faceW   = w_state.face   || null;
     const fingerW = w_state.finger || null;
+
+    // 디버그 로그
+    console.log('[v19.5 BodyAge] face:', faceW ? `HR=${faceW.hr} RMSSD=${faceW.rmssd}` : '없음',
+                '/ finger:', fingerW ? `HR=${fingerW.hr} RMSSD=${fingerW.rmssd}` : '없음');
 
     // HR 기여 (Steptoe 2007: 안정 시 HR 60 이하 = 심혈관 건강)
     const hrVal = fingerW?.hr || faceW?.hr || null;

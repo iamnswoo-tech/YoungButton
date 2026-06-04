@@ -8512,6 +8512,39 @@ body::before {
 .vao-countdown { font-size: 36px; font-weight: 900; color: #059669; font-variant-numeric: tabular-nums; }
 .vao-error { font-size: 12px; color: #EF4444; padding: 8px; text-align: center; }
 
+/* ★ v19.5: 마이크 권한 안내 UI */
+.vao-permission-guide {
+  padding: 16px; background: #FFF7ED;
+  border-radius: var(--radius); border: 1px solid rgba(245,158,11,.25);
+}
+.vao-pg-icon  { font-size: 32px; text-align: center; margin-bottom: 8px; }
+.vao-pg-title { font-size: 15px; font-weight: 900; color: #92400E; text-align: center; margin-bottom: 5px; }
+.vao-pg-desc  { font-size: 12px; color: #B45309; text-align: center; margin-bottom: 14px; line-height: 1.5; }
+.vao-pg-steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.vao-pg-step  {
+  display: flex; align-items: flex-start; gap: 9px;
+  font-size: 12px; color: #78350F; line-height: 1.5;
+}
+.vao-pg-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #F59E0B; color: #fff;
+  font-size: 10px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px;
+}
+.vao-pg-alt {
+  font-size: 11px; color: #92400E; line-height: 1.7;
+  background: rgba(245,158,11,.08); border-radius: 8px;
+  padding: 9px 11px; margin-bottom: 12px;
+}
+.vao-pg-retry {
+  width: 100%; padding: 11px; border: none; border-radius: var(--radius);
+  background: #F59E0B; color: #fff;
+  font-family: var(--sans); font-size: 13px; font-weight: 800;
+  cursor: pointer; transition: background var(--dur-fast);
+}
+.vao-pg-retry:active { background: #D97706; }
+
 /* 음성 분석 결과 그리드 */
 .voice-metrics-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin: 10px 0; }
 .vm-item { text-align: center; background: var(--bg-soft); border-radius: var(--radius); padding: 9px 6px; }
@@ -9916,7 +9949,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
         <div class="mcg-icon finger">☝️</div>
         <div class="mcg-content">
           <div class="mcg-title">손가락 측정</div>
-          <div class="mcg-desc">플래시 + 카메라로 정밀 HRV 측정</div>
+          <div class="mcg-desc">카메라 렌즈에 손가락을 대고 정밀 HRV 측정</div>
           <div class="mcg-meta">
             <span class="mcg-time">⏱ 약 30초</span>
           </div>
@@ -10749,8 +10782,8 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="finger-hero-badge">CLINICAL GRADE</div>
       <div class="finger-hero-title">밝은 조명 아래에서<br>측정해주세요</div>
       <div class="finger-hero-sub">
-        스마트폰 플래시보다 외부 조명이 더 정확합니다<br>
-        자연광이나 밝은 실내등 앞에서 측정하세요
+        자연광이나 밝은 실내 조명이 가장 정확합니다<br>
+        외부 조명만으로도 충분히 측정 가능합니다
       </div>
     </div>
 
@@ -10764,7 +10797,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
           <ul>
             <li>☀️ 자연광이 들어오는 창가</li>
             <li>💡 밝은 실내 조명 아래</li>
-            <li>🪟 조명을 등지지 않고 마주보기</li>
+            <li>🪟 조명을 마주보고 측정</li>
           </ul>
         </div>
         <div class="finger-env-bad">
@@ -10772,7 +10805,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
           <div class="feg-label">피하세요</div>
           <ul>
             <li>🌙 어두운 방·야간</li>
-            <li>🔦 스마트폰 플래시 의존</li>
+            <li>☀️ 직사광선(너무 밝음)</li>
             <li>🌪️ 흔들리며 측정</li>
           </ul>
         </div>
@@ -10817,10 +10850,10 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
     <!-- ★ v16.3: 플래시는 작은 보조 옵션으로 강등 -->
     <div class="finger-flash-aux">
-      <div class="ffa-icon">🔦</div>
+      <div class="ffa-icon">💡</div>
       <div class="ffa-body">
-        <div class="ffa-title">어두운 환경에서만 플래시 사용</div>
-        <div class="ffa-sub">측정 화면에서 직접 켤 수 있어요. 다만 외부 조명이 더 정확합니다.</div>
+        <div class="ffa-title">어두운 환경에서만 플래시 보조 사용</div>
+        <div class="ffa-sub">실내 조명이 충분하면 플래시 없이 더 정확합니다. 너무 밝은 직사광선도 피해주세요.</div>
       </div>
     </div>
 

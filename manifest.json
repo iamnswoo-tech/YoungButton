@@ -1,7 +1,7 @@
 {
-  "name": "건강 측정 v19.4",
-  "short_name": "건강측정 v19.4",
-  "description": "v19.4 — 동공 변동성+표정 AU 분석+음성 분석(선택) 추가",
+  "name": "건강 측정 v19.5",
+  "short_name": "건강측정 v19.5",
+  "description": "v19.5 — 혈관나이 안정화·신체나이 실측 반영·플래시 안내 개선·음성 권한 안내",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
