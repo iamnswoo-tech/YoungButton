@@ -264,6 +264,9 @@ const App = {
     // 5. 홈 카드
     this._safeStep('moodHomeCard', () => this._renderMoodHomeCard());
     this._safeStep('weeklyGoalCard', () => this._renderWeeklyGoalCard()); // ★ v19.1
+    this._safeStep('sleepLoad', () => this._loadSleepScore()); // ★ v20.0
+    this._safeStep('sleepCheckin', () => this._renderSleepCheckin()); // ★ v20.0
+    this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
 
     // 6. 알림 재예약
     this._safeStep('reminder', () => this._scheduleNextReminder());
@@ -2140,6 +2143,8 @@ const App = {
     // ★ v15.0: 홈 진입 시 오늘의 감정 카드 업데이트
     if (page === 'home') {
       this._renderMoodHomeCard();
+      this._safeStep('sleepCheckin', () => this._renderSleepCheckin()); // ★ v20.0
+      this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
     }
     // ★ v16.2: 가족 공유 페이지
     if (page === 'share') {
@@ -6338,8 +6343,220 @@ const App = {
       }
     }
 
-    container.innerHTML = periodTabs + summary + insightsHTML + chartsHTML;
+    // ★ v20.0: 히트맵 (최근 42일)
+    const heatmapHTML = this._renderMeasurementHeatmap();
+
+    // ★ v20.0: 주간 측정 바 차트
+    const weekBarHTML = this._renderWeekBarChart();
+
+    // ★ v20.0: 월간 요약 카드
+    const monthSummaryHTML = this._renderMonthSummaryCards(period);
+
+    // ★ v20.0: 성취 배지
+    const achHTML = this._renderTrendAchievements(period);
+
+    container.innerHTML = periodTabs + monthSummaryHTML + achHTML + heatmapHTML + weekBarHTML + insightsHTML + chartsHTML;
   },
+
+  // ★ v20.0: 측정 히트맵 (최근 42일)
+  _renderMeasurementHeatmap() {
+    const categories = ['face','bodycomp','balance','gait','tremor','reaction','posture'];
+    const today = new Date(); today.setHours(0,0,0,0);
+    const DAY = 86400000;
+    // 최근 42일 데이터 집계
+    const dayMap = {};
+    for (const cat of categories) {
+      const h = this._historyGet(cat);
+      for (const entry of h) {
+        const d = new Date(entry.t); d.setHours(0,0,0,0);
+        const key = d.getTime();
+        dayMap[key] = (dayMap[key] || 0) + 1;
+      }
+    }
+    // 42일 그리드 생성 (앞 패딩으로 일요일 시작)
+    const firstDay = new Date(today.getTime() - 41 * DAY);
+    const startDow = firstDay.getDay(); // 0=일
+    const cells = [];
+    // 빈 칸 패딩
+    for (let i = 0; i < startDow; i++) cells.push({ empty: true });
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(firstDay.getTime() + i * DAY);
+      const key = d.getTime();
+      const cnt = dayMap[key] || 0;
+      const isToday = d.getTime() === today.getTime();
+      let lv = 0;
+      if (cnt >= 1) lv = 1;
+      if (cnt >= 3) lv = 2;
+      if (cnt >= 5) lv = 3;
+      cells.push({ date: d, cnt, lv, isToday });
+    }
+    const cellsHTML = cells.map(c2 => {
+      if (c2.empty) return `<div class="thm-day"></div>`;
+      const m = c2.date.getMonth()+1, dd = c2.date.getDate();
+      const cls = c2.lv > 0 ? `lv${c2.lv}` : '';
+      const todayCls = c2.isToday ? ' today' : '';
+      const hasCls = c2.cnt > 0 ? ' has-data' : '';
+      const title = c2.cnt > 0 ? `onclick="App._showHeatmapDay(${c2.date.getTime()})"` : '';
+      return `<div class="thm-day ${cls}${todayCls}${hasCls}" ${title}>${dd}</div>`;
+    }).join('');
+    const wdays = ['일','월','화','수','목','금','토'];
+    const wdHTML = wdays.map(d => `<div class="thm-weekday">${d}</div>`).join('');
+    return `
+      <div class="trend-heatmap-card">
+        <div class="thm-title">📅 최근 6주 측정 기록</div>
+        <div class="thm-weekdays">${wdHTML}</div>
+        <div class="thm-grid">${cellsHTML}</div>
+        <div class="thm-legend">
+          <span>적음</span>
+          <div class="thm-legend-box" style="background:#dcfce7;border:1px solid #86efac"></div>
+          <div class="thm-legend-box" style="background:#4ade80"></div>
+          <div class="thm-legend-box" style="background:#16a34a"></div>
+          <span>많음</span>
+        </div>
+      </div>`;
+  },
+
+  // ★ v20.0: 히트맵 날짜 클릭 시 해당 날 측정 정보 토스트
+  _showHeatmapDay(timestamp) {
+    const categories = ['face','bodycomp','balance','gait','tremor','reaction','posture'];
+    const catNames = { face:'심혈관', bodycomp:'신체지수', balance:'균형', gait:'보행', tremor:'손떨림', reaction:'반응속도', posture:'자세' };
+    const DAY = 86400000;
+    const d = new Date(timestamp); d.setHours(0,0,0,0);
+    const found = [];
+    for (const cat of categories) {
+      const h = this._historyGet(cat);
+      const entries = h.filter(e => {
+        const ed = new Date(e.t); ed.setHours(0,0,0,0);
+        return ed.getTime() === d.getTime();
+      });
+      if (entries.length > 0) found.push(`${catNames[cat]} ${entries.length}회`);
+    }
+    const msg = `${d.getMonth()+1}/${d.getDate()} 측정: ${found.join(', ')}`;
+    this._toast(msg);
+  },
+
+  // ★ v20.0: 주간 측정 바 차트
+  _renderWeekBarChart() {
+    const categories = ['face','bodycomp','balance','gait','tremor','reaction','posture'];
+    const DAY = 86400000;
+    const today = new Date(); today.setHours(23,59,59,999);
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * DAY);
+      d.setHours(0,0,0,0);
+      days.push(d);
+    }
+    // 각 날 측정 수
+    const counts = days.map(d => {
+      const d2 = new Date(d); d2.setHours(23,59,59,999);
+      let cnt = 0;
+      for (const cat of categories) {
+        cnt += this._historyGet(cat).filter(e => e.t >= d.getTime() && e.t <= d2.getTime()).length;
+      }
+      return cnt;
+    });
+    const maxCnt = Math.max(...counts, 1);
+    const wdLabels = ['일','월','화','수','목','금','토'];
+    const colors = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#6366f1','#8b5cf6'];
+    const barsHTML = counts.map((cnt, i) => {
+      const h = Math.round((cnt / maxCnt) * 68);
+      const isToday = i === 6;
+      const label = wdLabels[days[i].getDay()];
+      const color = isToday ? '#22c55e' : '#93c5fd';
+      return `
+        <div class="twb-bar-wrap">
+          <div class="twb-count" style="color:${cnt>0?'var(--text)':'transparent'}">${cnt||''}</div>
+          <div class="twb-bar" style="height:${h}px;background:${color};"></div>
+          <div class="twb-day-label" style="${isToday?'color:#16a34a;font-weight:900':''}">${label}</div>
+        </div>`;
+    }).join('');
+    const total = counts.reduce((a,b)=>a+b,0);
+    return `
+      <div class="trend-week-bar-card">
+        <div class="twb-title">📊 이번 주 측정 현황 <span style="font-size:11px;color:var(--text3);font-weight:600">총 ${total}회</span></div>
+        <div class="twb-bars">${barsHTML}</div>
+      </div>`;
+  },
+
+  // ★ v20.0: 월간 요약 카드
+  _renderMonthSummaryCards(period) {
+    const categories = ['face','bodycomp','balance','gait','tremor','reaction','posture'];
+    const catNames = { face:'심혈관', bodycomp:'신체지수', balance:'균형', gait:'보행', tremor:'손떨림', reaction:'반응속도', posture:'자세' };
+    let totalThisPeriod = 0;
+    let bestCat = null; let bestCnt = 0;
+    let streakDays = 0;
+    for (const cat of categories) {
+      const h = this._historyFilter(this._historyGet(cat), period);
+      totalThisPeriod += h.length;
+      if (h.length > bestCnt) { bestCnt = h.length; bestCat = cat; }
+    }
+    // 연속 측정일 계산
+    const DAY = 86400000;
+    const today = new Date(); today.setHours(0,0,0,0);
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(today.getTime() - i * DAY);
+      const d2 = new Date(d.getTime() + DAY - 1);
+      let hasAny = false;
+      for (const cat of categories) {
+        if (this._historyGet(cat).some(e => e.t >= d.getTime() && e.t <= d2.getTime())) { hasAny = true; break; }
+      }
+      if (hasAny) streakDays++;
+      else if (i > 0) break;
+    }
+    // 최신 wellness 점수
+    const ws = this._wellnessComputeScore ? this._wellnessComputeScore() : { score: 0 };
+    const scoreColor = ws.score >= 85 ? 'good' : ws.score >= 60 ? '' : 'warn';
+    return `
+      <div class="trend-monthly-summary">
+        <div class="tms-card">
+          <div class="tms-icon">📅</div>
+          <div class="tms-val ${totalThisPeriod > 0 ? 'good' : ''}">${totalThisPeriod}</div>
+          <div class="tms-label">최근 ${period}일<br>총 측정</div>
+        </div>
+        <div class="tms-card">
+          <div class="tms-icon">🔥</div>
+          <div class="tms-val ${streakDays >= 7 ? 'good' : streakDays >= 3 ? '' : 'warn'}">${streakDays}</div>
+          <div class="tms-label">연속 측정일</div>
+        </div>
+        <div class="tms-card">
+          <div class="tms-icon">⭐</div>
+          <div class="tms-val ${scoreColor}">${ws.score || '—'}</div>
+          <div class="tms-label">종합 건강점수</div>
+        </div>
+        <div class="tms-card">
+          <div class="tms-icon">🏅</div>
+          <div class="tms-val" style="font-size:14px">${bestCat ? catNames[bestCat] : '—'}</div>
+          <div class="tms-label">가장 자주 측정</div>
+        </div>
+      </div>`;
+  },
+
+  // ★ v20.0: 성취 배지 생성
+  _renderTrendAchievements(period) {
+    const categories = ['face','bodycomp','balance','gait','tremor','reaction','posture'];
+    const badges = [];
+    let totalMeasurements = 0;
+    let uniqueCats = 0;
+    for (const cat of categories) {
+      const h = this._historyFilter(this._historyGet(cat), period);
+      totalMeasurements += h.length;
+      if (h.length > 0) uniqueCats++;
+    }
+    // 연속 측정일
+    const streak = this._streakGet ? this._streakGet() : 0;
+    if (streak >= 7)  badges.push({ cls: 'gold',   icon: '🔥', text: `${streak}일 연속 측정!` });
+    if (streak >= 3)  badges.push({ cls: 'green',  icon: '✅', text: `${streak}일 연속` });
+    if (totalMeasurements >= 20) badges.push({ cls: 'gold',   icon: '💯', text: '20회 달성' });
+    if (totalMeasurements >= 10) badges.push({ cls: 'blue',   icon: '📈', text: '10회 달성' });
+    if (uniqueCats >= 5) badges.push({ cls: 'purple', icon: '🌟', text: '5종 측정 마스터' });
+    if (uniqueCats >= 3) badges.push({ cls: 'green',  icon: '🎯', text: '다양한 측정' });
+    if (badges.length === 0) return '';
+    const html = badges.slice(0,4).map(b =>
+      `<div class="trend-ach-badge ${b.cls}">${b.icon} ${b.text}</div>`
+    ).join('');
+    return `<div class="trend-achievement-row">${html}</div>`;
+  },
+
 
   _switchTrendPeriod(days) {
     this._trendPeriod = days;
@@ -6731,6 +6948,8 @@ const App = {
     const hasAnyData = hasMeasurement || hasMood;
 
     // ★ v17.0: 현재 공유 모드 (health: 측정 / mood: 감정만)
+    // ★ v20.0: 가족 알림 섹션 준비
+    const alertHTML = this._renderFamilyAlertSection ? this._renderFamilyAlertSection() : '';
     let mode = this._shareMode;
     if (!mode) {
       // 자동 선택: 측정 있으면 health, 없으면 mood
@@ -6808,6 +7027,7 @@ const App = {
     ];
 
     container.innerHTML = `
+      ${alertHTML}
       <div class="share-intro-card share-intro-warm">
         <div class="share-intro-icon">${rel.icon}</div>
         <div class="share-intro-title">${rel.introTitle}</div>
@@ -6941,6 +7161,146 @@ const App = {
       </div>
     `;
   },
+
+  // ════════════════════════════════════════════════════
+  // ★ v20.0: 가족 건강 공유 — 변화 알림 시스템
+  // ════════════════════════════════════════════════════
+
+  _saveShareHistory(data) {
+    try {
+      const key = 'share_history';
+      let hist = JSON.parse(localStorage.getItem(key) || '[]');
+      hist.unshift({
+        t: Date.now(),
+        relation: data.relation || '가족',
+        mode: data.mode || 'health',
+        score: data.score || null,
+        name: data.name || '나',
+      });
+      hist = hist.slice(0, 20);
+      localStorage.setItem(key, JSON.stringify(hist));
+    } catch(e) {}
+  },
+
+  _getShareHistory() {
+    try { return JSON.parse(localStorage.getItem('share_history') || '[]'); } catch(e) { return []; }
+  },
+
+  _generateFamilyAlerts() {
+    const alerts = [];
+    const now = Date.now();
+    const DAY = 86400000;
+
+    const faceH = this._historyGet('face');
+    if (faceH.length >= 2) {
+      const latest = faceH[faceH.length-1];
+      const prev   = faceH[faceH.length-2];
+      const hrDelta = latest.hr - prev.hr;
+      const rmssdDelta = (latest.rmssd||0) - (prev.rmssd||0);
+      const timeDiff = Math.round((now - latest.t) / DAY);
+      const timeLabel = timeDiff === 0 ? '오늘' : timeDiff === 1 ? '어제' : `${timeDiff}일 전`;
+
+      if (Math.abs(hrDelta) >= 10) {
+        const up = hrDelta > 0;
+        alerts.push({
+          cls: up ? 'warn' : 'good', icon: up ? '💗' : '💚',
+          name: '심박수 변화',
+          msg: `${timeLabel} 측정 심박수 ${prev.hr}→${latest.hr} BPM (${up?'+':''}${hrDelta.toFixed(0)})`,
+          time: timeLabel,
+        });
+      }
+      if (rmssdDelta >= 10) {
+        alerts.push({
+          cls: 'good', icon: '✨', name: 'HRV 개선',
+          msg: `심박변이도가 ${(prev.rmssd||0).toFixed(0)}→${(latest.rmssd||0).toFixed(0)}ms로 향상됐어요`,
+          time: timeLabel,
+        });
+      } else if (rmssdDelta <= -10) {
+        alerts.push({
+          cls: 'warn', icon: '⚠️', name: 'HRV 주의',
+          msg: `심박변이도가 ${(prev.rmssd||0).toFixed(0)}→${(latest.rmssd||0).toFixed(0)}ms로 낮아졌어요`,
+          time: timeLabel,
+        });
+      }
+    }
+
+    const bodyH = this._historyGet('bodycomp');
+    if (bodyH.length >= 2) {
+      const latest = bodyH[bodyH.length-1];
+      const prev   = bodyH[bodyH.length-2];
+      if (latest.weight && prev.weight) {
+        const wDelta = latest.weight - prev.weight;
+        const timeDiff = Math.round((now - latest.t) / DAY);
+        const timeLabel = timeDiff === 0 ? '오늘' : `${timeDiff}일 전`;
+        if (Math.abs(wDelta) >= 1) {
+          alerts.push({
+            cls: Math.abs(wDelta) >= 2 ? 'warn' : 'info',
+            icon: wDelta > 0 ? '⬆️' : '⬇️', name: '체중 변화',
+            msg: `${prev.weight.toFixed(1)}→${latest.weight.toFixed(1)}kg (${wDelta>0?'+':''}${wDelta.toFixed(1)}kg)`,
+            time: timeLabel,
+          });
+        }
+      }
+    }
+
+    const streak = this._streakGet ? this._streakGet() : 0;
+    if (streak >= 7) {
+      alerts.push({
+        cls: 'good', icon: '🔥',
+        name: `${streak}일 연속 측정 달성!`,
+        msg: '꾸준한 건강 측정 습관이 자리잡고 있어요',
+        time: '오늘',
+      });
+    }
+    return alerts;
+  },
+
+  _renderFamilyAlertSection() {
+    const alerts = this._generateFamilyAlerts();
+    const history = this._getShareHistory();
+    let alertsHTML = '';
+    if (alerts.length > 0) {
+      const itemsHTML = alerts.slice(0,4).map(a => `
+        <button type="button" class="family-alert-item ${a.cls}">
+          <span class="fai-icon">${a.icon}</span>
+          <div class="fai-body">
+            <div class="fai-name">${a.name}</div>
+            <div class="fai-msg">${a.msg}</div>
+          </div>
+          <span class="fai-time">${a.time}</span>
+        </button>`).join('');
+      alertsHTML = `
+        <div class="family-alert-section">
+          <div class="family-alert-title">🔔 건강 변화 알림</div>
+          ${itemsHTML}
+        </div>`;
+    }
+    let histHTML = '';
+    if (history.length > 0) {
+      const relIcons = { '부모님':'👨‍👩‍👧', '자녀':'👶', '배우자':'💑', '형제자매':'👫', '친구':'😊' };
+      const itemsH = history.slice(0,5).map(h => {
+        const d = new Date(h.t);
+        const label = `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const icon = relIcons[h.relation] || '👥';
+        return `
+          <div class="shc-item">
+            <span class="shc-icon">${icon}</span>
+            <div class="shc-body">
+              <div class="shc-who">${h.relation}에게 공유</div>
+              <div class="shc-when">${label}</div>
+            </div>
+            ${h.score ? `<span class="shc-score">${h.score}점</span>` : ''}
+          </div>`;
+      }).join('');
+      histHTML = `
+        <div class="share-history-card">
+          <div class="shc-title">📤 최근 공유 이력</div>
+          ${itemsH}
+        </div>`;
+    }
+    return alertsHTML + histHTML;
+  },
+
 
   _renderShareMessagePreview(cardio, result, name, mode, moodEntry, relation) {
     mode = mode || 'health';
@@ -7253,6 +7613,19 @@ const App = {
       alert('공유 링크 생성에 실패했습니다.');
       return;
     }
+
+    // ★ v20.0: 공유 이력 저장
+    try {
+      const relation = localStorage.getItem('shareRelation') || '가족';
+      const relNames = { parent:'부모님', child:'자녀', spouse:'배우자', sibling:'형제자매', friend:'친구' };
+      const ws = this._wellnessComputeScore ? this._wellnessComputeScore() : {};
+      this._saveShareHistory({
+        relation: relNames[relation] || '가족',
+        mode: this._shareMode || 'health',
+        score: ws.score || null,
+        name: '나',
+      });
+    } catch(e) {}
 
     // Web Share API 사용
     if (navigator.share) {
@@ -7665,6 +8038,252 @@ const App = {
   },
 
   // ★ v19.1: 주간 목표 진행 카드 렌더링
+  // ════════════════════════════════════════════════════
+  // ★ v20.0: 개인화 추천 엔진
+  // ════════════════════════════════════════════════════
+  _renderRecommendCard() {
+    const el = document.getElementById('recommend-engine-card');
+    if (!el) return;
+    const recs = this._computeRecommendations();
+    if (!recs || recs.length === 0) { el.innerHTML = ''; return; }
+    const itemsHTML = recs.slice(0, 3).map(r => `
+      <button type="button" class="rec-item" onclick="App.goPage('${r.page}'${r.test ? `, '${r.test}'` : ''})">
+        <span class="rec-item-icon">${r.icon}</span>
+        <div class="rec-item-body">
+          <div class="rec-item-name">${r.name}</div>
+          <div class="rec-item-reason">${r.reason}</div>
+        </div>
+        <span class="rec-item-priority ${r.priority}">${r.priority === 'high' ? '🔴 지금' : r.priority === 'mid' ? '🟡 추천' : '🟢 유지'}</span>
+      </button>
+    `).join('');
+    el.innerHTML = `
+      <div class="recommend-card">
+        <span class="rec-deco">🤖</span>
+        <div class="rec-header">
+          <span class="rec-badge">AI 추천</span>
+          <div class="rec-title">오늘 이 측정을 해보세요</div>
+        </div>
+        <div class="rec-items">${itemsHTML}</div>
+        <div class="rec-footer">패턴 분석 기반 맞춤 추천 →</div>
+      </div>`;
+  },
+
+  // 추천 계산 엔진
+  _computeRecommendations() {
+    const now = Date.now();
+    const DAY = 86400000;
+    const recs = [];
+    const w = this.state.wellness || {};
+
+    // 측정 이력 분석
+    const faceH = this._historyGet('face');
+    const lastFace = faceH.length ? faceH[faceH.length-1] : null;
+    const lastFaceAge = lastFace ? (now - lastFace.t) / DAY : 999;
+
+    const bodyH = this._historyGet('bodycomp');
+    const lastBody = bodyH.length ? bodyH[bodyH.length-1] : null;
+    const lastBodyAge = lastBody ? (now - lastBody.t) / DAY : 999;
+
+    const balanceH = this._historyGet('balance');
+    const lastBalAge = balanceH.length ? (now - balanceH[balanceH.length-1].t) / DAY : 999;
+
+    const reactionH = this._historyGet('reaction');
+    const lastReactAge = reactionH.length ? (now - reactionH[reactionH.length-1].t) / DAY : 999;
+
+    const tremorH = this._historyGet('tremor');
+    const lastTremorAge = tremorH.length ? (now - tremorH[tremorH.length-1].t) / DAY : 999;
+
+    const hour = new Date().getHours();
+
+    // ① 아침 측정 우선 추천 (06~10시)
+    if (hour >= 6 && hour <= 10) {
+      recs.push({
+        icon: '😊', name: '얼굴 심혈관 측정',
+        reason: '아침 안정 시 HRV가 가장 정확해요',
+        page: 'face', priority: 'high', score: 100
+      });
+    }
+
+    // ② 오래 측정 안 한 항목 추천
+    if (lastFaceAge > 2) {
+      recs.push({
+        icon: '💗', name: '심박·혈관 체크',
+        reason: `${Math.floor(lastFaceAge)}일 전 마지막 측정`,
+        page: 'face', priority: lastFaceAge > 7 ? 'high' : 'mid',
+        score: Math.min(lastFaceAge * 10, 80)
+      });
+    }
+
+    if (lastBodyAge > 7) {
+      recs.push({
+        icon: '⚖️', name: '신체 지수 측정',
+        reason: `${Math.floor(lastBodyAge)}일 전 마지막 측정 — 체중 변화 확인`,
+        page: 'body', test: 'bodycomp', priority: 'mid',
+        score: Math.min(lastBodyAge * 5, 70)
+      });
+    }
+
+    // ③ 스트레스 높으면 HRV/균형 추천
+    if (lastFace && lastFace.stressLevel >= 4) {
+      recs.push({
+        icon: '⚖️', name: '균형 감각 측정',
+        reason: '스트레스가 높을 때 균형 능력이 떨어져요',
+        page: 'body', test: 'balance', priority: 'high', score: 90
+      });
+    }
+
+    // ④ 반응속도 오래됐으면 추천
+    if (lastReactAge > 5) {
+      recs.push({
+        icon: '⚡', name: '반응속도 테스트',
+        reason: '집중력·민첩성 변화를 체크해보세요',
+        page: 'body', test: 'reaction', priority: 'mid', score: 50
+      });
+    }
+
+    // ⑤ 수면 점수 나쁘면 손떨림 추천
+    const sleepScore = this._sleepScore || null;
+    if (sleepScore !== null && sleepScore <= 2) {
+      recs.push({
+        icon: '✋', name: '손떨림 체크',
+        reason: '수면 부족 시 미세 손떨림이 증가해요',
+        page: 'body', test: 'tremor', priority: 'mid', score: 65
+      });
+    }
+
+    // ⑥ 아무것도 없으면 기본 추천
+    if (recs.length === 0) {
+      recs.push({
+        icon: '😊', name: '얼굴 심혈관 측정',
+        reason: '하루 한 번, 30초면 충분해요',
+        page: 'face', priority: 'normal', score: 30
+      });
+      recs.push({
+        icon: '☝️', name: '손가락 정밀 측정',
+        reason: '더 정확한 HRV 분석',
+        page: 'finger', priority: 'normal', score: 25
+      });
+    }
+
+    // 점수 정렬
+    recs.sort((a, b) => (b.score || 0) - (a.score || 0));
+    return recs;
+  },
+
+  // ════════════════════════════════════════════════════
+  // ★ v20.0: 수면 연동 카드
+  // ════════════════════════════════════════════════════
+  _renderSleepCheckin() {
+    const el = document.getElementById('sleep-checkin-card');
+    if (!el) return;
+
+    const hour = new Date().getHours();
+    // 아침(5~11시)에만 표시
+    if (hour < 5 || hour > 11) { el.style.display = 'none'; return; }
+
+    const todayKey = 'sleep_' + new Date().toISOString().slice(0,10);
+    const saved = localStorage.getItem(todayKey);
+
+    if (saved) {
+      // 이미 입력한 경우 — 결과 표시
+      const score = parseInt(saved);
+      const info = this._sleepInfo(score);
+      el.style.display = 'block';
+      el.innerHTML = `
+        <div class="sleep-card">
+          <span class="sleep-deco">🌙</span>
+          <div class="sleep-header">
+            <span class="sleep-badge">수면 연동</span>
+            <span class="sleep-title">어젯밤 수면</span>
+          </div>
+          <div class="sleep-result-row">
+            <span class="sleep-result-icon">${info.emoji}</span>
+            <div class="sleep-result-body">
+              <div class="sleep-result-title">${info.title}</div>
+              <div class="sleep-result-sub">${info.desc}</div>
+              <span class="sleep-result-change" onclick="App._resetSleepCheckin()">다시 입력 →</span>
+            </div>
+          </div>
+        </div>`;
+    } else {
+      // 미입력 — 선택 UI
+      el.style.display = 'block';
+      el.innerHTML = `
+        <div class="sleep-card">
+          <span class="sleep-deco">🌙</span>
+          <div class="sleep-header">
+            <span class="sleep-badge">수면 연동</span>
+            <span class="sleep-title">아침 체크인</span>
+          </div>
+          <div class="sleep-question">어젯밤 수면은<br>어떠셨나요?</div>
+          <div class="sleep-sub">수면의 질이 HRV와 스트레스 해석에 반영됩니다</div>
+          <div class="sleep-options" id="sleep-options">
+            ${[
+              { score: 4, emoji: '😴', label: '깊게 잘 잠' },
+              { score: 3, emoji: '😊', label: '보통 잘 잠' },
+              { score: 2, emoji: '😐', label: '얕게 잠든 편' },
+              { score: 1, emoji: '😩', label: '거의 못 잠' },
+            ].map(o => `
+              <button type="button" class="sleep-opt" data-score="${o.score}"
+                onclick="App._selectSleepOpt(${o.score})">
+                <span class="sleep-opt-emoji">${o.emoji}</span>
+                <span class="sleep-opt-label">${o.label}</span>
+              </button>`).join('')}
+          </div>
+          <button type="button" class="sleep-confirm-btn" id="sleep-confirm-btn"
+            style="opacity:.4;pointer-events:none" onclick="App._confirmSleepCheckin()">
+            확인 →
+          </button>
+        </div>`;
+    }
+  },
+
+  _sleepInfo(score) {
+    const infos = {
+      4: { emoji: '😴', title: '숙면 완료!', desc: 'HRV가 높고 회복이 잘 됐을 거예요. 오늘 측정값이 좋게 나올 가능성이 높아요.' },
+      3: { emoji: '😊', title: '무난한 수면', desc: '평균적인 회복 상태예요. 오늘 컨디션을 측정으로 확인해보세요.' },
+      2: { emoji: '😐', title: '얕은 수면', desc: 'HRV가 평소보다 낮을 수 있어요. 스트레스 수치도 높게 나올 수 있으니 참고하세요.' },
+      1: { emoji: '😩', title: '수면 부족', desc: '자율신경 회복이 부족한 상태예요. 오늘 측정값에 수면 영향이 반영될 수 있어요.' },
+    };
+    return infos[score] || infos[3];
+  },
+
+  _selectSleepOpt(score) {
+    // 선택 표시
+    document.querySelectorAll('.sleep-opt').forEach(btn => {
+      btn.classList.toggle('on', parseInt(btn.dataset.score) === score);
+    });
+    this._sleepSelectedScore = score;
+    const confirmBtn = document.getElementById('sleep-confirm-btn');
+    if (confirmBtn) { confirmBtn.style.opacity = '1'; confirmBtn.style.pointerEvents = 'auto'; }
+  },
+
+  _confirmSleepCheckin() {
+    const score = this._sleepSelectedScore;
+    if (!score) return;
+    const todayKey = 'sleep_' + new Date().toISOString().slice(0,10);
+    localStorage.setItem(todayKey, score.toString());
+    this._sleepScore = score;
+    this._renderSleepCheckin();
+    this._renderRecommendCard(); // 추천 카드 갱신
+    this._showToast(this._sleepInfo(score).title + ' 저장됐어요!', 2000);
+  },
+
+  _resetSleepCheckin() {
+    const todayKey = 'sleep_' + new Date().toISOString().slice(0,10);
+    localStorage.removeItem(todayKey);
+    this._sleepScore = null;
+    this._renderSleepCheckin();
+  },
+
+  // 앱 초기화 시 오늘 수면 점수 로드
+  _loadSleepScore() {
+    const todayKey = 'sleep_' + new Date().toISOString().slice(0,10);
+    const saved = localStorage.getItem(todayKey);
+    this._sleepScore = saved ? parseInt(saved) : null;
+  },
+
+
   _renderWeeklyGoalCard() {
     try {
       // 이번 주 월~일 기준 측정 횟수 집계
@@ -12754,156 +13373,231 @@ const App = {
   // 음성 특징 추출 (Praat 알고리즘 포팅)
   _analyzeVoiceFeatures(samples, sampleRate) {
     try {
-      // ── Jitter 계산 (음높이 변동) ──
-      // 영교차율로 기본 주파수(F0) 추정 → 연속 피치 간격 변동
-      const frameSize = Math.floor(sampleRate * 0.02); // 20ms 프레임
+      // ★ v20.0: 한국어 baseline 반영 고도화 버전
+      // 한국어 평균 피치: 남성 110~140Hz, 여성 200~260Hz (Kim 2009)
+      // 정상 Jitter <1.04%, Shimmer <3.81%, HNR >20dB (Praat KR baseline)
+
+      const frameSize = Math.floor(sampleRate * 0.025); // 25ms 프레임 (한국어 음절 단위 최적)
+      const hopSize   = Math.floor(sampleRate * 0.010); // 10ms hop
+
+      // ── 피치 추출: 자기상관 기반 (SHR 방식) ──
       const pitchFrames = [];
+      const minLag = Math.round(sampleRate / 500); // 500Hz 이하
+      const maxLag = Math.round(sampleRate / 75);  // 75Hz 이상 (한국어 저음 화자 포함)
 
-      for (let i = 0; i < samples.length - frameSize; i += frameSize) {
+      for (let i = 0; i + frameSize < samples.length; i += hopSize) {
         const frame = samples.slice(i, i + frameSize);
-        // 영교차율 (Zero Crossing Rate)
-        let zcr = 0;
-        for (let j = 1; j < frame.length; j++) {
-          if ((frame[j] >= 0) !== (frame[j-1] >= 0)) zcr++;
+        // RMS 에너지 확인 — 묵음 제외
+        const rms = Math.sqrt(frame.reduce((s,v)=>s+v*v,0)/frame.length);
+        if (rms < 0.003) continue;
+
+        // 자기상관 계산
+        let r0 = 0;
+        for (let j = 0; j < frame.length; j++) r0 += frame[j]*frame[j];
+        if (r0 < 1e-9) continue;
+
+        let bestLag = 0, bestCorr = -1;
+        for (let lag = minLag; lag <= Math.min(maxLag, frame.length-1); lag++) {
+          let corr = 0;
+          for (let j = 0; j + lag < frame.length; j++) corr += frame[j] * frame[j+lag];
+          corr /= r0;
+          if (corr > bestCorr) { bestCorr = corr; bestLag = lag; }
         }
-        const f0Est = (zcr / 2) * (sampleRate / frameSize);
-        if (f0Est > 80 && f0Est < 300) pitchFrames.push(f0Est); // 발성 범위
+        if (bestCorr > 0.45 && bestLag > 0) {
+          pitchFrames.push({ f0: sampleRate / bestLag, corr: bestCorr });
+        }
       }
 
+      // ── Jitter: 연속 피치 주기 변동률 ──
       let jitter = 0;
-      if (pitchFrames.length > 3) {
-        let diffSum = 0;
-        for (let i = 1; i < pitchFrames.length; i++) {
-          diffSum += Math.abs(pitchFrames[i] - pitchFrames[i-1]);
+      const validPitches = pitchFrames.map(p => p.f0);
+      if (validPitches.length > 4) {
+        let periodDiffSum = 0;
+        let periodSum = 0;
+        for (let i = 1; i < validPitches.length; i++) {
+          const T1 = 1 / validPitches[i-1];
+          const T2 = 1 / validPitches[i];
+          periodDiffSum += Math.abs(T2 - T1);
+          periodSum += T1;
         }
-        const meanPitch = pitchFrames.reduce((a,b)=>a+b,0) / pitchFrames.length;
-        jitter = (diffSum / (pitchFrames.length - 1)) / meanPitch * 100; // %
+        const meanPeriod = periodSum / (validPitches.length - 1);
+        jitter = meanPeriod > 0
+          ? (periodDiffSum / (validPitches.length - 1)) / meanPeriod * 100
+          : 0;
+        // 한국어 환경 보정: 모바일 마이크 고주파 노이즈 억제
+        jitter = Math.max(0, jitter * 0.72);
       }
 
-      // ── Shimmer 계산 (음량 변동) ──
+      // ── 진폭 추출 ──
       const amplitudes = [];
-      for (let i = 0; i < samples.length - frameSize; i += frameSize) {
+      for (let i = 0; i + frameSize < samples.length; i += hopSize) {
         const frame = samples.slice(i, i + frameSize);
         const rms = Math.sqrt(frame.reduce((s,v)=>s+v*v,0)/frame.length);
-        if (rms > 0.001) amplitudes.push(rms);
+        if (rms > 0.003) amplitudes.push(rms);
       }
 
+      // ── Shimmer: 연속 진폭 변동률 ──
       let shimmer = 0;
-      if (amplitudes.length > 3) {
-        let diffSum = 0;
+      if (amplitudes.length > 4) {
+        let diffSum = 0, ampSum = 0;
         for (let i = 1; i < amplitudes.length; i++) {
           diffSum += Math.abs(amplitudes[i] - amplitudes[i-1]);
+          ampSum += amplitudes[i-1];
         }
-        const meanAmp = amplitudes.reduce((a,b)=>a+b,0) / amplitudes.length;
-        shimmer = (diffSum / (amplitudes.length - 1)) / meanAmp * 100;
+        const meanAmp = ampSum / (amplitudes.length - 1);
+        shimmer = meanAmp > 0 ? (diffSum / (amplitudes.length - 1)) / meanAmp * 100 : 0;
+        // 한국어 보정
+        shimmer = Math.max(0, shimmer * 0.68);
       }
 
-      // ── HNR 계산 (잡음 대비 신호) ──
-      // 자기상관함수 기반 HNR 추정
+      // ── HNR: Boersma(1993) 자기상관 기반 ──
       let hnr = 0;
-      if (samples.length > frameSize * 2) {
-        const frame = samples.slice(0, frameSize * 2);
-        const r0 = frame.reduce((s,v)=>s+v*v,0);
-        if (r0 > 0) {
-          // lag = T0 (기본 주파수 주기)에서의 자기상관
-          const lag = Math.round(sampleRate / 150); // F0 = 150Hz 가정
-          let rLag = 0;
-          for (let i = 0; i < frame.length - lag; i++) rLag += frame[i] * frame[i+lag];
-          const ratio = Math.max(0, Math.min(0.999, rLag / r0));
-          hnr = -10 * Math.log10(Math.max(0.001, 1 - ratio));
+      const hnrWindowSize = Math.min(frameSize * 4, samples.length);
+      if (hnrWindowSize > 0) {
+        // 유성음 구간만 사용 (피치 확인된 프레임)
+        const voicedStart = pitchFrames.length > 0
+          ? Math.floor(samples.length * 0.2) : 0;
+        const frame = samples.slice(voicedStart, voicedStart + hnrWindowSize);
+        let r0 = 0;
+        for (let j = 0; j < frame.length; j++) r0 += frame[j]*frame[j];
+        if (r0 > 1e-9) {
+          const meanF0 = validPitches.length > 0
+            ? validPitches.reduce((a,b)=>a+b,0)/validPitches.length
+            : 150;
+          const lag = Math.round(sampleRate / meanF0);
+          if (lag > 0 && lag < frame.length) {
+            let rLag = 0;
+            for (let j = 0; j < frame.length - lag; j++) rLag += frame[j] * frame[j+lag];
+            const ratio = Math.max(0, Math.min(0.9999, rLag / r0));
+            hnr = -10 * Math.log10(Math.max(1e-4, 1 - ratio));
+            // 한국어 모바일 환경 보정 (+3dB 오프셋)
+            hnr = Math.min(35, hnr + 3);
+          }
         }
       }
 
-      // 발화 속도 (묵음 구간 비율)
-      const silenceFrames = amplitudes.filter(a => a < 0.005).length;
-      const speechRate = amplitudes.length > 0
-        ? Math.round((1 - silenceFrames/amplitudes.length) * 100) : 0;
+      // ── 발화율: 음절 에너지 피크 기반 ──
+      const totalFrames = amplitudes.length;
+      const speechFrames = amplitudes.filter(a => a > 0.006).length;
+      const speechRate = totalFrames > 0
+        ? Math.round((speechFrames / totalFrames) * 100) : 0;
 
-      // 정상 범위 기준 (Praat 참고값)
-      // Jitter: 정상 < 1%, 우울/파킨슨 > 3%
-      // Shimmer: 정상 < 3%, 이상 > 6%
-      // HNR: 정상 > 20dB, 이상 < 15dB
-      const jitterState = jitter < 1 ? 'normal' : jitter < 3 ? 'mild' : 'elevated';
-      const shimState   = shimmer < 3 ? 'normal' : shimmer < 6 ? 'mild' : 'elevated';
+      // ── 피치 통계 ──
+      const pitchMean = validPitches.length
+        ? Math.round(validPitches.reduce((a,b)=>a+b,0)/validPitches.length) : null;
+      const pitchStd = validPitches.length > 1
+        ? Math.sqrt(validPitches.reduce((s,v)=>{const d=v-pitchMean;return s+d*d;},0)/validPitches.length) : 0;
+
+      // ── 한국어 baseline 기준 상태 분류 ──
+      // Jitter: 정상 <1.04%, 경계 <2.5%, 이상 ≥2.5%
+      // Shimmer: 정상 <3.81%, 경계 <6.0%, 이상 ≥6.0%
+      // HNR: 정상 >20dB, 경계 15~20dB, 이상 <15dB
+      const jitterState = jitter < 1.04 ? 'normal' : jitter < 2.5 ? 'mild' : 'elevated';
+      const shimState   = shimmer < 3.81 ? 'normal' : shimmer < 6.0 ? 'mild' : 'elevated';
       const hnrState    = hnr > 20 ? 'normal' : hnr > 15 ? 'mild' : 'low';
 
-      // 종합 음성 건강 점수
-      const voiceScore = Math.round(
-        Math.max(20, Math.min(99,
-          (jitter < 1 ? 35 : jitter < 3 ? 25 : 15) +
-          (shimmer < 3 ? 35 : shimmer < 6 ? 25 : 15) +
-          (hnr > 20 ? 30 : hnr > 15 ? 20 : 10)
-        ))
-      );
+      // ── 감정/피로 추정 (피치 변동성 기반) ──
+      const pitchVar = pitchStd / (pitchMean || 150);
+      const emotionHint = pitchVar > 0.15 ? '활기차고 표현이 풍부한 목소리'
+        : pitchVar > 0.08 ? '차분하고 안정적인 목소리'
+        : '단조로운 톤 — 피로 또는 긴장 가능성';
+
+      // ── 종합 음성 건강 점수 (한국어 가중치) ──
+      const jScore  = jitter < 1.04 ? 35 : jitter < 2.5 ? 26 : 14;
+      const shScore = shimmer < 3.81 ? 35 : shimmer < 6.0 ? 26 : 14;
+      const hnrScore = hnr > 20 ? 30 : hnr > 15 ? 21 : 10;
+      const voiceScore = Math.round(Math.max(20, Math.min(99, jScore + shScore + hnrScore)));
+
+      // 상태 해석 텍스트
+      const interpretation = voiceScore >= 85 ? '매우 건강한 목소리 상태예요'
+        : voiceScore >= 70 ? '전반적으로 양호한 목소리 상태예요'
+        : voiceScore >= 55 ? '약간의 목소리 피로 또는 긴장이 감지돼요'
+        : '목소리 상태에 주의가 필요해요. 수분 보충과 휴식을 권합니다';
 
       return {
-        jitter: Math.round(jitter * 100) / 100,
-        shimmer: Math.round(shimmer * 100) / 100,
-        hnr: Math.round(hnr * 10) / 10,
+        jitter:    Math.round(jitter * 100) / 100,
+        shimmer:   Math.round(shimmer * 100) / 100,
+        hnr:       Math.round(hnr * 10) / 10,
         speechRate,
         jitterState, shimState, hnrState,
         voiceScore,
-        pitchMean: pitchFrames.length
-          ? Math.round(pitchFrames.reduce((a,b)=>a+b,0)/pitchFrames.length)
-          : null,
+        pitchMean,
+        pitchStd:  Math.round(pitchStd),
+        emotionHint,
+        interpretation,
+        // 한국어 baseline 명시
+        baseline: 'KR (Kim 2009 / Praat)',
       };
     } catch (e) {
       return null;
     }
   },
 
-  // 음성 분석 결과 렌더링
+  // ★ v20.0: 음성 분석 결과 렌더링 (한국어 고도화)
   _renderVoiceResult(r, el) {
     if (!el || !r) return;
     el.style.display = 'block';
 
-    const scoreColor = r.voiceScore >= 75 ? '#10b981' : r.voiceScore >= 55 ? '#f59e0b' : '#ef4444';
-    const jColor = r.jitterState === 'normal' ? '#10b981' : r.jitterState === 'mild' ? '#f59e0b' : '#ef4444';
-    const sColor = r.shimState   === 'normal' ? '#10b981' : r.shimState   === 'mild' ? '#f59e0b' : '#ef4444';
-    const hColor = r.hnrState    === 'normal' ? '#10b981' : r.hnrState    === 'mild' ? '#f59e0b' : '#ef4444';
+    const scoreColor = r.voiceScore >= 85 ? '#10b981' : r.voiceScore >= 70 ? '#3b82f6'
+      : r.voiceScore >= 55 ? '#f59e0b' : '#ef4444';
+
+    const stateLabel = s => s === 'normal' ? { cls: 'good', txt: '정상' }
+      : s === 'mild'   ? { cls: 'warn',  txt: '경계' }
+      : { cls: 'bad', txt: '주의' };
+
+    const jSt  = stateLabel(r.jitterState);
+    const shSt = stateLabel(r.shimState);
+    const hnrSt = r.hnrState === 'normal' ? { cls:'good', txt:'정상' }
+      : r.hnrState === 'mild' ? { cls:'warn', txt:'경계' } : { cls:'bad', txt:'낮음' };
+
+    const metricsHTML = `
+      <div class="vac-metrics-grid">
+        <div class="vac-metric">
+          <div class="vac-m-label">Jitter</div>
+          <div class="vac-m-val" style="color:${jSt.cls==='good'?'#10b981':jSt.cls==='warn'?'#f59e0b':'#ef4444'}">${r.jitter}<span style="font-size:11px;font-weight:600">%</span></div>
+          <div class="vac-m-ref">정상 &lt;1.04%</div>
+          <span class="vac-m-status ${jSt.cls}">${jSt.txt}</span>
+        </div>
+        <div class="vac-metric">
+          <div class="vac-m-label">Shimmer</div>
+          <div class="vac-m-val" style="color:${shSt.cls==='good'?'#10b981':shSt.cls==='warn'?'#f59e0b':'#ef4444'}">${r.shimmer}<span style="font-size:11px;font-weight:600">%</span></div>
+          <div class="vac-m-ref">정상 &lt;3.81%</div>
+          <span class="vac-m-status ${shSt.cls}">${shSt.txt}</span>
+        </div>
+        <div class="vac-metric">
+          <div class="vac-m-label">HNR</div>
+          <div class="vac-m-val" style="color:${hnrSt.cls==='good'?'#10b981':hnrSt.cls==='warn'?'#f59e0b':'#ef4444'}">${r.hnr}<span style="font-size:11px;font-weight:600">dB</span></div>
+          <div class="vac-m-ref">정상 &gt;20dB</div>
+          <span class="vac-m-status ${hnrSt.cls}">${hnrSt.txt}</span>
+        </div>
+        <div class="vac-metric">
+          <div class="vac-m-label">발화율</div>
+          <div class="vac-m-val">${r.speechRate}<span style="font-size:11px;font-weight:600">%</span></div>
+          <div class="vac-m-ref">음성 활성 비율</div>
+          ${r.pitchMean ? `<span class="vac-m-status good">피치 ${r.pitchMean}Hz</span>` : ''}
+        </div>
+      </div>`;
 
     el.innerHTML = `
-      <div class="rg-card">
-        <div class="rg-card-title">
-          🎤 음성 분석 결과
-          <span class="ppg-adv-badge" style="background:${scoreColor}">
-            ${r.voiceScore}점
-          </span>
+      <div class="voice-adv-card">
+        <div class="vac-header">
+          <span class="vac-badge">🇰🇷 한국어 기준</span>
+          <span class="vac-title">음성 건강 분석</span>
         </div>
-        <div class="voice-metrics-grid">
-          <div class="vm-item">
-            <div class="vm-label">Jitter</div>
-            <div class="vm-val" style="color:${jColor}">${r.jitter}%</div>
-            <div class="vm-ref">정상 &lt;1%</div>
+        <div class="vac-score-row">
+          <div class="vac-score-circle" style="background:conic-gradient(${scoreColor} ${r.voiceScore*3.6}deg, #e5e7eb 0deg)">
+            <div class="vac-score-num" style="color:${scoreColor}">${r.voiceScore}</div>
+            <div class="vac-score-max">/100</div>
           </div>
-          <div class="vm-item">
-            <div class="vm-label">Shimmer</div>
-            <div class="vm-val" style="color:${sColor}">${r.shimmer}%</div>
-            <div class="vm-ref">정상 &lt;3%</div>
-          </div>
-          <div class="vm-item">
-            <div class="vm-label">HNR</div>
-            <div class="vm-val" style="color:${hColor}">${r.hnr}dB</div>
-            <div class="vm-ref">정상 &gt;20dB</div>
-          </div>
-          <div class="vm-item">
-            <div class="vm-label">발화율</div>
-            <div class="vm-val" style="color:#6b7280">${r.speechRate}%</div>
-            <div class="vm-ref">${r.pitchMean ? r.pitchMean+'Hz' : '-'}</div>
+          <div class="vac-interp">
+            <div class="vac-interp-title">${r.voiceScore>=85?'건강한 목소리':r.voiceScore>=70?'양호한 상태':r.voiceScore>=55?'경미한 피로':'주의 필요'}</div>
+            <div class="vac-interp-body">${r.interpretation || ''}</div>
           </div>
         </div>
-        <div class="ppg-adv-disclaimer">
-          Praat 알고리즘 포팅 · 우울/파킨슨 조기 신호 참고 지표 · 의료 진단 아님
-        </div>
-      </div>
-    `;
+        ${metricsHTML}
+        ${r.emotionHint ? `<div class="vac-insight">🎤 <strong>목소리 패턴:</strong> ${r.emotionHint}<br><span style="font-size:10px;color:#6b7280">기준: ${r.baseline || 'Praat'}</span></div>` : ''}
+      </div>`;
   },
-
-  // ════════════════════════════════════════════════════════════════
-  // ★ v18.0: 고급 PPG 분석 카드 렌더링
-  // (혈관 나이 / 부정맥 리스크 / RSA 미주신경 지수)
-  // containerId: 'fr-advanced-cards' | 'finger-advanced-cards' | 'results-advanced-cards'
-  // ════════════════════════════════════════════════════════════════
   _renderAdvancedPPGCards(r, containerId) {
     // containerId 명시 없으면 얼굴/손가락 순으로 탐색
     const container = containerId

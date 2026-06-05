@@ -1,5 +1,5 @@
 // 건강 측정 v12.0 ME-rPPG — Service Worker
-const CACHE_NAME = 'healthmeas-v19-s06';
+const CACHE_NAME = 'healthmeas-v20-s01';
 const ASSETS = [
   './',
   './index.html',
