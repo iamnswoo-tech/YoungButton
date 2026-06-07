@@ -8532,6 +8532,7 @@ body::before {
 .vao-permission-guide {
   padding: 16px; background: #FFF7ED;
   border-radius: var(--radius); border: 1px solid rgba(245,158,11,.25);
+  overflow: visible; position: relative;
 }
 .vao-pg-icon  { font-size: 32px; text-align: center; margin-bottom: 8px; }
 .vao-pg-title { font-size: 15px; font-weight: 900; color: #92400E; text-align: center; margin-bottom: 5px; }
@@ -8554,12 +8555,15 @@ body::before {
   padding: 9px 11px; margin-bottom: 12px;
 }
 .vao-pg-retry {
-  width: 100%; padding: 11px; border: none; border-radius: var(--radius);
+  width: 100%; padding: 14px 11px; border: none; border-radius: var(--radius);
   background: #F59E0B; color: #fff;
-  font-family: var(--sans); font-size: 13px; font-weight: 800;
+  font-family: var(--sans); font-size: 14px; font-weight: 900;
   cursor: pointer; transition: background var(--dur-fast);
+  display: block; position: relative; z-index: 10;
+  -webkit-tap-highlight-color: rgba(0,0,0,.15);
+  touch-action: manipulation;
 }
-.vao-pg-retry:active { background: #D97706; }
+.vao-pg-retry:active { background: #D97706; transform: scale(.98); }
 
 /* 음성 분석 결과 그리드 */
 .voice-metrics-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin: 10px 0; }

@@ -13151,41 +13151,19 @@ const App = {
   // ★ v19.5: 마이크 권한 사전 체크 (Permissions API 활용)
   // 삼성 브라우저: getUserMedia 없이 먼저 권한 상태 확인
   async _faceCheckMicPermission() {
+    // ★ v20.1: 재시도 버튼 클릭 시 무조건 getUserMedia 직접 시도
+    // Permissions API의 'denied' 캐시 값을 믿지 않음
+    // → 사용자가 설정에서 허용 변경 후 눌렀을 때 정상 작동
     const readyEl  = document.getElementById('vao-state-ready');
     const deniedEl = document.getElementById('vao-state-denied');
     const recEl    = document.getElementById('vao-state-recording');
 
-    // Permissions API 지원 여부 확인
-    if (navigator.permissions && navigator.permissions.query) {
-      try {
-        const status = await navigator.permissions.query({ name: 'microphone' });
+    // UI: denied 숨기고 recording 상태로 전환
+    if (deniedEl) deniedEl.style.display = 'none';
+    if (readyEl)  readyEl.style.display  = 'none';
+    if (recEl)    recEl.style.display    = 'block';
 
-        if (status.state === 'denied') {
-          // 이미 거부된 상태 → 시스템 설정 안내
-          this._faceShowMicDeniedGuide(deniedEl, readyEl);
-          return;
-        }
-
-        // granted 또는 prompt → 바로 getUserMedia 진행
-        if (readyEl) readyEl.style.display = 'none';
-        if (recEl)   recEl.style.display = 'block';
-        await this._faceStartVoiceAnalysis();
-
-        // 권한 상태 변경 감지 (허용/거부 변경 시 자동 대응)
-        status.onchange = () => {
-          if (status.state === 'denied') {
-            this._faceShowMicDeniedGuide(deniedEl, readyEl);
-          }
-        };
-        return;
-      } catch (e) {
-        // Permissions API 에러 → 직접 getUserMedia 시도
-      }
-    }
-
-    // Permissions API 미지원 브라우저 → 바로 시도
-    if (readyEl) readyEl.style.display = 'none';
-    if (recEl)   recEl.style.display = 'block';
+    // 무조건 getUserMedia 시도 (Permissions API 우회)
     await this._faceStartVoiceAnalysis();
   },
 
@@ -13197,9 +13175,10 @@ const App = {
 
     // 기기/브라우저 감지
     const ua = navigator.userAgent;
-    const isSamsung = /SamsungBrowser/i.test(ua);
-    const isChrome  = /Chrome/i.test(ua) && !isSamsung;
-    const isIOS     = /iPhone|iPad/i.test(ua);
+    // ★ v20.1: Samsung 감지 강화 — 'Samsung' 단어도 체크
+    const isSamsung = /SamsungBrowser/i.test(ua) || /Samsung/i.test(ua);
+    const isChrome  = /Chrome/i.test(ua) && !isSamsung && !/EdgA|OPR|Brave/i.test(ua);
+    const isIOS     = /iPhone|iPad|iPod/i.test(ua);
     const isFirefox = /Firefox/i.test(ua);
 
     let guideSteps = '';
@@ -13207,15 +13186,15 @@ const App = {
       guideSteps = `
         <div class="vao-pg-step">
           <span class="vao-pg-num">1</span>
-          <span>삼성 인터넷 하단 <strong>탭 바 → ⋮ 메뉴</strong> 탭</span>
+          <span>주소창 왼쪽 <strong>자물쇠 🔒 아이콘</strong> 탭</span>
         </div>
         <div class="vao-pg-step">
           <span class="vao-pg-num">2</span>
-          <span><strong>설정 → 사이트 및 다운로드 → 사이트 권한 → 마이크</strong></span>
+          <span><strong>마이크</strong> 항목을 <strong>허용</strong>으로 변경</span>
         </div>
         <div class="vao-pg-step">
           <span class="vao-pg-num">3</span>
-          <span>현재 사이트를 찾아 <strong>허용</strong> 변경 후 새로고침</span>
+          <span>아래 <strong>권한 허용 후 다시 시도</strong> 버튼 탭</span>
         </div>`;
     } else if (isChrome) {
       guideSteps = `
@@ -13262,10 +13241,11 @@ const App = {
     }
 
     // 안드로이드 시스템 설정 경로 (브라우저 앱 권한)
+    const browserName = isSamsung ? '삼성 인터넷' : isChrome ? 'Chrome' : isFirefox ? 'Firefox' : '브라우저';
     const androidSystemGuide = isIOS ? '' : `
       <div class="vao-pg-alt">
-        📱 위 방법으로 안 될 경우:<br>
-        <strong>안드로이드 설정 → 앱 → ${isSamsung ? '인터넷' : '브라우저'} → 권한 → 마이크 → 허용</strong>
+        📱 위 방법으로도 안 될 경우:<br>
+        <strong>안드로이드 설정 → 앱 → ${browserName} → 권한 → 마이크 → 허용</strong>
       </div>`;
 
     deniedEl.innerHTML = `
@@ -13289,17 +13269,26 @@ const App = {
     const deniedEl = document.getElementById('vao-state-denied');
     const readyEl  = document.getElementById('vao-state-ready');
 
-    // 녹음 중 UI
-    if (recEl) recEl.innerHTML = `
-      <div class="vao-recording">
-        <div class="vao-mic-pulse">🎤</div>
-        <div class="vao-recording-text">"아~" 소리를 5초간 내주세요</div>
-        <div class="vao-countdown" id="vao-countdown">5</div>
-      </div>
-    `;
+    // ★ v20.1: 녹음 중 UI — 강제 표시 보장
+    if (recEl) {
+      recEl.style.display = 'block';
+      recEl.innerHTML = `
+        <div class="vao-recording">
+          <div class="vao-mic-pulse">🎤</div>
+          <div class="vao-recording-text">"아~" 소리를 5초간 내주세요</div>
+          <div class="vao-countdown" id="vao-countdown">5</div>
+        </div>
+      `;
+    }
+    if (deniedEl) deniedEl.style.display = 'none';
+    if (readyEl)  readyEl.style.display  = 'none';
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // ★ v20.1: 삼성 인터넷 대응 — exact:false 옵션 추가
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        video: false
+      });
 
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const analyser = audioCtx.createAnalyser();
@@ -13340,8 +13329,9 @@ const App = {
     } catch (e) {
       if (recEl) recEl.style.display = 'none';
 
-      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
-        // 거부 → 안내 UI 표시
+      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError' || e.name === 'SecurityError') {
+        // ★ v20.1: 거부 → 안내 UI 표시 (recEl 먼저 숨김)
+        if (recEl) recEl.style.display = 'none';
         this._faceShowMicDeniedGuide(deniedEl, readyEl);
       } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
         if (deniedEl) {
