@@ -13366,16 +13366,85 @@ const App = {
     if (!deniedEl) return;
     deniedEl.style.display = 'block';
 
-    // 기기/브라우저 감지
     const ua = navigator.userAgent;
-    // ★ v20.1: Samsung 감지 강화 — 'Samsung' 단어도 체크
     const isSamsung = /SamsungBrowser/i.test(ua) || /Samsung/i.test(ua);
     const isChrome  = /Chrome/i.test(ua) && !isSamsung && !/EdgA|OPR|Brave/i.test(ua);
     const isIOS     = /iPhone|iPad|iPod/i.test(ua);
     const isFirefox = /Firefox/i.test(ua);
+    const browserName = isSamsung ? '삼성 인터넷' : isChrome ? 'Chrome' : isFirefox ? 'Firefox' : '브라우저';
 
+    // ★ v20.3: PWA(바탕화면 설치 앱) 감지
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches
+               || window.navigator.standalone === true
+               || document.referrer.startsWith('android-app://');
+
+    let pwaWarning = '';
     let guideSteps = '';
-    if (isSamsung) {
+    let systemGuide = '';
+
+    if (isPWA && !isIOS) {
+      // ── 안드로이드 PWA: 주소창 없음 → 시스템 설정 직접 안내 ──
+      pwaWarning = `
+        <div class="vao-pg-pwa-badge">📲 바탕화면 앱 환경</div>
+        <div class="vao-pg-pwa-notice">홈화면 아이콘으로 실행하면 주소창이 없어서<br>자물쇠 아이콘 방식을 사용할 수 없어요.</div>`;
+
+      guideSteps = `
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">1</span>
+          <span>폰 홈 화면으로 나가서 <strong>설정 앱</strong> 열기</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">2</span>
+          <span><strong>앱</strong> (또는 애플리케이션 관리자) 탭</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">3</span>
+          <span>목록에서 <strong>${browserName}</strong> 찾아 탭</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">4</span>
+          <span><strong>권한 → 마이크 → 허용</strong> 선택</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">5</span>
+          <span>이 앱으로 돌아와 아래 <strong>다시 시도</strong> 버튼 탭</span>
+        </div>`;
+
+      systemGuide = isChrome ? `
+        <div class="vao-pg-alt vao-pg-alt-pwa">
+          💡 <strong>또는 크롬 브라우저에서 직접:</strong><br>
+          크롬 앱 열기 → 주소창에 아래 주소 입력<br>
+          <span class="vao-pg-url">chrome://settings/content/microphone</span><br>
+          → 차단된 목록에서 이 사이트 찾아 허용
+        </div>` : `
+        <div class="vao-pg-alt vao-pg-alt-pwa">
+          💡 <strong>또는 ${browserName} 앱을 직접 열어서:</strong><br>
+          주소창 자물쇠 🔒 → 마이크 → 허용 후 돌아오기
+        </div>`;
+
+    } else if (isPWA && isIOS) {
+      // ── iOS PWA (홈화면 추가) ──
+      pwaWarning = `
+        <div class="vao-pg-pwa-badge">📲 홈화면 추가 앱 환경</div>`;
+      guideSteps = `
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">1</span>
+          <span>iPhone <strong>설정 앱</strong> 열기</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">2</span>
+          <span><strong>Safari</strong> 탭</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">3</span>
+          <span><strong>마이크 → 허용</strong> 선택</span>
+        </div>
+        <div class="vao-pg-step">
+          <span class="vao-pg-num">4</span>
+          <span>앱으로 돌아와 아래 <strong>다시 시도</strong> 버튼 탭</span>
+        </div>`;
+
+    } else if (isSamsung) {
       guideSteps = `
         <div class="vao-pg-step">
           <span class="vao-pg-num">1</span>
@@ -13389,11 +13458,17 @@ const App = {
           <span class="vao-pg-num">3</span>
           <span>아래 <strong>권한 허용 후 다시 시도</strong> 버튼 탭</span>
         </div>`;
+      systemGuide = `
+        <div class="vao-pg-alt">
+          📱 위 방법으로도 안 될 경우:<br>
+          <strong>안드로이드 설정 → 앱 → 삼성 인터넷 → 권한 → 마이크 → 허용</strong>
+        </div>`;
+
     } else if (isChrome) {
       guideSteps = `
         <div class="vao-pg-step">
           <span class="vao-pg-num">1</span>
-          <span>주소창 왼쪽 <strong>자물쇠 🔒</strong> 또는 <strong>ⓘ</strong> 아이콘 탭</span>
+          <span>주소창 왼쪽 <strong>자물쇠 🔒</strong> 또는 <strong>ⓘ</strong> 탭</span>
         </div>
         <div class="vao-pg-step">
           <span class="vao-pg-num">2</span>
@@ -13403,6 +13478,12 @@ const App = {
           <span class="vao-pg-num">3</span>
           <span>페이지 <strong>새로고침</strong> 후 다시 시도</span>
         </div>`;
+      systemGuide = `
+        <div class="vao-pg-alt">
+          📱 위 방법으로도 안 될 경우:<br>
+          <strong>안드로이드 설정 → 앱 → Chrome → 권한 → 마이크 → 허용</strong>
+        </div>`;
+
     } else if (isIOS) {
       guideSteps = `
         <div class="vao-pg-step">
@@ -13411,17 +13492,18 @@ const App = {
         </div>
         <div class="vao-pg-step">
           <span class="vao-pg-num">2</span>
-          <span><strong>Safari → 마이크 → 허용</strong> 선택</span>
+          <span><strong>Safari → 마이크 → 허용</strong></span>
         </div>
         <div class="vao-pg-step">
           <span class="vao-pg-num">3</span>
           <span>Safari로 돌아와 <strong>새로고침</strong> 후 다시 시도</span>
         </div>`;
+
     } else {
       guideSteps = `
         <div class="vao-pg-step">
           <span class="vao-pg-num">1</span>
-          <span>주소창 옆 <strong>자물쇠 🔒</strong> 또는 <strong>ⓘ</strong> 아이콘 탭</span>
+          <span>주소창 옆 <strong>자물쇠 🔒</strong> 또는 <strong>ⓘ</strong> 탭</span>
         </div>
         <div class="vao-pg-step">
           <span class="vao-pg-num">2</span>
@@ -13431,30 +13513,27 @@ const App = {
           <span class="vao-pg-num">3</span>
           <span><strong>새로고침</strong> 후 다시 시도</span>
         </div>`;
+      systemGuide = `
+        <div class="vao-pg-alt">
+          📱 위 방법으로도 안 될 경우:<br>
+          <strong>안드로이드 설정 → 앱 → ${browserName} → 권한 → 마이크 → 허용</strong>
+        </div>`;
     }
-
-    // 안드로이드 시스템 설정 경로 (브라우저 앱 권한)
-    const browserName = isSamsung ? '삼성 인터넷' : isChrome ? 'Chrome' : isFirefox ? 'Firefox' : '브라우저';
-    const androidSystemGuide = isIOS ? '' : `
-      <div class="vao-pg-alt">
-        📱 위 방법으로도 안 될 경우:<br>
-        <strong>안드로이드 설정 → 앱 → ${browserName} → 권한 → 마이크 → 허용</strong>
-      </div>`;
 
     deniedEl.innerHTML = `
       <div class="vao-permission-guide">
+        ${pwaWarning}
         <div class="vao-pg-icon">🎤</div>
         <div class="vao-pg-title">마이크 권한이 필요합니다</div>
         <div class="vao-pg-desc">음성 분석을 위해 마이크 접근 권한을 허용해주세요.</div>
         <div class="vao-pg-steps">${guideSteps}</div>
-        ${androidSystemGuide}
+        ${systemGuide}
         <button class="vao-pg-retry" type="button" onclick="App._faceCheckMicPermission()">
           🔄 권한 허용 후 다시 시도
         </button>
       </div>
     `;
   },
-
   async _faceStartVoiceAnalysis() {
     const optEl    = document.getElementById('voice-analysis-opt');
     const resultEl = document.getElementById('voice-result-card');

@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>건강 측정 v20 — ME-rPPG</title>
+<title>건강 측정 v19 — ME-rPPG</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -10304,6 +10304,39 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 .fusion-chip.face-good  { background: #dbeafe; color: #1e3a8a; border: 1px solid #93c5fd; }
 .fusion-chip.face-mid   { background: #f5f3ff; color: #5b21b6; border: 1px solid #c4b5fd; }
 .fusion-chip.face-low   { background: #fce7f3; color: #831843; border: 1px solid #f9a8d4; }
+
+/* ════════════════════════════════════════════════════
+   ★ v20.3: PWA 마이크 권한 안내 스타일
+   ════════════════════════════════════════════════════ */
+.vao-pg-pwa-badge {
+  display: inline-flex; align-items: center;
+  background: #3b82f6; color: #fff;
+  font-size: 11px; font-weight: 900;
+  padding: 4px 12px; border-radius: 999px;
+  margin: 0 auto 8px; letter-spacing: .03em;
+}
+.vao-pg-pwa-notice {
+  font-size: 12px; font-weight: 600;
+  color: #92400e; text-align: center;
+  background: #fef3c7; border: 1px solid #fcd34d;
+  border-radius: 10px; padding: 8px 12px;
+  margin-bottom: 14px; line-height: 1.5;
+}
+.vao-pg-alt-pwa {
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  color: #1e3a8a !important;
+}
+.vao-pg-url {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 11px; font-weight: 800;
+  color: #1d4ed8;
+  background: #dbeafe;
+  padding: 3px 8px; border-radius: 6px;
+  margin: 4px 0; word-break: break-all;
+  border: 1px solid #93c5fd;
+}
 </style>
 </head>
 <body>
@@ -10319,7 +10352,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </svg>
     </div>
     <div>
-      <div class="hd-logo">ResetButton</div>
+      <div class="hd-title">ResetButton</div>
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
