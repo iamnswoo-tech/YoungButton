@@ -10337,6 +10337,58 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   margin: 4px 0; word-break: break-all;
   border: 1px solid #93c5fd;
 }
+
+/* ════════════════════════════════════════════════════
+   ★ v20.5: 기본 정보(신체지수) 카드
+   ════════════════════════════════════════════════════ */
+.basic-info-prompt {
+  display: block; width: calc(100% - 32px);
+  margin: 0 16px 14px; padding: 18px;
+  background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
+  border: 2px solid #60a5fa; border-radius: 20px;
+  cursor: pointer; font-family: inherit; text-align: left;
+  box-shadow: 0 4px 16px rgba(59,130,246,.18);
+  position: relative; animation: bipPulse 2.5s ease-in-out infinite;
+}
+@keyframes bipPulse {
+  0%,100% { box-shadow: 0 4px 16px rgba(59,130,246,.18); }
+  50%     { box-shadow: 0 6px 24px rgba(59,130,246,.35); }
+}
+.basic-info-prompt:active { transform: scale(.98); }
+.bip-badge {
+  display: inline-block; font-size: 11px; font-weight: 900;
+  color: #fff; background: #2563eb;
+  padding: 4px 12px; border-radius: 999px; margin-bottom: 10px;
+  letter-spacing: .03em;
+}
+.bip-main { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.bip-icon { font-size: 34px; flex-shrink: 0; }
+.bip-body { flex: 1; }
+.bip-title { font-size: 16px; font-weight: 900; color: #1e3a8a; margin-bottom: 5px; letter-spacing: -.02em; }
+.bip-desc  { font-size: 12px; font-weight: 600; color: #1e40af; line-height: 1.5; }
+.bip-cta {
+  text-align: center; font-size: 14px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  padding: 12px; border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+
+/* 입력 완료 후 컴팩트 요약 */
+.basic-info-done {
+  display: flex; align-items: center; justify-content: space-between;
+  width: calc(100% - 32px); margin: 0 16px 12px; padding: 13px 16px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; cursor: pointer; font-family: inherit;
+  box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+.basic-info-done:active { transform: scale(.98); background: var(--bg); }
+.bid-left { display: flex; align-items: center; gap: 11px; }
+.bid-icon { font-size: 24px; }
+.bid-title { font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 2px; }
+.bid-sub   { font-size: 12px; font-weight: 600; color: var(--text3); }
+.bid-right { text-align: right; }
+.bid-bmi   { display: block; font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.bid-cat   { display: block; font-size: 11px; font-weight: 700; margin-top: 1px; }
 </style>
 </head>
 <body>
@@ -10352,7 +10404,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </svg>
     </div>
     <div>
-      <div class="hd-title">오늘의 활력 버튼</div>
+      <div class="hd-title">ResetButton</div>
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
@@ -10364,11 +10416,14 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   <div class="hero">
     <div class="hero-emoji">👨‍⚕️🩺</div>
     <div class="hero-title">나를 찾는 건강습관,<br>내 몸과 마음의 리셋버튼.</div>
-    <div class="hero-sub"><strong>ME-rPPG 딥러닝 AI</strong>가 10초 만에<br>심박·혈관·감정·자율신경을 분석합니다.</div>
+    <div class="hero-sub"><strong>내장된 ME-rPPG 딥러닝 AI</strong>가 10초 만에<br>심박·혈관·감정·자율신경을 분석합니다.</div>
   </div>
 
   <!-- ★ v13: 종합 Wellness Score 카드 (측정 후 자동 표시) -->
   <div id="wellness-card" class="wellness-card" style="display:none"></div>
+
+  <!-- ★ v20.5: 기본 정보(신체지수) 입력 유도 카드 — 미입력 시 최상단 표시 -->
+  <div id="basic-info-card" style="display:none"></div>
 
   <!-- ★ v15.1: 오늘의 감정 카드 (홈 첫 화면) - 강화된 디자인 -->
   <div id="mood-today-card" class="mood-card-v2" onclick="App.goPage('mood')">
@@ -11564,15 +11619,14 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 </nav>
 
 <footer>
-  <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
+  <div style="font-size:14px;color:#4b5563;var(--muted);text-align:center;line-height:1.5;padding:0 16px">
     🚀 Reset Button - 기획/개발:남승우 ‍🚀<br>
     rPPG 엔진: ME-rPPG (Apache 2.0)<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
-    <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
+    <span style="color:#4b5563;font-size:14px">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>
-
-  v19.0 · 얼굴/손가락/심리 + 신체 측정 분리<br>
-  ✉ Reset Button 문의: iamnsw@naver.com
+<span style="color:#4b5563;font-size:14px">
+  ✉ Reset Button 문의: iamnsw@naver.com</span>
 </footer>
 
 <script src="app.js"></script>

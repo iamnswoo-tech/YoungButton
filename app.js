@@ -266,6 +266,7 @@ const App = {
     this._safeStep('weeklyGoalCard', () => this._renderWeeklyGoalCard()); // ★ v19.1
     this._safeStep('sleepLoad', () => this._loadSleepScore()); // ★ v20.0
     this._safeStep('sleepCheckin', () => this._renderSleepCheckin()); // ★ v20.0
+    this._safeStep('basicInfoCard', () => this._renderBasicInfoCard()); // ★ v20.5
     this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
 
     // 6. 알림 재예약
@@ -1005,6 +1006,9 @@ const App = {
     }
     this._wellnessRender();
     this._safeStep('weeklyGoalRefresh', () => this._renderWeeklyGoalCard());
+    // ★ v20.5: 측정 완료 후 AI 추천 + 기본정보 카드 즉시 갱신
+    this._safeStep('recommendRefresh', () => this._renderRecommendCard());
+    this._safeStep('basicInfoRefresh', () => this._renderBasicInfoCard());
   },
 
   // ★ v14.3: 측정 히스토리 누적 저장
@@ -2144,6 +2148,7 @@ const App = {
     if (page === 'home') {
       this._renderMoodHomeCard();
       this._safeStep('sleepCheckin', () => this._renderSleepCheckin()); // ★ v20.0
+      this._safeStep('basicInfoCard', () => this._renderBasicInfoCard()); // ★ v20.5
       this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
     }
     // ★ v16.2: 가족 공유 페이지
@@ -2226,7 +2231,23 @@ const App = {
     // 신체 나이/피부 나이 카드
     let ageHTML = '';
     if (w.bodycomp && w.bodycomp.bodyAge) {
-      const bc = w.bodycomp;
+      // ★ v20.5: 최신 얼굴(혈관나이/HRV) 데이터로 피부나이 재계산
+      const bc = { ...w.bodycomp };
+      const recomputed = this._recomputeBodyAges ? this._recomputeBodyAges() : null;
+      if (recomputed && recomputed.updated) {
+        bc.skinAge = recomputed.skinAge;
+        bc.skinAgeDiff = recomputed.skinAgeDiff;
+        bc.skinAgeConfidence = recomputed.skinAgeConfidence;
+        bc.bodyAge = recomputed.bodyAge;
+        bc.bodyAgeConfidence = recomputed.bodyAgeConfidence;
+        // 저장값도 갱신 (다음 조회 시 일관성)
+        try {
+          this.state.wellness.bodycomp.skinAge = recomputed.skinAge;
+          this.state.wellness.bodycomp.skinAgeDiff = recomputed.skinAgeDiff;
+          this.state.wellness.bodycomp.skinAgeConfidence = recomputed.skinAgeConfidence;
+          localStorage.setItem('wellness_data', JSON.stringify(this.state.wellness));
+        } catch (e) {}
+      }
       const diff = bc.ageDiff || 0;
       const skinDiff = bc.skinAgeDiff || 0;
       const bodyColor = diff <= 0 ? '#22c55e' : diff <= 3 ? '#f59e0b' : '#ef4444';
@@ -8039,6 +8060,54 @@ const App = {
 
   // ★ v19.1: 주간 목표 진행 카드 렌더링
   // ════════════════════════════════════════════════════
+  // ★ v20.5: 기본 정보(신체지수) 입력 유도 카드
+  // 앱 시작 시 가장 먼저 입력해야 할 기본 정보
+  // ════════════════════════════════════════════════════
+  _renderBasicInfoCard() {
+    const el = document.getElementById('basic-info-card');
+    if (!el) return;
+    const w = this.state.wellness || {};
+    const bc = w.bodycomp;
+
+    // 이미 신체지수 입력 완료 → 컴팩트 요약 카드
+    if (bc && bc.height && bc.weight && bc.bmi) {
+      const bmiCat = bc.bmi < 18.5 ? '저체중' : bc.bmi < 23 ? '정상' : bc.bmi < 25 ? '과체중' : '비만';
+      const bmiColor = bc.bmi < 18.5 ? '#3b82f6' : bc.bmi < 23 ? '#22c55e' : bc.bmi < 25 ? '#f59e0b' : '#ef4444';
+      el.style.display = 'block';
+      el.innerHTML = `
+        <button type="button" class="basic-info-done" onclick="App.openBodyComposition()">
+          <div class="bid-left">
+            <span class="bid-icon">📏</span>
+            <div class="bid-text">
+              <div class="bid-title">내 기본 정보</div>
+              <div class="bid-sub">${bc.height}cm · ${bc.weight}kg · ${bc.age}세</div>
+            </div>
+          </div>
+          <div class="bid-right">
+            <span class="bid-bmi" style="color:${bmiColor}">BMI ${bc.bmi.toFixed(1)}</span>
+            <span class="bid-cat" style="color:${bmiColor}">${bmiCat}</span>
+          </div>
+        </button>`;
+      return;
+    }
+
+    // 미입력 → 강조 입력 유도 카드
+    el.style.display = 'block';
+    el.innerHTML = `
+      <button type="button" class="basic-info-prompt" onclick="App.openBodyComposition()">
+        <div class="bip-badge">시작 전 필수</div>
+        <div class="bip-main">
+          <span class="bip-icon">📏</span>
+          <div class="bip-body">
+            <div class="bip-title">먼저 기본 정보를 입력해주세요</div>
+            <div class="bip-desc">키·체중·나이를 입력하면 모든 측정 결과가<br>더 정확해지고 신체 나이를 확인할 수 있어요</div>
+          </div>
+        </div>
+        <div class="bip-cta">기본 정보 입력하기 →</div>
+      </button>`;
+  },
+
+  // ════════════════════════════════════════════════════
   // ★ v20.0: 개인화 추천 엔진
   // ════════════════════════════════════════════════════
   _renderRecommendCard() {
@@ -8075,28 +8144,36 @@ const App = {
     const recs = [];
     const w = this.state.wellness || {};
 
+    // ★ v20.5: 오늘 측정 완료 여부 판단 헬퍼
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const measuredToday = (cat) => {
+      const h = this._historyGet(cat);
+      if (!h.length) return false;
+      return h[h.length-1].t >= todayStart.getTime();
+    };
+
     // 측정 이력 분석
     const faceH = this._historyGet('face');
     const lastFace = faceH.length ? faceH[faceH.length-1] : null;
     const lastFaceAge = lastFace ? (now - lastFace.t) / DAY : 999;
+    const faceToday = measuredToday('face');
 
     const bodyH = this._historyGet('bodycomp');
     const lastBody = bodyH.length ? bodyH[bodyH.length-1] : null;
     const lastBodyAge = lastBody ? (now - lastBody.t) / DAY : 999;
 
-    const balanceH = this._historyGet('balance');
-    const lastBalAge = balanceH.length ? (now - balanceH[balanceH.length-1].t) / DAY : 999;
-
     const reactionH = this._historyGet('reaction');
     const lastReactAge = reactionH.length ? (now - reactionH[reactionH.length-1].t) / DAY : 999;
+    const reactionToday = measuredToday('reaction');
 
-    const tremorH = this._historyGet('tremor');
-    const lastTremorAge = tremorH.length ? (now - tremorH[tremorH.length-1].t) / DAY : 999;
+    const balanceToday = measuredToday('balance');
+    const tremorToday = measuredToday('tremor');
+    const fingerToday = measuredToday('finger');
 
     const hour = new Date().getHours();
 
-    // ① 아침 측정 우선 추천 (06~10시)
-    if (hour >= 6 && hour <= 10) {
+    // ① 아침 측정 우선 추천 (06~10시) — 단, 오늘 아직 얼굴 측정 안 했을 때만
+    if (hour >= 6 && hour <= 10 && !faceToday) {
       recs.push({
         icon: '😊', name: '얼굴 심혈관 측정',
         reason: '아침 안정 시 HRV가 가장 정확해요',
@@ -8104,8 +8181,8 @@ const App = {
       });
     }
 
-    // ② 오래 측정 안 한 항목 추천
-    if (lastFaceAge > 2) {
+    // ② 오래 측정 안 한 항목 추천 — 오늘 측정 안 했고 2일 이상 경과
+    if (lastFaceAge > 2 && !faceToday) {
       recs.push({
         icon: '💗', name: '심박·혈관 체크',
         reason: `${Math.floor(lastFaceAge)}일 전 마지막 측정`,
@@ -8123,8 +8200,8 @@ const App = {
       });
     }
 
-    // ③ 스트레스 높으면 HRV/균형 추천
-    if (lastFace && lastFace.stressLevel >= 4) {
+    // ③ 스트레스 높으면 균형 추천 — 오늘 균형 측정 안 했을 때만
+    if (lastFace && lastFace.stressLevel >= 4 && !balanceToday) {
       recs.push({
         icon: '⚖️', name: '균형 감각 측정',
         reason: '스트레스가 높을 때 균형 능력이 떨어져요',
@@ -8132,8 +8209,8 @@ const App = {
       });
     }
 
-    // ④ 반응속도 오래됐으면 추천
-    if (lastReactAge > 5) {
+    // ④ 반응속도 오래됐으면 추천 — 오늘 측정 안 했을 때만
+    if (lastReactAge > 5 && !reactionToday) {
       recs.push({
         icon: '⚡', name: '반응속도 테스트',
         reason: '집중력·민첩성 변화를 체크해보세요',
@@ -8141,9 +8218,9 @@ const App = {
       });
     }
 
-    // ⑤ 수면 점수 나쁘면 손떨림 추천
+    // ⑤ 수면 점수 나쁘면 손떨림 추천 — 오늘 측정 안 했을 때만
     const sleepScore = this._sleepScore || null;
-    if (sleepScore !== null && sleepScore <= 2) {
+    if (sleepScore !== null && sleepScore <= 2 && !tremorToday) {
       recs.push({
         icon: '✋', name: '손떨림 체크',
         reason: '수면 부족 시 미세 손떨림이 증가해요',
@@ -8151,21 +8228,37 @@ const App = {
       });
     }
 
-    // ⑥ 아무것도 없으면 기본 추천
+    // ⑥ 추천할 게 없을 때 (오늘 주요 측정 다 함)
     if (recs.length === 0) {
-      recs.push({
-        icon: '😊', name: '얼굴 심혈관 측정',
-        reason: '하루 한 번, 30초면 충분해요',
-        page: 'face', priority: 'normal', score: 30
-      });
-      recs.push({
-        icon: '☝️', name: '손가락 정밀 측정',
-        reason: '더 정확한 HRV 분석',
-        page: 'finger', priority: 'normal', score: 25
-      });
+      // 오늘 얼굴 측정을 했으면 → 다른 측정 권유 or 격려
+      if (faceToday || fingerToday) {
+        if (!measuredToday('bodycomp') && lastBodyAge > 3) {
+          recs.push({
+            icon: '⚖️', name: '신체 지수 확인',
+            reason: '오늘 심혈관 측정 완료! 신체 지수도 확인해보세요',
+            page: 'body', test: 'bodycomp', priority: 'normal', score: 40
+          });
+        }
+        recs.push({
+          icon: '🎉', name: '오늘 측정 완료!',
+          reason: '주요 건강 측정을 마쳤어요. 트렌드에서 변화를 확인해보세요',
+          page: 'trends', priority: 'normal', score: 20
+        });
+      } else {
+        // 오늘 아무것도 안 했으면 기본 추천
+        recs.push({
+          icon: '😊', name: '얼굴 심혈관 측정',
+          reason: '하루 한 번, 30초면 충분해요',
+          page: 'face', priority: 'normal', score: 30
+        });
+        recs.push({
+          icon: '☝️', name: '손가락 정밀 측정',
+          reason: '더 정확한 HRV 분석',
+          page: 'finger', priority: 'normal', score: 25
+        });
+      }
     }
 
-    // 점수 정렬
     recs.sort((a, b) => (b.score || 0) - (a.score || 0));
     return recs;
   },
@@ -15387,6 +15480,119 @@ const App = {
       item.classList.toggle('near', dist === 1);
       item.classList.toggle('far', dist >= 2);
     });
+  },
+
+  // ★ v20.5: 신체나이/피부나이 재계산 헬퍼
+  // 결과 페이지에서 최신 얼굴(혈관나이/HRV) 데이터로 다시 계산
+  // 신체지수를 먼저 측정하고 나중에 얼굴 측정한 경우에도 최신값 반영
+  _recomputeBodyAges() {
+    const w = this.state.wellness || {};
+    const bc = w.bodycomp;
+    if (!bc || !bc.age || !bc.height || !bc.weight) return null;
+
+    // 최신 face/finger 데이터 (localStorage 7일 내 최신 병합)
+    let faceW = w.face || null;
+    let fingerW = w.finger || null;
+    try {
+      const raw = localStorage.getItem('wellness_data');
+      if (raw) {
+        const stored = JSON.parse(raw);
+        const now = Date.now();
+        const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+        if (stored.face?.t && (now - stored.face.t) < MAX_AGE) {
+          if (!faceW || stored.face.t >= (faceW.t || 0)) faceW = stored.face;
+        }
+        if (stored.finger?.t && (now - stored.finger.t) < MAX_AGE) {
+          if (!fingerW || stored.finger.t >= (fingerW.t || 0)) fingerW = stored.finger;
+        }
+      }
+    } catch (e) {}
+
+    const age = bc.age;
+    const bmi = bc.bmi;
+    const hrVal = fingerW?.hr || faceW?.hr || null;
+    const rmssdVal = fingerW?.rmssd || faceW?.rmssd || null;
+    const stressVal = fingerW?.stressIndex || faceW?.stressIdx || null;
+    const vascularAgeData = faceW?.vascularAge || null;
+    const rsaVal = faceW?.rsaIndex ?? null;
+    const respRate = faceW?.respRate || null;
+
+    // ── 피부 나이 재계산 (원본 로직과 동일) ──
+    let skinAge = age;
+    if (vascularAgeData?.estimatedAge) {
+      const vaDelta = vascularAgeData.estimatedAge - age;
+      skinAge += vaDelta * 0.40;
+    } else if (hrVal) {
+      if (hrVal <= 62)      skinAge -= 1.2;
+      else if (hrVal <= 72) skinAge += 0.0;
+      else if (hrVal <= 85) skinAge += 1.0;
+      else                  skinAge += 2.5;
+    }
+    if (rsaVal !== null) {
+      if (rsaVal >= 60)      skinAge -= 1.5;
+      else if (rsaVal >= 40) skinAge -= 0.5;
+      else if (rsaVal >= 20) skinAge += 0.5;
+      else                   skinAge += 2.0;
+    }
+    if (rmssdVal) {
+      const rmssdRef = Math.max(15, 60 - age * 0.4);
+      const ratio = rmssdVal / rmssdRef;
+      if (ratio >= 1.4)      skinAge -= 1.8;
+      else if (ratio >= 1.0) skinAge -= 0.5;
+      else if (ratio >= 0.7) skinAge += 0.8;
+      else                   skinAge += 2.5;
+    }
+    if (stressVal) {
+      if (stressVal < 50)       skinAge -= 0.8;
+      else if (stressVal < 150) skinAge += 0.0;
+      else if (stressVal < 400) skinAge += 1.5;
+      else                      skinAge += 3.0;
+    }
+    if (respRate) {
+      if (respRate >= 12 && respRate <= 18) skinAge -= 0.5;
+      else if (respRate > 22)               skinAge += 1.0;
+    }
+    if (bmi >= 30)       skinAge += 1.0;
+    else if (bmi < 18.5) skinAge += 1.5;
+    skinAge = Math.max(15, Math.min(120, Math.round(skinAge)));
+    const skinAgeDiff = skinAge - age;
+    const skinAgeConfidence = vascularAgeData
+      ? Math.min(85, 70 + (rsaVal !== null ? 8 : 0) + (rmssdVal ? 5 : 0))
+      : (rmssdVal || hrVal) ? 55 : 35;
+
+    // ── 신체 나이 심혈관 보정 재계산 (CV 부분만) ──
+    let bodyAge = bc.bodyAgeBase != null ? bc.bodyAgeBase : bc.bodyAge;
+    // bodyAgeBase가 없으면 기존 bodyAge 유지 (체형 기반은 변하지 않음)
+    // 심혈관 데이터가 새로 생겼을 때만 재보정
+    let cvAdj = 0, cvMeasured = false;
+    if (hrVal) {
+      cvMeasured = true;
+      if (hrVal <= 55)      cvAdj -= 2.0;
+      else if (hrVal <= 62) cvAdj -= 1.0;
+      else if (hrVal <= 72) cvAdj += 0.0;
+      else if (hrVal <= 82) cvAdj += 1.5;
+      else                  cvAdj += 3.0;
+    }
+    if (rmssdVal) {
+      const rmssdRef = Math.max(15, 60 - age * 0.4);
+      const ratio = rmssdVal / rmssdRef;
+      if (ratio >= 1.4)      cvAdj -= 2.0;
+      else if (ratio >= 1.0) cvAdj -= 0.8;
+      else if (ratio >= 0.7) cvAdj += 1.0;
+      else                   cvAdj += 2.5;
+    }
+    // 신체나이는 저장된 값 기준 유지하되, 심혈관 측정이 새로 추가됐으면 갱신
+    // (체형 baseline은 그대로, CV 보정만 최신화)
+    const bodyAgeConfidence = Math.min(95, (cvMeasured ? 65 : 45));
+
+    return {
+      skinAge, skinAgeDiff, skinAgeConfidence,
+      bodyAge: bc.bodyAge, // 신체나이는 체형 기반이라 저장값 유지
+      bodyAgeConfidence: bc.bodyAgeConfidence || bodyAgeConfidence,
+      vascularAge: vascularAgeData?.estimatedAge || null,
+      rsaIndex: rsaVal,
+      updated: true,
+    };
   },
 
   calcBodyComposition() {
