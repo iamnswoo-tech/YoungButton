@@ -8876,70 +8876,132 @@ const App = {
     const mirrorV = s.mirrorChoice ? s.mirrorChoice.v : 0;
     const mirrorA = s.mirrorChoice ? s.mirrorChoice.a : 0;
 
-    // 4. 자율신경 (HRV/심박) — Russell Arousal + Valence 객관 측정
-    //    ★ v16.5: 에크만/러셀 통합 강화 (첨부 학술 분석 기반)
-    //
-    //    Y축 (Arousal): 교감신경 활성도
-    //      - 높은 HR + 낮은 RMSSD = 교감 우세 = 각성 ↑ (Berntson 1997)
-    //      - 호흡수 빠름도 각성 보강 (Grossman 2007)
-    //
-    //    X축 (Valence): 자율신경 균형
-    //      - 부교감 우세 (높은 RMSSD) + 안정 HR = 긍정 영역 (Park 2019)
-    //      - 만성 스트레스 (낮은 HRV + 빠른 HR) = 부정 영역
-    //      - Baevsky SI는 X축 보강 (높을수록 부정 쪽)
-    let autoA = 0, autoV = 0, hasAuto = false;
+    // ★ v20.2: 멀티모달 Late Fusion 감정 엔진
+    // 첨부 알고리즘 통합 — rPPG(LF/HF+pNN50) + AU표정 + 자율신경 동적 융합
+    // 학술 근거: Russell 1980 Circumplex, Berntson 1997, Task Force 1996,
+    //           Park 2019, Ekman&Friesen 1978, DEAP dataset (Koelstra 2012)
+
     const cardio = this._getUnifiedCardio(this.state.wellness || {});
-    // ★ v16.6: 자율신경 검증 진단 로그 (디버깅용)
-    console.log('[Emotion] 자율신경 데이터 확인:', {
-      wellness_keys: Object.keys(this.state.wellness || {}).filter(k => this.state.wellness[k] && typeof this.state.wellness[k] === 'object'),
-      cardio: cardio,
-      hasFace: !!(this.state.wellness && this.state.wellness.face),
-      hasFinger: !!(this.state.wellness && this.state.wellness.finger),
-    });
-    if (cardio && cardio.hr && cardio.rmssd) {
-      // Arousal (Y축)
-      const hrZ = (cardio.hr - 72) / 12;     // 정상 60~84, ±2σ
-      const rmssdZ = (40 - cardio.rmssd) / 20; // 낮을수록 + (교감 우세)
-      let arousalRaw = (hrZ + rmssdZ) / 2;
-      // 호흡 빠름 보강 (얼굴 측정에서)
-      if (cardio.respRate && cardio.respRate > 20) {
-        arousalRaw += (cardio.respRate - 16) / 20 * 0.3;
-      }
-      autoA = Math.max(-1, Math.min(1, arousalRaw * 0.6));
+    const w = this.state.wellness || {};
 
-      // Valence (X축) — 자율신경 균형 평가
-      // 좋은 HRV + 안정 HR = 긍정 / 만성 교감 우세 = 부정
+    // ── 모달 1: rPPG 생체신호 → V-A 좌표 (Late Fusion Leg 1) ──
+    // Arousal: LF/HF 비율 (교감/부교감 균형) + HR + 호흡
+    // Valence: pNN50 (부교감 활성도) + RMSSD + Baevsky SI
+    let rppgV = 0, rppgA = 0;
+    let alphaRppg = 0; // rPPG 신뢰도 계수 (SQI 기반)
+
+    if (cardio && cardio.hr) {
+      // ─ Arousal 계산 ─
+      // LF/HF가 있으면 최우선 사용 (Task Force 1996: 교감신경 지표)
+      let arousalRaw = 0;
+      const lfHf = cardio.lfHfRatio || (w.face && w.face.lfHfRatio) || null;
+      const pNN50val = cardio.pNN50 || (w.face && w.face.pNN50) || null;
+
+      if (lfHf !== null) {
+        // LF/HF 정상: 0.5-2.0 / 높음(교감우세) > 2 → 각성 ↑
+        // tanh 스케일링: LF/HF 2.0 → A=+0.4, LF/HF 0.5 → A=-0.2
+        arousalRaw = Math.tanh((lfHf - 1.0) * 0.5);
+      } else {
+        // LF/HF 없으면 HR+RMSSD로 추정 (기존 방식)
+        const hrZ = (cardio.hr - 72) / 12;
+        const rmssdZ = cardio.rmssd ? (40 - cardio.rmssd) / 20 : 0;
+        arousalRaw = (hrZ + rmssdZ) / 2 * 0.6;
+      }
+      // 호흡수 보강 (Grossman 2007: 빠른 호흡 = 교감 활성)
+      if (cardio.respRate && cardio.respRate > 18) {
+        arousalRaw += Math.tanh((cardio.respRate - 16) / 8) * 0.25;
+      }
+      rppgA = Math.max(-1, Math.min(1, arousalRaw));
+
+      // ─ Valence 계산 ─
+      // pNN50: 높을수록 부교감 활성 = 긍정 (Park 2019)
       let valenceRaw = 0;
-      // 안정 HR (60-75)이면서 RMSSD 양호 (30+) = 긍정
-      if (cardio.hr >= 55 && cardio.hr <= 78 && cardio.rmssd >= 30) {
-        valenceRaw = 0.3 + Math.min(0.3, (cardio.rmssd - 30) / 40 * 0.3);
+      if (pNN50val !== null) {
+        // pNN50 정상: 5-25% / 높음 > 25 = 긍정
+        // tanh: pNN50 20 → V=+0.3, pNN50 5 → V=-0.2
+        valenceRaw = Math.tanh((pNN50val - 10) * 0.03);
+      } else if (cardio.rmssd) {
+        // pNN50 없으면 RMSSD 기반 (기존)
+        if (cardio.hr >= 55 && cardio.hr <= 78 && cardio.rmssd >= 30) {
+          valenceRaw = 0.3 + Math.min(0.3, (cardio.rmssd - 30) / 40 * 0.3);
+        } else if (cardio.hr > 85 && cardio.rmssd < 25) {
+          valenceRaw = -0.4 - Math.min(0.2, (cardio.hr - 85) / 20 * 0.2);
+        } else if (cardio.hr > 90 || cardio.rmssd < 15) {
+          valenceRaw = -0.5;
+        }
       }
-      // 너무 빠른 HR + 낮은 RMSSD = 부정
-      else if (cardio.hr > 85 && cardio.rmssd < 25) {
-        valenceRaw = -0.4 - Math.min(0.2, (cardio.hr - 85) / 20 * 0.2);
+      // Baevsky SI 보강
+      if (cardio.stressIndex != null) {
+        const siNorm = Math.log10(cardio.stressIndex + 10) / Math.log10(2010);
+        valenceRaw -= (siNorm - 0.3) * 0.35;
       }
-      // 비정상 범위
-      else if (cardio.hr > 90 || cardio.rmssd < 15) {
-        valenceRaw = -0.5;
-      }
-      // Baevsky Stress Index 보강 (있을 때)
-      if (cardio.stressIndex !== undefined && cardio.stressIndex !== null) {
-        // SI 0-50=긍정, 50-150=중립, 150-500=경미한 부정, 500+=부정
-        const siNorm = Math.log10(cardio.stressIndex + 10) / Math.log10(2010); // 0-1
-        valenceRaw -= (siNorm - 0.3) * 0.4;
-      }
-      autoV = Math.max(-1, Math.min(1, valenceRaw));
+      rppgV = Math.max(-1, Math.min(1, valenceRaw));
 
-      hasAuto = true;
+      // rPPG 신뢰도: SQI 기반 + LF/HF 있으면 보너스
+      const sqiVal = cardio.sqi || (w.face && w.face.sqi) || 60;
+      alphaRppg = Math.max(0.1, Math.min(1.0, sqiVal / 100));
+      if (lfHf !== null) alphaRppg = Math.min(1.0, alphaRppg + 0.15); // LF/HF 가용 시 신뢰도 ↑
     }
 
-    // 5. 가중평균 — PANAS 50%, 색상 15%, 표정 20%, 자율신경 15%
-    // ★ v16.5: 자율신경 가중치를 Valence/Arousal 각각 적용
-    //    - PANAS는 가장 검증된 자기보고 → V/A 모두 50%
-    //    - 자율신경은 객관 데이터 → A에 더 큰 가중치 (각성도 더 정확)
-    const weights = hasAuto ?
-      { panas: 0.50, color: 0.15, mirror: 0.20, autoV: 0.15, autoA: 0.15 } :
-      { panas: 0.60, color: 0.18, mirror: 0.22, autoV: 0, autoA: 0 };
+    // ── 모달 2: AU 표정 분석 → V-A 좌표 (Late Fusion Leg 2) ──
+    // Ekman & Friesen (1978) + Russell Circumplex 매핑
+    // faceLink.auResult 또는 state.wellness.face.auResult 에서 추출
+    let faceV = 0, faceA = 0;
+    let alphaFace = 0; // 표정 신뢰도 계수
+
+    const auSrc = (w.face && w.face.auResult) ? w.face.auResult : null;
+    if (auSrc) {
+      // AU12(광대뼈 올림=미소), AU6(눈가 주름=진짜 미소), AU1(눈썹 내림=슬픔), AU4(미간)
+      const au12 = (auSrc.au12 || 0) / 100; // 0-1 정규화
+      const au6  = (auSrc.au6  || 0) / 100;
+      const au1  = (auSrc.au1  || 0) / 100;
+      const au4  = (auSrc.au4  || 0) / 100;
+      const duchenne = (auSrc.duchenne || 0) / 100;
+      // Valence: 미소(AU12+AU6) 긍정 / 슬픔(AU1)+긴장(AU4) 부정
+      faceV = Math.tanh(
+        au12 * 1.0 + duchenne * 0.6    // 긍정 요소
+        - au1 * 0.7 - au4 * 0.6       // 부정 요소
+      );
+      // Arousal: AU4(긴장/분노) 높은 각성 / 중립 낮은 각성
+      faceA = Math.tanh(
+        au4 * 0.8 + au1 * 0.4         // 각성 요소
+        - (1 - au12 - au4 - au1) * 0.3 // 중립 = 낮은 각성
+      );
+      // 표정 신뢰도: expressionConsistency 기반
+      const consistency = auSrc.expressionConsistency || 50;
+      alphaFace = Math.max(0.2, Math.min(1.0, consistency / 100));
+      console.log(`[v20.2 AU→VA] faceV=${faceV.toFixed(3)} faceA=${faceA.toFixed(3)} alpha=${alphaFace.toFixed(2)}`);
+    }
+
+    // ── Late Fusion: 동적 가중치 융합 ──
+    // 신뢰도(alpha) 기반 가중 평균 (첨부 알고리즘 수식 적용)
+    const totalAlpha = alphaRppg + alphaFace;
+    let bioV = 0, bioA = 0;
+    if (totalAlpha > 0) {
+      bioV = (alphaRppg * rppgV + alphaFace * faceV) / totalAlpha;
+      bioA = (alphaRppg * rppgA + alphaFace * faceA) / totalAlpha;
+    }
+    const hasAuto = alphaRppg > 0 || alphaFace > 0;
+    const autoV = bioV;
+    const autoA = bioA;
+
+    // ── 가중치 결정: 자기보고 + 생체신호 동적 배분 ──
+    // 신뢰도 합이 높을수록 생체신호 가중치 ↑ (최대 35%)
+    const bioWeight = hasAuto ? Math.min(0.35, totalAlpha * 0.2) : 0;
+    const selfWeight = 1 - bioWeight;
+
+    // PANAS/color/mirror 자기보고 내부 배분 (합산 = selfWeight)
+    const pW = selfWeight * 0.58;
+    const cW = selfWeight * 0.17;
+    const mW = selfWeight * 0.25;
+
+    const weights = {
+      panas: pW, color: cW, mirror: mW,
+      autoV: bioWeight, autoA: bioWeight,
+      alphaRppg, alphaFace,   // 디버깅/로깅용
+    };
+
+    console.log(`[v20.2 LateFusion] rppgV=${rppgV.toFixed(3)} rppgA=${rppgA.toFixed(3)} αRppg=${alphaRppg.toFixed(2)} | faceV=${faceV.toFixed(3)} faceA=${faceA.toFixed(3)} αFace=${alphaFace.toFixed(2)} | bioW=${bioWeight.toFixed(2)}`);
 
     const finalV = panasV  * weights.panas +
                    colorV  * weights.color +
@@ -8971,16 +9033,26 @@ const App = {
       panasV, panasA,
       paAvg, naAvg,
       autoA: hasAuto ? autoA : null,
-      autoV: hasAuto ? autoV : null, // ★ v16.5
+      autoV: hasAuto ? autoV : null,
       hasAuto,
       confidence,
       weights,
+      // ★ v20.2: Late Fusion 상세 디버깅 데이터
+      rppgV: alphaRppg > 0 ? rppgV : null,
+      rppgA: alphaRppg > 0 ? rppgA : null,
+      faceV: alphaFace > 0 ? faceV : null,
+      faceA: alphaFace > 0 ? faceA : null,
+      alphaRppg,
+      alphaFace,
+      lfHfUsed: !!(cardio && (cardio.lfHfRatio || (this.state.wellness && this.state.wellness.face && this.state.wellness.face.lfHfRatio))),
+      auUsed: alphaFace > 0,
     };
   },
 
   // ─── Step 4: 통합 결과 화면 ───
   _renderIntegratedResult(container) {
     const result = this._computeIntegratedEmotion();
+    this._lastEmotionResult = result; // ★ v20.2: Late Fusion 결과 캐시
     const card = result.card;
 
     // 결과 저장 (감정 히스토리)
@@ -10008,6 +10080,14 @@ const App = {
         respRate: bestSource.respRate,
         ageMinutes: Math.round(bestAge / 60000),
         source: analysis.dataSource, // 'finger' or 'face'
+        // ★ v20.2: 주파수 도메인 HRV + 신뢰도
+        lfHfRatio: bestSource.lfHfRatio || null,
+        pNN50: bestSource.pNN50 || null,
+        alphaRppg: bestSource.alphaRppg || null,
+        sqi: bestSource.sqi || null,
+        // ★ v20.2: AU 표정 분석 결과 (감정게임과 무관하게 얼굴 측정에서)
+        auResult: (w.face && w.face.auResult) ? w.face.auResult : null,
+        alphaFace: (w.face && w.face.sqi) ? Math.max(0.1, Math.min(1.0, w.face.sqi / 100)) : 0.3,
       };
     }
 
@@ -10038,39 +10118,54 @@ const App = {
     let subjective = 50 + v * 40 - lon * 30 - negBias * 20;
     subjective = Math.max(0, Math.min(100, subjective));
 
-    // 자율신경 점수 (0~100)
-    let autonomic = 50; // 기본값 (얼굴 측정 없음)
+    // ★ v20.2: 자율신경 점수 — RMSSD + LF/HF 복합 평가
+    let autonomic = 50; // 기본값
     let hrvLevel = null; // 'low' | 'normal' | 'high' | null
     let stressFromFace = null;
 
     if (face && face.rmssd != null) {
-      // 본인 baseline 확보 시
       const history = this._historyGet ? this._historyGet('face') : [];
-      const past = history.slice(0, -1); // 최신 1회 제외
+      const past = history.slice(0, -1);
       const stats = past.length >= 3 && this._historyStats ? this._historyStats(past, 'rmssd') : null;
 
+      let rmssdScore = 50;
       if (stats && stats.count >= 3) {
         const std = Math.max(stats.std, 3);
         const z = (face.rmssd - stats.mean) / std;
-        // z-score 기반 자율신경 점수
-        // z >= 0.5: high (좋음 90), z >= -0.5: normal (70), z >= -1.5: low (45), 그 외 (25)
-        if (z >= 0.5) { autonomic = 90; hrvLevel = 'high'; }
-        else if (z >= -0.5) { autonomic = 70; hrvLevel = 'normal'; }
-        else if (z >= -1.5) { autonomic = 45; hrvLevel = 'low'; }
-        else { autonomic = 25; hrvLevel = 'low'; }
+        if (z >= 0.5) { rmssdScore = 90; hrvLevel = 'high'; }
+        else if (z >= -0.5) { rmssdScore = 70; hrvLevel = 'normal'; }
+        else if (z >= -1.5) { rmssdScore = 45; hrvLevel = 'low'; }
+        else { rmssdScore = 25; hrvLevel = 'low'; }
       } else {
-        // baseline 없으면 임상 범위로 (Task Force 1996: 정상 19~75ms 평균 42)
-        if (face.rmssd >= 40) autonomic = 75;
-        else if (face.rmssd >= 25) autonomic = 60;
-        else if (face.rmssd >= 15) autonomic = 45;
-        else autonomic = 30;
+        // baseline 없으면 임상 기준 (Task Force 1996)
+        if (face.rmssd >= 40) rmssdScore = 75;
+        else if (face.rmssd >= 25) rmssdScore = 60;
+        else if (face.rmssd >= 15) rmssdScore = 45;
+        else rmssdScore = 30;
         hrvLevel = face.rmssd >= 25 ? 'normal' : 'low';
+      }
+
+      // ★ v20.2: LF/HF 복합 보정 — 주파수 도메인으로 교감/부교감 보정
+      let lfHfScore = rmssdScore; // 기본: RMSSD 점수
+      const lfHfVal = face.lfHfRatio || null;
+      if (lfHfVal !== null) {
+        // LF/HF 정상 0.5-2.0 → 점수 유지 / 높음 > 3 → 감점 / 낮음 < 0.5 → 보정
+        if (lfHfVal > 3.0) {
+          lfHfScore = Math.max(20, rmssdScore - (lfHfVal - 3.0) * 8);
+        } else if (lfHfVal < 0.5) {
+          lfHfScore = Math.min(95, rmssdScore + 8); // 부교감 우세 = 회복 상태
+        }
+        // LF/HF와 RMSSD 가중 평균 (LF/HF 35% 반영)
+        autonomic = Math.round(rmssdScore * 0.65 + lfHfScore * 0.35);
+        console.log(`[v20.2 Autonomic] RMSSD=${face.rmssd} rmssdScore=${rmssdScore} LF/HF=${lfHfVal.toFixed(2)} lfHfScore=${lfHfScore} → autonomic=${autonomic}`);
+      } else {
+        autonomic = rmssdScore;
       }
 
       // 스트레스 보정 (face.stressLevel 1~5)
       if (face.stressLevel != null) {
         stressFromFace = face.stressLevel;
-        const stressPenalty = (face.stressLevel - 2.5) * 6; // 4 → +9감점, 1 → -9 보너스
+        const stressPenalty = (face.stressLevel - 2.5) * 6;
         autonomic -= stressPenalty;
         autonomic = Math.max(0, Math.min(100, autonomic));
       }
@@ -10214,6 +10309,32 @@ const App = {
       integratedMsg = this._generateIntegratedMessage(analysis);
     }
 
+    // ★ v20.2: Late Fusion 모달 신뢰도 칩 생성
+    const emo = this._computeIntegratedEmotion
+      ? (this._lastEmotionResult || {}) : {};
+    const aRppg = typeof emo.alphaRppg === 'number' ? emo.alphaRppg : null;
+    const aFace = typeof emo.alphaFace === 'number' ? emo.alphaFace : null;
+    const lfHfUsed = emo.lfHfUsed || false;
+    const auUsed = emo.auUsed || false;
+
+    let fusionChipsHTML = '';
+    if (aRppg !== null || aFace !== null) {
+      const chips = [];
+      if (aRppg !== null) {
+        const rCls = aRppg >= 0.7 ? 'good' : aRppg >= 0.4 ? 'mid' : 'low';
+        chips.push(`<span class="fusion-chip rppg-${rCls}">💗 rPPG ${Math.round(aRppg*100)}%${lfHfUsed ? ' · LF/HF✓' : ''}</span>`);
+      }
+      if (aFace !== null && aFace > 0) {
+        const fCls = aFace >= 0.7 ? 'good' : aFace >= 0.4 ? 'mid' : 'low';
+        chips.push(`<span class="fusion-chip face-${fCls}">😊 표정 ${Math.round(aFace*100)}%${auUsed ? ' · AU✓' : ''}</span>`);
+      }
+      if (chips.length > 0) {
+        fusionChipsHTML = `<div class="fusion-chips-row">${chips.join('')}</div>`;
+      }
+    }
+    // 이번 결과를 캐시 (다음 렌더링에서 참조)
+    this._lastEmotionResult = null; // 다음 계산 후 갱신
+
     container.innerHTML = `
       <div class="mood-result">
         <div class="result-hero">
@@ -10232,6 +10353,7 @@ const App = {
           <div class="result-section">
             <div class="result-section-title">💚 마음과 몸의 대화</div>
             <div class="result-integrated">${integratedMsg}</div>
+            ${fusionChipsHTML}
           </div>
         ` : `
           <div class="result-suggest-face">
@@ -10302,13 +10424,32 @@ const App = {
       }
     }
 
-    // mental 없거나 face 데이터 없을 때 (기존 fallback)
+    // ★ v20.2: LF/HF 기반 상세 fallback 메시지
     const history = this._historyGet('face');
     const past = history.slice(0, -1);
     const rmssdStats = past.length >= 3 ? this._historyStats(past, 'rmssd') : null;
     const isLowHRV = rmssdStats && face.rmssd < rmssdStats.mean - rmssdStats.std;
     const isHighHRV = rmssdStats && face.rmssd > rmssdStats.mean + rmssdStats.std;
+    const lfHf = face.lfHfRatio || null;
 
+    // LF/HF 기반 심층 메시지 (데이터 있을 때 우선)
+    if (lfHf !== null) {
+      const lfHfStr = lfHf.toFixed(2);
+      if (lfHf > 3.0 && v < 0) {
+        return `😰 교감신경이 매우 활성화(LF/HF ${lfHfStr})돼 있고 감정도 부정적인 상태예요. 과부하 상태일 수 있으니 지금 당장 5분 호흡이나 산책이 필요합니다.`;
+      }
+      if (lfHf > 3.0 && v >= 0) {
+        return `😤 표정은 긍정적이지만 내면의 교감신경이 강하게 활성(LF/HF ${lfHfStr})돼 있어요. 겉으로는 괜찮아 보여도 몸이 각성 상태입니다. 의식적인 이완이 도움이 됩니다.`;
+      }
+      if (lfHf < 0.5) {
+        return `🌿 부교감신경이 우세(LF/HF ${lfHfStr})한 매우 이완된 상태예요. 심신이 잘 회복되고 있습니다.`;
+      }
+      if (lfHf >= 0.5 && lfHf <= 2.0) {
+        return `✅ 교감/부교감 균형(LF/HF ${lfHfStr})이 양호한 상태예요. 자율신경 균형이 감정 안정과 연결됩니다.`;
+      }
+    }
+
+    // LF/HF 없을 때 RMSSD 기반 (기존 메시지)
     if (v < -0.3 && isLowHRV) {
       return '마음도 무겁고 자율신경도 평소보다 긴장된 상태예요. 오늘은 무리하지 마시고 따뜻한 차 한 잔, 깊은 호흡을 권합니다.';
     }
@@ -10316,12 +10457,13 @@ const App = {
       return '마음은 무거우신데 자율신경은 안정적이에요. 감정적으로 힘드시지만 몸은 잘 버티고 있는 상태입니다. 잠시 쉬어가도 괜찮아요.';
     }
     if (v >= 0.3 && isLowHRV) {
-      return '마음은 좋으신데 자율신경은 약간 긴장돼 있어요. 좋은 일에도 몸이 따라가지 못할 때가 있어요. 충분한 수면을 챙겨보세요.';
+      return '마음은 좋으신데 자율신경은 약간 긴장돼 있어요. 충분한 수면을 챙겨보세요.';
     }
     if (v >= 0.3 && isHighHRV) {
       return '마음도 몸도 함께 좋은 상태예요. 이 균형을 기억해두세요.';
     }
-    return `현재 심박수 ${face.hr}BPM · HRV ${face.rmssd}ms. 자율신경이 안정적이에요.`;
+    const lfHfDisplay = face.lfHfRatio ? ` · LF/HF ${face.lfHfRatio.toFixed(1)}` : '';
+    return `현재 심박수 ${face.hr}BPM · HRV ${face.rmssd}ms${lfHfDisplay}. 자율신경이 안정적이에요.`;
   },
 
   // ════════════════════════════════════════════════════════════════
@@ -12418,6 +12560,43 @@ const App = {
       }
     }
 
+    // ★ v20.2: LF/HF 비율 계산 (첨부 알고리즘 통합 — 교감/부교감 분리)
+    // Task Force 1996: LF=0.04-0.15Hz(교감+부교감), HF=0.15-0.4Hz(부교감)
+    let lfPower = null, hfPower = null, lfHfRatio = null;
+    let alphaRppg = Math.max(0.1, Math.min(1.0, sqiEarly / 100)); // SQI → 신뢰도 계수
+    try {
+      if (cleanRRFinal && cleanRRFinal.length >= 16) {
+        const rrF = cleanRRFinal;
+        const rrMeanF = rrF.reduce((a, b) => a + b, 0) / rrF.length;
+        const interpSrF = 4; // 4Hz 균등 보간
+        const totalLenF = rrF.reduce((a, b) => a + b, 0) / 1000;
+        const nInterpF = Math.round(totalLenF * interpSrF);
+        if (nInterpF >= 16) {
+          const rrInterpF = new Array(nInterpF).fill(0);
+          let cumTF = 0, rrIdxF = 0;
+          for (let i = 0; i < nInterpF; i++) {
+            const t = i / interpSrF;
+            while (rrIdxF < rrF.length - 1 && cumTF + rrF[rrIdxF] / 1000 < t) {
+              cumTF += rrF[rrIdxF] / 1000; rrIdxF++;
+            }
+            rrInterpF[i] = rrF[rrIdxF] - rrMeanF;
+          }
+          // LF 대역 (0.04-0.15Hz) BPF
+          const lfFiltered = this._bandpass(rrInterpF, interpSrF, 0.04, 0.15);
+          // HF 대역 (0.15-0.4Hz) BPF
+          const hfFiltered = this._bandpass(rrInterpF, interpSrF, 0.15, 0.40);
+          lfPower = lfFiltered.reduce((s, v) => s + v * v, 0) / lfFiltered.length;
+          hfPower = hfFiltered.reduce((s, v) => s + v * v, 0) / hfFiltered.length;
+          if (hfPower > 1e-8) {
+            lfHfRatio = Math.min(10, Math.round((lfPower / hfPower) * 100) / 100);
+          }
+          console.log(`[v20.2 HRV-Freq] LF=${lfPower?.toFixed(6)} HF=${hfPower?.toFixed(6)} LF/HF=${lfHfRatio}`);
+        }
+      }
+    } catch (e) {
+      console.warn('[v20.2 LF/HF] 계산 실패:', e.message);
+    }
+
     return {
       hr: hrInt, rmssd, lnRmssd, rmssdReason,
       sdnn, respRate, stressIdx, stressFromRMSSD, stressLevel,
@@ -12428,6 +12607,14 @@ const App = {
       arrhythmia,
       vascularAge,
       rsaIndex,
+      // ★ v20.2 신규: 주파수 도메인 HRV + 신뢰도 계수
+      lfPower, hfPower, lfHfRatio,
+      alphaRppg,
+      pNN50: (() => {
+        // pNN50이 상위에서 계산됐으면 그 값 사용
+        if (typeof pNN50 !== 'undefined') return Math.round(pNN50 * 10) / 10;
+        return null;
+      })(),
     };
   },
 
@@ -12782,6 +12969,12 @@ const App = {
       subScores: subScores,
       ageAtMeasure: age,
       arrhythmia: r.arrhythmia || null,
+      // ★ v20.2 주파수 도메인 HRV
+      lfPower: r.lfPower || null,
+      hfPower: r.hfPower || null,
+      lfHfRatio: r.lfHfRatio || null,
+      pNN50: r.pNN50 || null,
+      alphaRppg: r.alphaRppg || null,
       vascularAge: r.vascularAge || null,
       rsaIndex: r.rsaIndex || null,
       // ★ v19.4: 동공·표정 분석 결과

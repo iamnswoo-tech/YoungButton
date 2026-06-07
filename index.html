@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>건강 측정 v19 — ME-rPPG</title>
+<title>건강 측정 v20 — ME-rPPG</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -10284,6 +10284,26 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   line-height: 1.6;
 }
 .vac-insight strong { font-weight: 900; color: #166534; }
+
+/* ════════════════════════════════════════════════════════
+   ★ v20.2: Late Fusion 신뢰도 칩 스타일
+   ════════════════════════════════════════════════════════ */
+.fusion-chips-row {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-top: 10px;
+}
+.fusion-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 800;
+  letter-spacing: .02em;
+}
+.fusion-chip.rppg-good  { background: #dcfce7; color: #14532d; border: 1px solid #86efac; }
+.fusion-chip.rppg-mid   { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+.fusion-chip.rppg-low   { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+.fusion-chip.face-good  { background: #dbeafe; color: #1e3a8a; border: 1px solid #93c5fd; }
+.fusion-chip.face-mid   { background: #f5f3ff; color: #5b21b6; border: 1px solid #c4b5fd; }
+.fusion-chip.face-low   { background: #fce7f3; color: #831843; border: 1px solid #f9a8d4; }
 </style>
 </head>
 <body>
@@ -10299,7 +10319,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </svg>
     </div>
     <div>
-      <div class="hd-title">오늘의 활력 버튼</div>
+      <div class="hd-logo">ResetButton</div>
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
