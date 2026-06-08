@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>건강 측정 v19 — ME-rPPG</title>
+<title>건강 측정 v20 — ME-rPPG</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -10389,6 +10389,97 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 .bid-right { text-align: right; }
 .bid-bmi   { display: block; font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; }
 .bid-cat   { display: block; font-size: 11px; font-weight: 700; margin-top: 1px; }
+
+/* ════════════════════════════════════════════════════
+   ★ v20.6: 개인정보 보안 안내 카드
+   ════════════════════════════════════════════════════ */
+.privacy-card {
+  margin: 14px 16px 0;
+  background: linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%);
+  border: 1.5px solid #86efac; border-radius: 18px;
+  padding: 16px 18px;
+}
+.privacy-header {
+  display: flex; align-items: center; gap: 9px;
+  margin-bottom: 12px;
+}
+.privacy-lock { font-size: 22px; }
+.privacy-title {
+  font-size: 14px; font-weight: 900; color: #14532d;
+  letter-spacing: -.01em;
+}
+.privacy-body {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 14px;
+}
+.privacy-row {
+  display: flex; align-items: flex-start; gap: 9px;
+  font-size: 12px; font-weight: 600; color: #166534;
+  line-height: 1.5;
+}
+.privacy-row strong { font-weight: 900; color: #15803d; }
+.privacy-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+.privacy-actions {
+  display: flex; gap: 8px; margin-bottom: 8px;
+}
+.privacy-btn {
+  flex: 1; padding: 10px; border-radius: 11px;
+  font-family: inherit; font-size: 12px; font-weight: 800;
+  cursor: pointer; border: 1.5px solid;
+  transition: transform .12s;
+}
+.privacy-btn:active { transform: scale(.97); }
+.privacy-btn.export {
+  background: #22c55e; color: #fff; border-color: #22c55e;
+}
+.privacy-btn.import {
+  background: #fff; color: #15803d; border-color: #86efac;
+}
+.privacy-detail-btn {
+  width: 100%; background: none; border: none;
+  font-family: inherit; font-size: 11px; font-weight: 700;
+  color: #16a34a; cursor: pointer; padding: 6px;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+
+/* 개인정보 처리방침 모달 */
+.privacy-modal-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,.5);
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: fadeIn .2s;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.privacy-modal {
+  background: var(--card); width: 100%; max-width: 500px;
+  border-radius: 20px 20px 0 0; padding: 22px 20px;
+  max-height: 80vh; overflow-y: auto;
+  animation: slideUp .3s cubic-bezier(.16,1,.3,1);
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.privacy-modal-title {
+  font-size: 17px; font-weight: 900; color: var(--text);
+  margin-bottom: 4px; display: flex; align-items: center; gap: 8px;
+}
+.privacy-modal-sub {
+  font-size: 11px; color: var(--muted); margin-bottom: 16px;
+}
+.privacy-modal-section { margin-bottom: 16px; }
+.privacy-modal-h {
+  font-size: 13px; font-weight: 800; color: var(--text);
+  margin-bottom: 6px;
+}
+.privacy-modal-p {
+  font-size: 12px; font-weight: 500; color: var(--text2);
+  line-height: 1.6;
+}
+.privacy-modal-close {
+  width: 100%; padding: 13px; margin-top: 8px;
+  background: var(--primary); color: #fff; border: none;
+  border-radius: 12px; font-family: inherit;
+  font-size: 14px; font-weight: 800; cursor: pointer;
+}
+.privacy-modal-close:active { transform: scale(.98); }
 </style>
 </head>
 <body>
@@ -10404,7 +10495,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </svg>
     </div>
     <div>
-      <div class="hd-title">오늘의 활력 버튼</div>
+      <div class="hd-title">ResetButton</div>
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
@@ -10618,6 +10709,39 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <div class="info-row"><span class="info-icon">⚠️</span><span class="info-text">이 앱은 의료기기가 아닙니다. 건강 참고용으로만 사용하세요.</span></div>
     <div class="info-row"><span class="info-icon">📷</span><span class="info-text">측정 시 카메라/센서 권한이 필요합니다.</span></div>
     <div class="info-row"><span class="info-icon">🔆</span><span class="info-text">밝은 환경에서 측정하면 정확도가 향상됩니다.</span></div>
+  </div>
+
+  <!-- ★ v20.6: 개인정보 보안 안내 카드 -->
+  <div class="privacy-card">
+    <div class="privacy-header">
+      <span class="privacy-lock">🔒</span>
+      <span class="privacy-title">내 정보는 안전하게 보호됩니다</span>
+    </div>
+    <div class="privacy-body">
+      <div class="privacy-row">
+        <span class="privacy-icon">📱</span>
+        <span>모든 측정 데이터는 <strong>이 기기 안에만</strong> 저장됩니다.</span>
+      </div>
+      <div class="privacy-row">
+        <span class="privacy-icon">🚫</span>
+        <span>외부 서버로 <strong>전송되지 않으며</strong>, 누구도 열람할 수 없습니다.</span>
+      </div>
+      <div class="privacy-row">
+        <span class="privacy-icon">🔐</span>
+        <span>회원가입·로그인이 없어 <strong>개인을 식별하지 않습니다.</strong></span>
+      </div>
+    </div>
+    <div class="privacy-actions">
+      <button type="button" class="privacy-btn export" onclick="App.exportMyData()">
+        💾 내 데이터 백업
+      </button>
+      <button type="button" class="privacy-btn import" onclick="App.importMyData()">
+        📥 백업 복원
+      </button>
+    </div>
+    <button type="button" class="privacy-detail-btn" onclick="App.showPrivacyDetail()">
+      개인정보 처리방침 자세히 보기 →
+    </button>
   </div>
 </div>
 
@@ -11619,15 +11743,13 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 </nav>
 
 <footer>
-  <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
+  <div style="font-size:10px;color:#6b7280;var(--muted);text-align:center;line-height:1.5;padding:0 16px">
     🚀 Reset Button - 기획/개발:남승우 ‍🚀<br>
     rPPG 엔진: ME-rPPG (Apache 2.0)<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
-    <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
+    <span style="color:#6b7280">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>
-
-  v19.0 · 얼굴/손가락/심리 + 신체 측정 분리<br>
-  ✉ Reset Button 문의: iamnsw@naver.com
+  <span style="color:#6b7280">✉ Reset Button 문의: iamnsw@naver.com</span>
 </footer>
 
 <script src="app.js"></script>

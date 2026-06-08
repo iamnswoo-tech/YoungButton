@@ -8060,6 +8060,144 @@ const App = {
 
   // ★ v19.1: 주간 목표 진행 카드 렌더링
   // ════════════════════════════════════════════════════
+  // ★ v20.6: 개인정보 데이터 관리 (백업/복원/처리방침)
+  // ════════════════════════════════════════════════════
+
+  // 내 데이터 전체를 JSON 파일로 내보내기 (기기에 다운로드)
+  exportMyData() {
+    try {
+      const keys = [
+        'wellness_data', 'history_mood', 'bodycomp_input',
+        'streak_data', 'badges_earned', 'share_history',
+        'shareRelation', 'shareSenderName',
+        'reminderEnabled', 'reminderHour', 'reminderMinute',
+      ];
+      // 측정 히스토리 키들 (history_face, history_finger 등)
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('history_') || k.startsWith('sleep_'))) {
+          if (!keys.includes(k)) keys.push(k);
+        }
+      }
+
+      const backup = { _app: 'YoungButton', _version: 'v20.6', _exportedAt: new Date().toISOString(), data: {} };
+      keys.forEach(k => {
+        const v = localStorage.getItem(k);
+        if (v !== null) backup.data[k] = v;
+      });
+
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `YoungButton_백업_${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      const cnt = Object.keys(backup.data).length;
+      this._toast(`✓ 내 데이터 ${cnt}개 항목을 백업했어요`);
+    } catch (e) {
+      this._toast('백업에 실패했어요. 다시 시도해주세요.');
+      console.warn('[Export] 실패:', e);
+    }
+  },
+
+  // 백업 파일에서 데이터 복원
+  importMyData() {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json,.json';
+      input.onchange = (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const parsed = JSON.parse(ev.target.result);
+            if (!parsed || parsed._app !== 'YoungButton' || !parsed.data) {
+              this._toast('올바른 YoungButton 백업 파일이 아니에요.');
+              return;
+            }
+            if (!confirm('백업 데이터로 복원하시겠어요?\n현재 기기의 측정 기록이 백업 내용으로 덮어쓰기 됩니다.')) return;
+
+            let restored = 0;
+            Object.keys(parsed.data).forEach(k => {
+              try { localStorage.setItem(k, parsed.data[k]); restored++; } catch (e2) {}
+            });
+            this._toast(`✓ ${restored}개 항목을 복원했어요. 새로고침합니다...`);
+            setTimeout(() => location.reload(), 1500);
+          } catch (err) {
+            this._toast('백업 파일을 읽을 수 없어요.');
+            console.warn('[Import] 파싱 실패:', err);
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    } catch (e) {
+      this._toast('복원에 실패했어요.');
+      console.warn('[Import] 실패:', e);
+    }
+  },
+
+  // 개인정보 처리방침 모달
+  showPrivacyDetail() {
+    const existing = document.getElementById('privacy-modal-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'privacy-modal-overlay';
+    overlay.className = 'privacy-modal-overlay';
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+    overlay.innerHTML = `
+      <div class="privacy-modal">
+        <div class="privacy-modal-title">🔒 개인정보 처리방침</div>
+        <div class="privacy-modal-sub">YoungButton은 사용자의 프라이버시를 최우선으로 합니다</div>
+
+        <div class="privacy-modal-section">
+          <div class="privacy-modal-h">📱 데이터 저장 위치</div>
+          <div class="privacy-modal-p">측정한 모든 건강 데이터(심박·심박변이도·혈관나이·감정·신체지수 등)는 <strong>사용자 본인의 기기 안(브라우저 로컬 저장소)에만</strong> 저장됩니다. 외부 서버나 클라우드로 전송되거나 업로드되지 않습니다.</div>
+        </div>
+
+        <div class="privacy-modal-section">
+          <div class="privacy-modal-h">🚫 수집하지 않는 정보</div>
+          <div class="privacy-modal-p">회원가입·로그인 절차가 없으며, 이름·전화번호·이메일 등으로 개인을 식별하지 않습니다. 직접 입력하신 정보(나이·성별·자녀 연락처 등)도 기기 안에만 보관됩니다.</div>
+        </div>
+
+        <div class="privacy-modal-section">
+          <div class="privacy-modal-h">📷 카메라·마이크 권한</div>
+          <div class="privacy-modal-p">측정 시에만 사용되며, 영상·음성은 <strong>실시간 분석 후 즉시 폐기</strong>됩니다. 사진이나 녹음 파일로 저장하거나 전송하지 않습니다.</div>
+        </div>
+
+        <div class="privacy-modal-section">
+          <div class="privacy-modal-h">🌐 외부 통신</div>
+          <div class="privacy-modal-p">화면 글꼴(Pretendard)과 얼굴 인식 AI(MediaPipe) 라이브러리를 다운로드하는 용도로만 외부에 연결되며, 이때도 사용자 건강 데이터는 전송되지 않습니다.</div>
+        </div>
+
+        <div class="privacy-modal-section">
+          <div class="privacy-modal-h">💾 데이터 관리 권한</div>
+          <div class="privacy-modal-p">언제든 '내 데이터 백업'으로 파일로 보관하거나, 브라우저 설정에서 사이트 데이터를 삭제해 모든 기록을 완전히 지울 수 있습니다.</div>
+        </div>
+
+        <div class="privacy-modal-section">
+          <div class="privacy-modal-h">⚠️ 안내</div>
+          <div class="privacy-modal-p">본 앱은 의료기기가 아니며 건강 참고용 보조 도구입니다. 진단·치료를 대체하지 않습니다.</div>
+        </div>
+
+        <button type="button" class="privacy-modal-close" onclick="document.getElementById('privacy-modal-overlay').remove()">
+          확인했어요
+        </button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  },
+
+  // ════════════════════════════════════════════════════
   // ★ v20.5: 기본 정보(신체지수) 입력 유도 카드
   // 앱 시작 시 가장 먼저 입력해야 할 기본 정보
   // ════════════════════════════════════════════════════
