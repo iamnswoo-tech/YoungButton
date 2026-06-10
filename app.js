@@ -6244,6 +6244,26 @@ const App = {
       });
     }
 
+    // ★ v21.0: 보행 가변성 추세 (치매 선별 — 추세가 핵심 지표)
+    const gaitHistory = this._historyFilter(this._historyGet('gait'), period);
+    const gaitWithCV = gaitHistory.filter(h => h.cvStepTime != null);
+    if (gaitWithCV.length >= 2) {
+      chartsHTML += '<div class="trends-section-title" style="margin-top:20px">🧠 보행 가변성 추세 <span style="font-size:11px;font-weight:600;color:#9ca3af">(치매 선별 보조 · 낮을수록 안정)</span></div>';
+      chartsHTML += this._renderTrendChart({
+        title: '보행 가변성 (CV)',
+        icon: '🧠',
+        history: gaitWithCV,
+        field: 'cvStepTime',
+        unit: '%',
+        normalMin: 0,
+        normalMax: 3.5,
+        color: '#8b5cf6',
+        yMin: 0,
+        yMax: 10,
+        invert: true,
+      });
+    }
+
     // 기타 점수
     for (const cat of ['balance', 'gait', 'reaction', 'tremor', 'posture']) {
       const h = this._historyFilter(this._historyGet(cat), period);
@@ -14766,15 +14786,273 @@ const App = {
         <div class="bt-result-row"><span class="bt-result-row-label">Romberg 비율</span><span class="bt-result-row-value">${rombergRatio.toFixed(2)}x</span></div>
         <div class="bt-result-cmt">${cmt}</div>
       </div>
+      ${this._renderFallRiskCard(score, closedMetrics, openMetrics, rombergRatio, age)}
       <button class="bt-redo" type="button" onclick="App.startBodyTest('balance')">🔄 다시 측정</button>
     `;
 
-    // ★ v13: Wellness 저장
+    // ★ v21.0: 낙상 위험도 계산
+    const fallRisk = this._computeFallRisk(score, closedMetrics.rms, rombergRatio, age);
+
+    // ★ v13: Wellness 저장 (+ v21.0 낙상 위험)
     this._wellnessSave('balance', {
       score, rms: closedMetrics.rms, rombergRatio,
+      fallRiskLevel: fallRisk.level,
+      fallRiskScore: fallRisk.riskScore,
+      rombergRatioVal: Math.round(rombergRatio * 100) / 100,
     });
     // ★ v19.3: 측정 완료 후 인사이트 카드
     setTimeout(() => this._showPostMeasureInsight('balance', { score }), 800);
+  },
+
+  // ★ v21.0: 낙상 위험도 계산 (Romberg + 흔들림 기반)
+  // 학술: Romberg ratio는 전정·고유수용 기능 지표 (Black 1982),
+  //       자세 동요(postural sway)는 낙상 예측 인자 (Maki 1994)
+  _computeFallRisk(balanceScore, closedRms, rombergRatio, age) {
+    // 위험 점수 0~100 (높을수록 위험)
+    let risk = 0;
+    // 균형 점수 반영 (낮을수록 위험)
+    risk += (100 - balanceScore) * 0.5;
+    // Romberg 비율 (전정 기능 — 높을수록 위험)
+    if (rombergRatio > 4.0)      risk += 25;
+    else if (rombergRatio > 2.8) risk += 12;
+    else if (rombergRatio > 1.2) risk += 0;
+    else                         risk += 5; // 너무 낮아도(눈영향 없음) 측정 의심
+    // 눈감고 흔들림 절대값
+    if (closedRms > 0.40)      risk += 20;
+    else if (closedRms > 0.28) risk += 10;
+    // 고령 가중 (65세 이상 낙상 취약)
+    if (age >= 75)      risk += 8;
+    else if (age >= 65) risk += 4;
+
+    risk = Math.max(0, Math.min(100, Math.round(risk)));
+
+    let level, label, color, advice;
+    if (risk < 25) {
+      level = 'low'; label = '낮음'; color = '#16a34a';
+      advice = '낙상 위험이 낮습니다. 규칙적인 걷기와 가벼운 균형 운동으로 현재 상태를 유지하세요.';
+    } else if (risk < 50) {
+      level = 'mild'; label = '경계'; color = '#f59e0b';
+      advice = '약간의 주의가 필요합니다. 발목·코어 근력 운동과 한 발 서기 연습이 도움됩니다. 어두운 곳 이동 시 조심하세요.';
+    } else if (risk < 70) {
+      level = 'moderate'; label = '주의'; color = '#ea580c';
+      advice = '낙상 주의가 필요합니다. 욕실·계단에 손잡이를 두고, 미끄럼 방지 매트를 권합니다. 며칠간 반복 측정해 추세를 확인하세요.';
+    } else {
+      level = 'high'; label = '높음'; color = '#dc2626';
+      advice = '낙상 위험이 높게 나왔습니다. 일회성 결과일 수 있으나, 어지러움·휘청거림이 잦다면 전문의(이비인후과·신경과) 상담을 권합니다.';
+    }
+    return { riskScore: risk, level, label, color, advice };
+  },
+
+  // ★ v21.0: 낙상 위험 카드 렌더
+  _renderFallRiskCard(balanceScore, closedMetrics, openMetrics, rombergRatio, age) {
+    const fr = this._computeFallRisk(balanceScore, closedMetrics.rms, rombergRatio, age || 50);
+    return `
+      <div class="fall-risk-card">
+        <div class="fall-risk-title">🛡️ 낙상 위험도 평가 <span class="fall-risk-badge">선별 보조</span></div>
+        <div class="fall-risk-gauge">
+          <div class="frg-bar">
+            <div class="frg-fill" style="width:${fr.riskScore}%;background:${fr.color}"></div>
+            <div class="frg-marker" style="left:${fr.riskScore}%"></div>
+          </div>
+          <div class="frg-labels">
+            <span>안전</span><span>경계</span><span>주의</span><span>위험</span>
+          </div>
+        </div>
+        <div class="fall-risk-result">
+          <span class="frr-level" style="color:${fr.color}">위험도 ${fr.label}</span>
+          <span class="frr-score">${fr.riskScore}<span style="font-size:11px;color:#9ca3af">/100</span></span>
+        </div>
+        <div class="fall-risk-advice">${fr.advice}</div>
+        <div class="fall-risk-cite">
+          📚 Romberg test (Black 1982) · Postural sway &amp; falls (Maki 1994)<br>
+          ⚠️ 의학적 진단이 아닌 <strong>낙상 선별 보조 지표</strong>입니다. 추세 관찰을 권합니다.
+        </div>
+      </div>`;
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // ★ v21.0: 보행/낙상 분석 고도화 — 치매·낙상 선별 보조 지표
+  //
+  // 학술 근거:
+  //  - 보행 가변성(Stride Time CV): Hausdorff 2007, Pieruccini-Faria 2021
+  //    (Alzheimer's & Dementia) — stride-to-stride 변동이 인지-피질
+  //    기능장애의 민감한 지표. AD군 분류 AUC 0.71~0.86
+  //  - 추세 중요성: Verghese 2023 (PMC10736855) — 일회성보다 종단
+  //    추세가 미래 치매 예측에 추가 가치
+  //  - 운동인지위험증후군(MCR): Verghese 2013 — 느린 보행 + 인지 호소
+  //  - Butterworth 저역통과: Brajdic & Harle 2013 (보행 검출 표준)
+  //
+  // ⚠️ 중요: 본 지표는 의학적 "진단"이 아닌 "선별 보조(screening aid)"
+  //    단일 측정의 절대값보다 개인 내 추세 변화가 핵심 가치
+  // ════════════════════════════════════════════════════════════════
+
+  // 4차 Butterworth 저역통과 필터 (2-pass, zero-phase 근사)
+  // cutoff Hz, sampleRate Hz
+  _butterworthLowpass(data, cutoff, sampleRate) {
+    if (!data || data.length < 6) return data ? data.slice() : [];
+    // 2차 정규화 (Wn)
+    const nyq = sampleRate / 2;
+    let wc = cutoff / nyq;
+    wc = Math.max(0.01, Math.min(0.99, wc));
+    // 2차 저역통과 계수 (RBJ biquad, Q=0.7071 Butterworth)
+    const w0 = Math.tan(Math.PI * wc / 2);
+    const w02 = w0 * w0;
+    const sqrt2 = Math.SQRT2;
+    const denom = 1 + sqrt2 * w0 + w02;
+    const b0 = w02 / denom;
+    const b1 = 2 * b0;
+    const b2 = b0;
+    const a1 = 2 * (w02 - 1) / denom;
+    const a2 = (1 - sqrt2 * w0 + w02) / denom;
+
+    const applyOnce = (x) => {
+      const y = new Array(x.length).fill(0);
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+      for (let i = 0; i < x.length; i++) {
+        const xi = x[i];
+        const yi = b0 * xi + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+        y[i] = yi;
+        x2 = x1; x1 = xi; y2 = y1; y1 = yi;
+      }
+      return y;
+    };
+    // forward + backward (zero-phase 근사 → 4차 효과)
+    const fwd = applyOnce(data);
+    const rev = applyOnce(fwd.slice().reverse());
+    return rev.reverse();
+  },
+
+  // 가속도 샘플 → SVM(Signal Vector Magnitude) 시계열 + 균등 리샘플
+  // 반환: { svm:[], sr:실효샘플레이트 }
+  _gaitToSVM(samples) {
+    if (!samples || samples.length < 10) return { svm: [], sr: 0 };
+    // 실효 샘플레이트
+    const dur = (samples[samples.length - 1].t - samples[0].t) / 1000;
+    const sr = dur > 0 ? samples.length / dur : 50;
+    // SVM = sqrt(x²+y²+z²) → 중력 성분 제거(평균 차감)
+    const svmRaw = samples.map(s => Math.sqrt(s.x*s.x + s.y*s.y + s.z*s.z));
+    const mean = svmRaw.reduce((a, b) => a + b, 0) / svmRaw.length;
+    const svm = svmRaw.map(v => v - mean);
+    return { svm, sr };
+  },
+
+  // 보행 이벤트(걸음) 검출 → step time 배열 반환
+  // Butterworth 필터 + 적응형 피크 검출
+  _detectSteps(samples) {
+    const { svm, sr } = this._gaitToSVM(samples);
+    if (svm.length < 20 || sr < 5) return { stepTimes: [], peaks: [], sr };
+
+    // 보행 대역 저역통과 (3.5Hz) — 고주파 노이즈 제거
+    const filtered = this._butterworthLowpass(svm, 3.5, sr);
+
+    // 적응형 임계값 (표준편차 기반)
+    const std = Math.sqrt(filtered.reduce((s, v) => s + v*v, 0) / filtered.length);
+    const thr = std * 0.45;
+    // 최소 걸음 간격 (보행 최대 ~4.5 step/s → 0.22s)
+    const minDist = Math.max(3, Math.round(sr * 0.25));
+
+    const peaks = [];
+    let lastIdx = -minDist;
+    for (let i = 1; i < filtered.length - 1; i++) {
+      if (filtered[i] > thr && filtered[i] >= filtered[i-1] && filtered[i] > filtered[i+1]) {
+        if (i - lastIdx >= minDist) {
+          peaks.push(i);
+          lastIdx = i;
+        }
+      }
+    }
+    // step time(초) 배열 — 피크 간 시간차
+    const stepTimes = [];
+    for (let i = 1; i < peaks.length; i++) {
+      const dt = (peaks[i] - peaks[i-1]) / sr;
+      if (dt > 0.18 && dt < 2.0) stepTimes.push(dt); // 생리적 범위만
+    }
+    return { stepTimes, peaks, sr };
+  },
+
+  // 보행 고도화 지표 산출 (가변성/리듬일관성/추정속도)
+  _computeGaitAdvanced(samples, age) {
+    const { stepTimes, peaks, sr } = this._detectSteps(samples);
+    if (stepTimes.length < 6) {
+      return { valid: false, reason: '걸음 수 부족 (최소 7걸음 필요)', steps: peaks.length };
+    }
+
+    // ── 1. Stride Time Variability (CV) — 치매 선별 핵심 ──
+    const meanST = stepTimes.reduce((a, b) => a + b, 0) / stepTimes.length;
+    const varST = stepTimes.reduce((s, v) => s + (v - meanST) ** 2, 0) / stepTimes.length;
+    const sdST = Math.sqrt(varST);
+    const cvStepTime = (sdST / meanST) * 100; // % — 변동계수
+
+    // ── 2. 케이던스 (걸음/분) ──
+    const cadence = Math.round(60 / meanST);
+
+    // ── 3. 리듬 일관성 (좌우 대칭 근사) ──
+    // 단일 센서 위치로 좌우 분리 불가 → 인접 걸음쌍 규칙성으로 근사
+    // 홀짝 걸음(좌/우 추정) 평균 차이 → 비대칭 근사
+    let oddSum = 0, oddN = 0, evenSum = 0, evenN = 0;
+    stepTimes.forEach((t, i) => {
+      if (i % 2 === 0) { evenSum += t; evenN++; } else { oddSum += t; oddN++; }
+    });
+    const evenMean = evenN ? evenSum / evenN : meanST;
+    const oddMean = oddN ? oddSum / oddN : meanST;
+    const asymmetryIdx = Math.abs(evenMean - oddMean) / ((evenMean + oddMean) / 2) * 100; // %
+
+    // ── 4. 보행 규칙성 점수 (자기상관 1주기) ──
+    const { svm } = this._gaitToSVM(samples);
+    const filtered = this._butterworthLowpass(svm, 3.5, sr);
+    let regularity = 0;
+    if (peaks.length >= 4) {
+      const avgStride = Math.round((peaks[peaks.length-1] - peaks[0]) / (peaks.length - 1));
+      let r0 = 0, rLag = 0;
+      for (let i = 0; i < filtered.length; i++) r0 += filtered[i] * filtered[i];
+      for (let i = 0; i < filtered.length - avgStride; i++) rLag += filtered[i] * filtered[i + avgStride];
+      regularity = r0 > 0 ? Math.max(0, Math.min(1, rLag / r0)) : 0;
+    }
+
+    // ── 5. CV 임상 해석 (Hausdorff/Pieruccini-Faria 기준) ──
+    // 정상 성인 stride time CV: ~1-3%. MCI/치매: 흔히 >5%
+    // 노인은 baseline이 약간 높음 (~3-4%)
+    let cvLevel, cvColor;
+    if (cvStepTime < 3.5)      { cvLevel = 'good';   cvColor = '#16a34a'; }
+    else if (cvStepTime < 5.5) { cvLevel = 'normal'; cvColor = '#f59e0b'; }
+    else if (cvStepTime < 8.0) { cvLevel = 'watch';  cvColor = '#ea580c'; }
+    else                       { cvLevel = 'high';   cvColor = '#dc2626'; }
+
+    return {
+      valid: true,
+      steps: peaks.length,
+      stepCount: stepTimes.length + 1,
+      meanStepTime: Math.round(meanST * 1000), // ms
+      cvStepTime: Math.round(cvStepTime * 10) / 10, // %
+      cadence,
+      asymmetryIdx: Math.round(asymmetryIdx * 10) / 10, // %
+      regularity: Math.round(regularity * 100), // %
+      cvLevel, cvColor,
+      sr: Math.round(sr),
+    };
+  },
+
+  // 운동인지위험(MCR) 선별 — 보행속도 추정 + 추세 결합
+  // 반환: 위험 단계 + 정직한 면책 문구
+  _computeMCRScreening(gaitAdv, age) {
+    if (!gaitAdv || !gaitAdv.valid) return null;
+    // 케이던스 기반 보행속도 추정 (절대속도 아님, 상대 지표)
+    // 느린 케이던스 + 높은 CV = 주의
+    const slowCadence = age >= 65 ? gaitAdv.cadence < 95 : gaitAdv.cadence < 100;
+    const highVariability = gaitAdv.cvStepTime >= 5.5;
+
+    let level, label, color, desc;
+    if (highVariability && slowCadence) {
+      level = 'watch'; label = '추적 권장'; color = '#dc2626';
+      desc = '보행 가변성과 속도 모두에서 평소와 다른 패턴이 보입니다. 일회성 결과로 단정할 수 없으니, 며칠간 반복 측정해 추세를 확인해보세요.';
+    } else if (highVariability || slowCadence) {
+      level = 'normal'; label = '경계'; color = '#f59e0b';
+      desc = '한 가지 지표에서 약간의 변화가 보입니다. 컨디션·신발·바닥 영향일 수 있으니 추세를 지켜보세요.';
+    } else {
+      level = 'good'; label = '양호'; color = '#16a34a';
+      desc = '보행 리듬과 속도가 안정적입니다. 규칙적인 걷기는 인지·심혈관 건강 유지에 도움이 됩니다.';
+    }
+    return { level, label, color, desc };
   },
 
   _computeBalanceMetrics(samples) {
@@ -14821,7 +15099,7 @@ const App = {
     document.getElementById('bt-gait-steps').textContent = 0;
 
     // ★ v13.1: 음성 끝난 후 측정 시작
-    this._speak('보행 측정을 시작합니다. 평소 속도로 30초간 걸어주세요.', () => {
+    this._speak('보행 측정을 시작합니다. 스마트폰을 손에 들거나 주머니에 넣고, 평평한 곳을 30초간 평소 속도로 걸어주세요.', () => {
       if (!this.state.body.running) return;
       console.log('[Gait] 음성 종료 → 측정 시작');
 
@@ -14883,23 +15161,31 @@ const App = {
     const cadence = steps * 2; // 30초 → 분당
     const meanInterval = g.samples.length > 0 ? 30000 / Math.max(steps, 1) : 0;
 
-    // ★ v15.3: 나이 보정 보행 점수
     const profile = this._getUserProfile();
     const { age } = profile;
     let score;
 
     if (age && steps >= 20) {
       const cadenceRef = this._refCadence(age);
-      // Cadence는 중심값 좋음 (너무 느려도 빨라도 비정상)
       const deviation = Math.abs(cadence - cadenceRef.mean) / cadenceRef.sd;
       score = Math.max(5, Math.min(99, this._zToScore(-deviation + 0.7)));
-      console.log(`[Gait Score] age=${age} cadence=${cadence} ref=${cadenceRef.mean}±${cadenceRef.sd} → ${score}`);
     } else {
-      // Fallback
       score = 100;
       if (cadence < 80 || cadence > 130) score -= 20;
       if (steps < 20) score -= 30;
       score = Math.max(0, Math.min(100, score));
+    }
+
+    // ★ v21.0: 보행 고도화 지표 (가변성/대칭성/규칙성)
+    const adv = this._computeGaitAdvanced(g.samples, age || 50);
+    const mcr = adv.valid ? this._computeMCRScreening(adv, age || 50) : null;
+
+    // 가변성이 측정되면 점수에 반영 (높은 CV = 감점)
+    if (adv.valid) {
+      if (adv.cvStepTime >= 8.0)      score = Math.min(score, 55);
+      else if (adv.cvStepTime >= 5.5) score = Math.min(score, 72);
+      // 추세 비교를 위해 CV를 점수에 살짝 보정
+      score = Math.round(score);
     }
 
     const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 50 ? 'C' : 'D';
@@ -14910,6 +15196,55 @@ const App = {
     else if (cadence <= 110) cmt = '안정적이고 정상적인 보행 속도입니다.';
     else if (cadence <= 130) cmt = '약간 빠른 걸음입니다.';
     else cmt = '매우 빠른 걸음 또는 측정 오류 가능성이 있습니다.';
+
+    // ★ v21.0: 고도화 지표 HTML
+    let advHTML = '';
+    if (adv.valid) {
+      advHTML = `
+        <div class="gait-adv-card">
+          <div class="gait-adv-title">🧠 보행 정밀 분석 <span class="gait-adv-badge">치매·낙상 선별 보조</span></div>
+          <div class="gait-adv-grid">
+            <div class="gait-adv-metric">
+              <div class="gam-label">보행 가변성</div>
+              <div class="gam-val" style="color:${adv.cvColor}">${adv.cvStepTime}<span class="gam-unit">%</span></div>
+              <div class="gam-ref">CV · 정상 &lt;3.5%</div>
+            </div>
+            <div class="gait-adv-metric">
+              <div class="gam-label">리듬 일관성</div>
+              <div class="gam-val" style="color:${adv.regularity >= 70 ? '#16a34a' : adv.regularity >= 50 ? '#f59e0b' : '#dc2626'}">${adv.regularity}<span class="gam-unit">%</span></div>
+              <div class="gam-ref">자기상관 규칙성</div>
+            </div>
+            <div class="gait-adv-metric">
+              <div class="gam-label">좌우 비대칭</div>
+              <div class="gam-val" style="color:${adv.asymmetryIdx < 5 ? '#16a34a' : adv.asymmetryIdx < 10 ? '#f59e0b' : '#dc2626'}">${adv.asymmetryIdx}<span class="gam-unit">%</span></div>
+              <div class="gam-ref">근사값 · 낮을수록 좋음</div>
+            </div>
+            <div class="gait-adv-metric">
+              <div class="gam-label">감지된 걸음</div>
+              <div class="gam-val" style="color:#374151">${adv.stepCount}<span class="gam-unit">보</span></div>
+              <div class="gam-ref">${adv.sr}Hz 샘플링</div>
+            </div>
+          </div>
+          ${mcr ? `
+          <div class="gait-mcr" style="border-left-color:${mcr.color}">
+            <div class="gait-mcr-head">
+              <span class="gait-mcr-label" style="color:${mcr.color}">${mcr.label}</span>
+              <span class="gait-mcr-title">운동인지위험(MCR) 선별</span>
+            </div>
+            <div class="gait-mcr-desc">${mcr.desc}</div>
+          </div>` : ''}
+          <div class="gait-adv-cite">
+            📚 Hausdorff 2007 · Pieruccini-Faria 2021 (Alzheimer's &amp; Dementia) · Verghese 2013 MCR<br>
+            ⚠️ 의학적 진단이 아닌 <strong>선별 보조 지표</strong>입니다. 단일 측정값보다 <strong>여러 날의 추세 변화</strong>가 중요하며, 우려 시 전문의 상담을 권합니다.
+          </div>
+        </div>`;
+    } else {
+      advHTML = `
+        <div class="gait-adv-card gait-adv-invalid">
+          <div class="gait-adv-title">🧠 보행 정밀 분석</div>
+          <div class="gait-adv-cite">정밀 분석을 위해서는 최소 7걸음 이상이 필요합니다. (현재 ${adv.steps || 0}걸음 감지) 평평한 곳에서 10m 이상 평소처럼 걸어주세요.</div>
+        </div>`;
+    }
 
     document.getElementById('bt-gait-running').style.display = 'none';
     const result = document.getElementById('bt-gait-result');
@@ -14924,12 +15259,18 @@ const App = {
         <div class="bt-result-row"><span class="bt-result-row-label">평균 간격</span><span class="bt-result-row-value">${meanInterval.toFixed(0)} ms</span></div>
         <div class="bt-result-cmt">${cmt}</div>
       </div>
+      ${advHTML}
       <button class="bt-redo" type="button" onclick="App.startBodyTest('gait')">🔄 다시 측정</button>
     `;
 
-    // ★ v13: Wellness 저장
+    // ★ v13: Wellness 저장 (+ v21.0 고도화 지표)
     this._wellnessSave('gait', {
       score, stepsPerMin: cadence, steps,
+      cvStepTime: adv.valid ? adv.cvStepTime : null,
+      regularity: adv.valid ? adv.regularity : null,
+      asymmetryIdx: adv.valid ? adv.asymmetryIdx : null,
+      cadenceAdv: adv.valid ? adv.cadence : null,
+      mcrLevel: mcr ? mcr.level : null,
     });
   },
 

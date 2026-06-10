@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>건강 측정 v20 — ME-rPPG</title>
+<title>건강 측정 v21 — ME-rPPG</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -10480,6 +10480,91 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   font-size: 14px; font-weight: 800; cursor: pointer;
 }
 .privacy-modal-close:active { transform: scale(.98); }
+
+/* ════════════════════════════════════════════════════
+   ★ v21.0: 보행 정밀 분석 / 낙상 위험도 카드
+   ════════════════════════════════════════════════════ */
+.gait-adv-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 16px; margin: 12px 0;
+}
+.gait-adv-card.gait-adv-invalid { background: #f9fafb; }
+.gait-adv-title {
+  font-size: 14px; font-weight: 900; color: var(--text);
+  margin-bottom: 12px; display: flex; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+}
+.gait-adv-badge, .fall-risk-badge {
+  font-size: 10px; font-weight: 800; color: #fff;
+  background: #6366f1; padding: 3px 9px; border-radius: 999px;
+  letter-spacing: .02em;
+}
+.gait-adv-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 8px; margin-bottom: 12px;
+}
+.gait-adv-metric {
+  background: var(--bg); border-radius: 12px; padding: 11px;
+  text-align: center;
+}
+.gam-label { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 4px; }
+.gam-val { font-size: 24px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.gam-unit { font-size: 12px; font-weight: 700; margin-left: 1px; }
+.gam-ref { font-size: 9px; color: var(--text3); margin-top: 4px; }
+
+.gait-mcr {
+  background: var(--bg); border-left: 4px solid;
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;
+}
+.gait-mcr-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.gait-mcr-label { font-size: 12px; font-weight: 900; }
+.gait-mcr-title { font-size: 12px; font-weight: 700; color: var(--text2); }
+.gait-mcr-desc { font-size: 12px; font-weight: 500; color: var(--text2); line-height: 1.55; }
+
+.gait-adv-cite, .fall-risk-cite {
+  font-size: 10px; color: var(--text3); line-height: 1.6;
+  background: var(--bg); border-radius: 8px; padding: 9px 11px;
+}
+.gait-adv-cite strong, .fall-risk-cite strong { color: var(--text2); font-weight: 800; }
+
+/* 낙상 위험 카드 */
+.fall-risk-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 16px; margin: 12px 0;
+}
+.fall-risk-title {
+  font-size: 14px; font-weight: 900; color: var(--text);
+  margin-bottom: 14px; display: flex; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+}
+.fall-risk-gauge { margin-bottom: 12px; }
+.frg-bar {
+  position: relative; height: 10px; border-radius: 999px;
+  background: linear-gradient(90deg, #16a34a 0%, #f59e0b 40%, #ea580c 65%, #dc2626 100%);
+  margin-bottom: 6px;
+}
+.frg-fill { display: none; }
+.frg-marker {
+  position: absolute; top: -4px; width: 4px; height: 18px;
+  background: #1f2937; border-radius: 2px;
+  transform: translateX(-50%);
+  box-shadow: 0 0 0 2px #fff;
+}
+.frg-labels {
+  display: flex; justify-content: space-between;
+  font-size: 9px; font-weight: 700; color: var(--text3);
+}
+.fall-risk-result {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.frr-level { font-size: 16px; font-weight: 900; }
+.frr-score { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--text); }
+.fall-risk-advice {
+  font-size: 12px; font-weight: 500; color: var(--text2);
+  line-height: 1.6; margin-bottom: 12px;
+  background: var(--bg); border-radius: 10px; padding: 11px 13px;
+}
 </style>
 </head>
 <body>
@@ -10499,7 +10584,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v20.0 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v21.0 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -11129,6 +11214,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <div class="bt-desc">
       휴대폰을 <strong>주머니에 넣거나 손에 들고</strong>,<br>
       평소 속도로 30초간 걸어주세요.<br>
+      <small style="color:#6366f1;font-weight:700">📱 폰을 손에 들거나 주머니에 넣고 10보 이상 걸으면 치매·낙상 선별 정밀 분석이 제공됩니다</small><br>
       직선 5~10m 정도의 평평한 공간에서 측정합니다.
     </div>
     <div class="bt-tip">📱 휴대폰 화면이 흔들리지 않도록 단단히 잡으세요</div>
