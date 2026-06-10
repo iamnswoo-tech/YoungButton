@@ -266,6 +266,7 @@ const App = {
     this._safeStep('weeklyGoalCard', () => this._renderWeeklyGoalCard()); // ★ v19.1
     this._safeStep('sleepLoad', () => this._loadSleepScore()); // ★ v20.0
     this._safeStep('sleepCheckin', () => this._renderSleepCheckin()); // ★ v20.0
+    this._safeStep('homeHero', () => this._renderHomeHero()); // ★ v22.0
     this._safeStep('basicInfoCard', () => this._renderBasicInfoCard()); // ★ v20.5
     this._safeStep('brainBalanceCard', () => this._renderBrainBalanceCard()); // ★ v21.1
     this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
@@ -1011,6 +1012,7 @@ const App = {
     this._safeStep('recommendRefresh', () => this._renderRecommendCard());
     this._safeStep('basicInfoRefresh', () => this._renderBasicInfoCard());
     this._safeStep('brainBalanceRefresh', () => this._renderBrainBalanceCard());
+    this._safeStep('homeHeroRefresh', () => this._renderHomeHero());
   },
 
   // ★ v14.3: 측정 히스토리 누적 저장
@@ -2150,6 +2152,7 @@ const App = {
     if (page === 'home') {
       this._renderMoodHomeCard();
       this._safeStep('sleepCheckin', () => this._renderSleepCheckin()); // ★ v20.0
+      this._safeStep('homeHero', () => this._renderHomeHero()); // ★ v22.0
       this._safeStep('basicInfoCard', () => this._renderBasicInfoCard()); // ★ v20.5
       this._safeStep('brainBalanceCard', () => this._renderBrainBalanceCard()); // ★ v21.1
       this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
@@ -8266,6 +8269,62 @@ const App = {
         </div>
         <div class="bip-cta">기본 정보 입력하기 →</div>
       </button>`;
+  },
+
+  // ════════════════════════════════════════════════════
+  // ★ v22.0: 동적 건강 요약 히어로 (홈 상단)
+  // ════════════════════════════════════════════════════
+  _renderHomeHero() {
+    const dyn = document.getElementById('home-hero-dynamic');
+    const def = document.getElementById('home-hero-default');
+    if (!dyn) return;
+
+    const ws = this._wellnessComputeScore ? this._wellnessComputeScore() : { score: null };
+
+    // 측정 데이터 없음 → 기본 히어로 유지
+    if (!ws || ws.score == null) {
+      dyn.innerHTML = '';
+      dyn.style.display = 'none';
+      if (def) def.style.display = '';
+      return;
+    }
+
+    // 측정 데이터 있음 → 동적 요약 히어로
+    if (def) def.style.display = 'none';
+    dyn.style.display = 'block';
+
+    const hour = new Date().getHours();
+    const greet = hour < 6 ? '편안한 새벽이에요' : hour < 12 ? '좋은 아침이에요'
+      : hour < 18 ? '활기찬 오후예요' : '편안한 저녁이에요';
+
+    // 핵심 지표 3개 (있는 것 우선)
+    const w = this.state.wellness || {};
+    const cardio = this._getUnifiedCardio ? this._getUnifiedCardio(w) : null;
+    const stats = [];
+    if (cardio && cardio.hr) stats.push({ val: cardio.hr, label: '심박수 BPM' });
+    if (cardio && cardio.rmssd) stats.push({ val: Math.round(cardio.rmssd), label: 'HRV ms' });
+    // 종합점수는 항상
+    stats.push({ val: ws.score, label: `건강점수 ${ws.grade}` });
+
+    // 최대 3개
+    const statsHTML = stats.slice(0, 3).map((s, i) => `
+      ${i > 0 ? '<div class="hh-stat-divider"></div>' : ''}
+      <div class="hh-stat">
+        <div class="hh-stat-val">${s.val}</div>
+        <div class="hh-stat-label">${s.label}</div>
+      </div>
+    `).join('');
+
+    const deltaTxt = ws.scoreDelta != null && ws.scoreDelta !== 0
+      ? (ws.scoreDelta > 0 ? `어제보다 ${ws.scoreDelta}점 좋아졌어요 📈` : `어제보다 ${Math.abs(ws.scoreDelta)}점 낮아요`)
+      : '오늘도 건강을 기록해보세요';
+
+    dyn.innerHTML = `
+      <div class="home-hero">
+        <div class="hh-greet">${greet} 👋</div>
+        <div class="hh-title">${deltaTxt}</div>
+        <div class="hh-stats">${statsHTML}</div>
+      </div>`;
   },
 
   // ════════════════════════════════════════════════════

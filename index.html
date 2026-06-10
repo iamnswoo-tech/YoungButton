@@ -10746,6 +10746,108 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   padding: 10px 14px;
 }
 .bbc-pf span { font-size: 18px; }
+
+/* ════════════════════════════════════════════════════════
+   ★ v22.0: 통합 디자인 시스템 (4인 전문가 합의)
+   ════════════════════════════════════════════════════════ */
+:root {
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+  --r-sm: 12px; --r-md: 16px; --r-lg: 20px; --r-xl: 24px;
+  --elev-1: 0 1px 3px rgba(15,23,42,.04), 0 1px 2px rgba(15,23,42,.03);
+  --elev-2: 0 4px 16px rgba(15,23,42,.06), 0 2px 6px rgba(15,23,42,.04);
+  --elev-3: 0 12px 32px rgba(15,23,42,.10), 0 4px 12px rgba(15,23,42,.06);
+}
+.ui-section { margin: var(--sp-6) var(--sp-4) 0; }
+.ui-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--sp-3); padding: 0 var(--sp-1);
+}
+.ui-section-title {
+  font-size: 17px; font-weight: 800; color: var(--text);
+  letter-spacing: -.02em; display: flex; align-items: center; gap: 7px;
+}
+.ui-section-more {
+  font-size: 13px; font-weight: 700; color: var(--primary);
+  background: none; border: none; cursor: pointer; font-family: inherit;
+}
+.ui-card {
+  background: var(--card); border-radius: var(--r-lg);
+  padding: var(--sp-4); box-shadow: var(--elev-1);
+  border: 1px solid var(--border);
+}
+.home-hero {
+  margin: var(--sp-4) var(--sp-4) 0;
+  background: linear-gradient(135deg, #2D7CFF 0%, #5B6CFF 100%);
+  border-radius: var(--r-xl); padding: var(--sp-5);
+  color: #fff; position: relative; overflow: hidden;
+  box-shadow: 0 8px 28px rgba(45,124,255,.28);
+}
+.home-hero::after {
+  content: ''; position: absolute; top: -40px; right: -40px;
+  width: 160px; height: 160px; border-radius: 50%;
+  background: rgba(255,255,255,.10); pointer-events: none;
+}
+.hh-greet {
+  font-size: 13px; font-weight: 600; opacity: .9;
+  margin-bottom: var(--sp-1); position: relative; z-index: 1;
+}
+.hh-title {
+  font-size: 22px; font-weight: 900; letter-spacing: -.03em;
+  margin-bottom: var(--sp-4); position: relative; z-index: 1; line-height: 1.3;
+}
+.hh-stats { display: flex; gap: var(--sp-4); position: relative; z-index: 1; }
+.hh-stat { flex: 1; }
+.hh-stat-val {
+  font-size: 24px; font-weight: 900; font-variant-numeric: tabular-nums;
+  line-height: 1; margin-bottom: 3px;
+}
+.hh-stat-label { font-size: 11px; font-weight: 600; opacity: .85; }
+.hh-stat-divider { width: 1px; background: rgba(255,255,255,.25); }
+
+/* ════════════════════════════════════════════════════════
+   ★ v22.0: 카드 스타일 통일 레이어 (기존 보존, 미세 정돈)
+   ════════════════════════════════════════════════════════ */
+/* 측정 카드 — 라운드/그림자 표준화 */
+.measure-card-game {
+  border-radius: var(--r-lg) !important;
+  box-shadow: var(--elev-2) !important;
+}
+/* 결과 카드 통일 */
+.bt-result-card {
+  border-radius: var(--r-lg) !important;
+  box-shadow: var(--elev-1) !important;
+}
+/* 섹션 타이틀 통일 (홈 측정 섹션 등) */
+.section-title {
+  font-size: 17px !important; font-weight: 800 !important;
+  letter-spacing: -.02em !important;
+}
+/* 안부/정보/개인정보 카드 외곽 일관 라운드 */
+.care-card, .info-card, .privacy-card, .wellness-card,
+.recommend-card, .sleep-card, .weekly-goal-card {
+  border-radius: var(--r-lg);
+}
+
+/* ════════════════════════════════════════════════════════
+   ★ v22.0: 하단 네비게이션 시각 정돈
+   ════════════════════════════════════════════════════════ */
+.tabbar, .bottom-nav, .nav-bar {
+  box-shadow: 0 -2px 16px rgba(15,23,42,.06);
+}
+
+/* ════════════════════════════════════════════════════════
+   ★ v22.0: 페이지 back-bar 통일
+   ════════════════════════════════════════════════════════ */
+.back-bar {
+  padding: var(--sp-3) var(--sp-4);
+}
+.page-title {
+  font-size: 19px; font-weight: 800; letter-spacing: -.02em;
+}
+.page-subtitle {
+  font-size: 12px; color: var(--text3); font-weight: 600; margin-top: 1px;
+}
 </style>
 </head>
 <body>
@@ -10761,16 +10863,19 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </svg>
     </div>
     <div>
-      <div class="hd-title">ResetButton For You</div>
+      <div class="hd-title">ResetButton</div>
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v21.2 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v22.0 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
 <div class="page on" id="page-home">
-  <div class="hero">
+  <!-- ★ v22.0: 동적 건강 요약 히어로 (측정 데이터 있을 때) -->
+  <div id="home-hero-dynamic"></div>
+
+  <div class="hero" id="home-hero-default">
     <div class="hero-emoji">👨‍⚕️🩺</div>
     <div class="hero-title">나를 찾는 건강습관,<br>내 몸과 마음의 리셋버튼.</div>
     <div class="hero-sub"><strong>ME-rPPG 딥러닝 AI</strong>가 10초 만에<br>심박·혈관·감정·자율신경을 분석합니다.</div>
