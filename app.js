@@ -2151,7 +2151,6 @@ const App = {
       this._renderMoodHomeCard();
       this._safeStep('sleepCheckin', () => this._renderSleepCheckin()); // ★ v20.0
       this._safeStep('basicInfoCard', () => this._renderBasicInfoCard()); // ★ v20.5
-    this._safeStep('brainBalanceCard', () => this._renderBrainBalanceCard()); // ★ v21.1
       this._safeStep('brainBalanceCard', () => this._renderBrainBalanceCard()); // ★ v21.1
       this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
     }
@@ -8279,6 +8278,29 @@ const App = {
     if (!h || !h.available) { el.style.display = 'none'; return; }
 
     el.style.display = 'block';
+
+    // ★ v21.2: 측정 데이터 없음 → 기능 소개 + 측정 유도 카드
+    if (h.promptMode) {
+      el.innerHTML = `
+        <div class="brain-balance-card bbc-prompt">
+          <div class="bbc-header">
+            <div class="bbc-title">🧠🛡️ 두뇌·균형 건강</div>
+            <span class="bbc-conf" style="background:#8b5cf6">NEW</span>
+          </div>
+          <div class="bbc-prompt-desc">
+            보행과 균형을 측정하면 <strong>낙상 위험도</strong>와 <strong>두뇌·보행 건강(치매 선별 보조)</strong>을 확인할 수 있어요.
+          </div>
+          <div class="bbc-prompt-feats">
+            <div class="bbc-pf"><span>🛡️</span> 낙상 위험도 평가</div>
+            <div class="bbc-pf"><span>🧠</span> 보행 가변성 분석</div>
+            <div class="bbc-pf"><span>📈</span> 추세 변화 추적</div>
+          </div>
+          <button type="button" class="bbc-cta" onclick="App.goPage('body');setTimeout(()=>App.startBodyTest('gait'),400)">
+            🚶 보행 측정 시작하기 →
+          </button>
+        </div>`;
+      return;
+    }
 
     // 낙상 위험 미니 게이지
     const fallHTML = h.fallRiskScore != null ? `
@@ -14945,12 +14967,16 @@ const App = {
     const lastGait = gaitH.length ? gaitH[gaitH.length-1] : null;
     const lastBal  = balH.length  ? balH[balH.length-1]  : null;
 
-    // 데이터 가용성
+    // ★ v21.2: 데이터 가용성 — 신규 정밀지표 + 기존 score 폴백
     const hasGaitCV = lastGait && lastGait.cvStepTime != null;
     const hasBalance = lastBal && lastBal.fallRiskScore != null;
+    // 기존 측정(score만 있는 구버전 데이터)도 인식
+    const hasGaitScore = lastGait && lastGait.score != null;
+    const hasBalScore  = lastBal && lastBal.score != null;
 
-    if (!hasGaitCV && !hasBalance) {
-      return { available: false };
+    // 측정 데이터가 전혀 없으면 → 측정 유도 모드
+    if (!hasGaitScore && !hasBalScore) {
+      return { available: true, promptMode: true };
     }
 
     // ── 측정 횟수 기반 신뢰도 ──
@@ -14967,10 +14993,15 @@ const App = {
     {
       let parts = [], weights = [];
       if (hasBalance) { parts.push(lastBal.fallRiskScore); weights.push(0.6); }
+      else if (hasBalScore) {
+        // 구버전 균형 데이터: score → 위험도 역산 (점수 높을수록 위험 낮음)
+        parts.push(Math.max(0, 100 - lastBal.score)); weights.push(0.6);
+      }
       if (hasGaitCV) {
-        // 보행 가변성 → 낙상 기여 (CV 높을수록 위험)
         const gaitFall = Math.min(100, Math.max(0, (lastGait.cvStepTime - 2) * 12));
         parts.push(gaitFall); weights.push(0.4);
+      } else if (hasGaitScore) {
+        parts.push(Math.max(0, 100 - lastGait.score)); weights.push(0.4);
       }
       if (parts.length) {
         const wSum = weights.reduce((a,b)=>a+b,0);
@@ -14986,12 +15017,15 @@ const App = {
     // ── 인지건강(치매 선별) — 보행 가변성 + MCR ──
     let cogScore = null, cogLevel = null, cogColor = null, cogLabel = null;
     if (hasGaitCV) {
-      // CV 낮을수록 인지건강 양호 (역방향 점수화)
       const cv = lastGait.cvStepTime;
       cogScore = Math.round(Math.max(0, Math.min(100, 100 - (cv - 2) * 11)));
-      // MCR 단계 반영
       if (lastGait.mcrLevel === 'watch') cogScore = Math.min(cogScore, 55);
       else if (lastGait.mcrLevel === 'normal') cogScore = Math.min(cogScore, 72);
+    } else if (hasGaitScore) {
+      // 구버전 보행 데이터: score 기반 근사 (정밀 분석 권장 표시용)
+      cogScore = lastGait.score;
+    }
+    if (cogScore != null) {
       if (cogScore >= 80)      { cogLevel='good';   cogColor='#16a34a'; cogLabel='양호'; }
       else if (cogScore >= 60) { cogLevel='normal'; cogColor='#f59e0b'; cogLabel='경계'; }
       else                     { cogLevel='watch';  cogColor='#dc2626'; cogLabel='추적 권장'; }

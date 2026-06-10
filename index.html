@@ -10728,6 +10728,24 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   0%,100% { background: rgba(99,102,241,.3); transform: scale(1); }
   50%     { background: #6366f1; transform: scale(1.3); }
 }
+
+/* ★ v21.2: 두뇌·균형 측정 유도 카드 */
+.bbc-prompt { background: linear-gradient(135deg, #FAF5FF 0%, #EEF2FF 100%); }
+.bbc-prompt-desc {
+  font-size: 13px; font-weight: 600; color: #5b21b6;
+  line-height: 1.6; margin-bottom: 14px;
+}
+.bbc-prompt-desc strong { font-weight: 900; color: #6d28d9; }
+.bbc-prompt-feats {
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;
+}
+.bbc-pf {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 700; color: #6b21a8;
+  background: rgba(255,255,255,.7); border-radius: 11px;
+  padding: 10px 14px;
+}
+.bbc-pf span { font-size: 18px; }
 </style>
 </head>
 <body>
@@ -10743,11 +10761,11 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       </svg>
     </div>
     <div>
-      <div class="hd-title">ResetButton</div>
+      <div class="hd-title">ResetButton For You</div>
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v21.1 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v21.2 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
