@@ -10565,6 +10565,169 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   line-height: 1.6; margin-bottom: 12px;
   background: var(--bg); border-radius: 10px; padding: 11px 13px;
 }
+
+/* ════════════════════════════════════════════════════
+   ★ v21.1: 두뇌·균형 건강 요약 카드 (홈)
+   ════════════════════════════════════════════════════ */
+.brain-balance-card {
+  margin: 0 16px 12px;
+  background: linear-gradient(135deg, #FAF5FF 0%, #F0F9FF 100%);
+  border: 1.5px solid #c4b5fd; border-radius: 20px;
+  padding: 16px 18px;
+  box-shadow: 0 4px 16px rgba(139,92,246,.10);
+}
+.bbc-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; gap: 8px;
+}
+.bbc-title { font-size: 15px; font-weight: 900; color: #5b21b6; letter-spacing: -.02em; }
+.bbc-conf {
+  font-size: 10px; font-weight: 800; color: #fff;
+  padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+}
+.bbc-metrics { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.bbc-metric {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255,255,255,.8); border-radius: 14px;
+  padding: 12px 14px; cursor: pointer;
+  border: 1px solid rgba(196,181,253,.4);
+  transition: transform .12s;
+}
+.bbc-metric:active { transform: scale(.98); }
+.bbc-m-icon { font-size: 26px; flex-shrink: 0; }
+.bbc-m-body { flex: 1; }
+.bbc-m-label { font-size: 12px; font-weight: 700; color: #6b7280; margin-bottom: 2px; }
+.bbc-m-val { font-size: 18px; font-weight: 900; letter-spacing: -.02em; }
+.bbc-m-gauge { position: relative; width: 44px; height: 44px; flex-shrink: 0; }
+.bbc-ring { width: 44px; height: 44px; }
+.bbc-ring-num {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  font-size: 14px; font-weight: 900; font-variant-numeric: tabular-nums;
+}
+.bbc-trend {
+  text-align: center; font-size: 12px; font-weight: 800;
+  padding: 8px; background: rgba(255,255,255,.7);
+  border-radius: 10px; margin-bottom: 10px;
+}
+.bbc-note {
+  font-size: 10px; color: #7c3aed; line-height: 1.5;
+  background: rgba(196,181,253,.15); border-radius: 9px;
+  padding: 8px 11px;
+}
+.bbc-note strong { font-weight: 900; }
+.bbc-cta {
+  width: 100%; margin-top: 10px; padding: 11px;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #fff; border: none; border-radius: 12px;
+  font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+}
+.bbc-cta:active { transform: scale(.98); }
+
+/* ════════════════════════════════════════════════════
+   ★ v21.1: 신체측정 화면 생동감 강화
+   ════════════════════════════════════════════════════ */
+/* 측정 중 배경 — 부드러운 그라데이션 펄스 */
+.bt-running {
+  position: relative;
+  background: linear-gradient(160deg, #f0f9ff 0%, #faf5ff 100%);
+  border-radius: 24px;
+  overflow: hidden;
+}
+.bt-running::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 30%, rgba(99,102,241,.08), transparent 60%);
+  animation: btBreathe 3s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes btBreathe {
+  0%,100% { opacity: .4; transform: scale(1); }
+  50%     { opacity: 1; transform: scale(1.1); }
+}
+
+/* 측정 단계 라벨 — 생동감 */
+.bt-phase {
+  font-size: 17px; font-weight: 800;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 14px; position: relative; z-index: 1;
+  letter-spacing: -.02em;
+}
+
+/* 타이머 — 펄스 링 + 큰 숫자 */
+.bt-timer-big {
+  font-size: 92px; font-weight: 900;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-variant-numeric: tabular-nums; margin: 12px 0;
+  position: relative; z-index: 1;
+  animation: btTimerPulse 1s ease-in-out infinite;
+}
+@keyframes btTimerPulse {
+  0%,100% { transform: scale(1); }
+  50%     { transform: scale(1.06); }
+}
+
+.bt-instruction {
+  font-size: 14px; color: var(--text2); font-weight: 600;
+  margin-bottom: 16px; position: relative; z-index: 1;
+  line-height: 1.5;
+}
+
+/* 측정 통계 — 카드형 */
+.bt-stat {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 14px; color: var(--text); font-weight: 600;
+  margin: 12px 0; padding: 10px 18px; position: relative; z-index: 1;
+  background: rgba(255,255,255,.8); border-radius: 999px;
+  border: 1.5px solid rgba(99,102,241,.2);
+}
+.bt-stat span {
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 900; font-size: 20px;
+}
+
+/* 파형 캔버스 — 글로우 테두리 */
+.wave-canvas {
+  width: 100%; height: 70px; display: block;
+  background: linear-gradient(180deg, #1e1b4b, #312e81);
+  border-radius: 12px; position: relative; z-index: 1;
+  box-shadow: 0 4px 20px rgba(99,102,241,.25),
+              inset 0 0 30px rgba(139,92,246,.15);
+}
+
+/* 측정 시작 전 준비 화면 — 아이콘 바운스 */
+.bt-stage { position: relative; }
+.bt-ready-icon {
+  font-size: 56px; display: inline-block;
+  animation: btBounce 1.6s ease-in-out infinite;
+  margin-bottom: 8px;
+}
+@keyframes btBounce {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-10px); }
+}
+
+/* 측정 진행 점 3개 */
+.bt-progress-dots {
+  display: flex; justify-content: center; gap: 8px;
+  margin: 14px 0; position: relative; z-index: 1;
+}
+.bt-progress-dots span {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: rgba(99,102,241,.3);
+  animation: btDot 1.4s ease-in-out infinite;
+}
+.bt-progress-dots span:nth-child(2) { animation-delay: .2s; }
+.bt-progress-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes btDot {
+  0%,100% { background: rgba(99,102,241,.3); transform: scale(1); }
+  50%     { background: #6366f1; transform: scale(1.3); }
+}
 </style>
 </head>
 <body>
@@ -10584,7 +10747,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v21.0 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v21.1 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -10600,6 +10763,9 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
 
   <!-- ★ v20.5: 기본 정보(신체지수) 입력 유도 카드 — 미입력 시 최상단 표시 -->
   <div id="basic-info-card" style="display:none"></div>
+
+  <!-- ★ v21.1: 두뇌·균형 건강 (낙상위험·치매선별) 요약 카드 -->
+  <div id="brain-balance-card" style="display:none"></div>
 
   <!-- ★ v15.1: 오늘의 감정 카드 (홈 첫 화면) - 강화된 디자인 -->
   <div id="mood-today-card" class="mood-card-v2" onclick="App.goPage('mood')">
@@ -11193,6 +11359,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <div class="bt-phase" id="bt-balance-phase">눈을 뜨고 정면을 보세요</div>
     <div class="bt-timer-big" id="bt-balance-timer">15</div>
     <div class="bt-instruction">움직이지 말고 가만히 서있으세요</div>
+    <div class="bt-progress-dots"><span></span><span></span><span></span></div>
     <canvas id="bt-balance-wave" class="wave-canvas" width="640" height="120" style="margin: 16px"></canvas>
     <button class="btn-main stop" type="button" onclick="App.bodyStop()">측정 중지</button>
   </div>
@@ -11226,6 +11393,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <div class="bt-phase">걷고 계세요</div>
     <div class="bt-timer-big" id="bt-gait-timer">30</div>
     <div class="bt-instruction">평소 속도로 자연스럽게 걸으세요</div>
+    <div class="bt-progress-dots"><span></span><span></span><span></span></div>
     <div class="bt-stat">스텝 카운트: <span id="bt-gait-steps">0</span></div>
     <canvas id="bt-gait-wave" class="wave-canvas" width="640" height="120" style="margin: 16px"></canvas>
     <button class="btn-main stop" type="button" onclick="App.bodyStop()">측정 중지</button>
@@ -11293,6 +11461,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
     <div class="bt-phase">손을 가만히 유지하세요</div>
     <div class="bt-timer-big" id="bt-tremor-timer">15</div>
     <div class="bt-instruction">팔을 앞으로 뻗고 떨지 마세요</div>
+    <div class="bt-progress-dots"><span></span><span></span><span></span></div>
     <canvas id="bt-tremor-wave" class="wave-canvas" width="640" height="120" style="margin: 16px"></canvas>
     <button class="btn-main stop" type="button" onclick="App.bodyStop()">측정 중지</button>
   </div>

@@ -267,6 +267,7 @@ const App = {
     this._safeStep('sleepLoad', () => this._loadSleepScore()); // ★ v20.0
     this._safeStep('sleepCheckin', () => this._renderSleepCheckin()); // ★ v20.0
     this._safeStep('basicInfoCard', () => this._renderBasicInfoCard()); // ★ v20.5
+    this._safeStep('brainBalanceCard', () => this._renderBrainBalanceCard()); // ★ v21.1
     this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
 
     // 6. 알림 재예약
@@ -1009,6 +1010,7 @@ const App = {
     // ★ v20.5: 측정 완료 후 AI 추천 + 기본정보 카드 즉시 갱신
     this._safeStep('recommendRefresh', () => this._renderRecommendCard());
     this._safeStep('basicInfoRefresh', () => this._renderBasicInfoCard());
+    this._safeStep('brainBalanceRefresh', () => this._renderBrainBalanceCard());
   },
 
   // ★ v14.3: 측정 히스토리 누적 저장
@@ -2149,6 +2151,8 @@ const App = {
       this._renderMoodHomeCard();
       this._safeStep('sleepCheckin', () => this._renderSleepCheckin()); // ★ v20.0
       this._safeStep('basicInfoCard', () => this._renderBasicInfoCard()); // ★ v20.5
+    this._safeStep('brainBalanceCard', () => this._renderBrainBalanceCard()); // ★ v21.1
+      this._safeStep('brainBalanceCard', () => this._renderBrainBalanceCard()); // ★ v21.1
       this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
     }
     // ★ v16.2: 가족 공유 페이지
@@ -8263,6 +8267,82 @@ const App = {
         </div>
         <div class="bip-cta">기본 정보 입력하기 →</div>
       </button>`;
+  },
+
+  // ════════════════════════════════════════════════════
+  // ★ v21.1: 두뇌·균형 건강 요약 카드 (낙상위험·치매선별)
+  // ════════════════════════════════════════════════════
+  _renderBrainBalanceCard() {
+    const el = document.getElementById('brain-balance-card');
+    if (!el) return;
+    const h = this._computeBrainBalanceHealth();
+    if (!h || !h.available) { el.style.display = 'none'; return; }
+
+    el.style.display = 'block';
+
+    // 낙상 위험 미니 게이지
+    const fallHTML = h.fallRiskScore != null ? `
+      <div class="bbc-metric" onclick="App.goPage('body');setTimeout(()=>App.startBodyTest('balance'),400)">
+        <div class="bbc-m-icon">🛡️</div>
+        <div class="bbc-m-body">
+          <div class="bbc-m-label">낙상 위험도</div>
+          <div class="bbc-m-val" style="color:${h.fallColor}">${h.fallLabel}</div>
+        </div>
+        <div class="bbc-m-gauge">
+          <svg viewBox="0 0 36 36" class="bbc-ring">
+            <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" stroke-width="3"/>
+            <circle cx="18" cy="18" r="15" fill="none" stroke="${h.fallColor}" stroke-width="3"
+              stroke-dasharray="${(h.fallRiskScore/100*94.2).toFixed(1)} 94.2"
+              stroke-linecap="round" transform="rotate(-90 18 18)"/>
+          </svg>
+          <span class="bbc-ring-num" style="color:${h.fallColor}">${h.fallRiskScore}</span>
+        </div>
+      </div>` : '';
+
+    // 인지건강 미니 게이지
+    const cogHTML = h.cogScore != null ? `
+      <div class="bbc-metric" onclick="App.goPage('body');setTimeout(()=>App.startBodyTest('gait'),400)">
+        <div class="bbc-m-icon">🧠</div>
+        <div class="bbc-m-body">
+          <div class="bbc-m-label">두뇌·보행 건강</div>
+          <div class="bbc-m-val" style="color:${h.cogColor}">${h.cogLabel}</div>
+        </div>
+        <div class="bbc-m-gauge">
+          <svg viewBox="0 0 36 36" class="bbc-ring">
+            <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" stroke-width="3"/>
+            <circle cx="18" cy="18" r="15" fill="none" stroke="${h.cogColor}" stroke-width="3"
+              stroke-dasharray="${(h.cogScore/100*94.2).toFixed(1)} 94.2"
+              stroke-linecap="round" transform="rotate(-90 18 18)"/>
+          </svg>
+          <span class="bbc-ring-num" style="color:${h.cogColor}">${h.cogScore}</span>
+        </div>
+      </div>` : '';
+
+    // 추세 배지
+    const trendHTML = h.cvTrend ? `
+      <div class="bbc-trend" style="color:${h.cvTrend.color}">
+        ${h.cvTrend.dir === 'up' ? '↗' : h.cvTrend.dir === 'down' ? '↘' : '→'} ${h.cvTrend.text}
+      </div>` : '';
+
+    // 신뢰도 배지
+    const confColor = h.confidence === 'high' ? '#16a34a' : h.confidence === 'medium' ? '#f59e0b' : '#9ca3af';
+
+    el.innerHTML = `
+      <div class="brain-balance-card">
+        <div class="bbc-header">
+          <div class="bbc-title">🧠🛡️ 두뇌·균형 건강</div>
+          <span class="bbc-conf" style="background:${confColor}">측정 ${h.totalMeasures}회 · 신뢰도 ${h.confLabel}</span>
+        </div>
+        <div class="bbc-metrics">
+          ${fallHTML}
+          ${cogHTML}
+        </div>
+        ${trendHTML}
+        <div class="bbc-note">
+          ⚠️ 의학적 진단이 아닌 <strong>선별 보조</strong>입니다. 반복 측정으로 추세를 확인하세요.
+        </div>
+        ${h.confidence === 'low' ? `<button type="button" class="bbc-cta" onclick="App.goPage('body');setTimeout(()=>App.startBodyTest('gait'),400)">정확도를 높이려면 보행 측정 →</button>` : ''}
+      </div>`;
   },
 
   // ════════════════════════════════════════════════════
@@ -14841,6 +14921,103 @@ const App = {
       advice = '낙상 위험이 높게 나왔습니다. 일회성 결과일 수 있으나, 어지러움·휘청거림이 잦다면 전문의(이비인후과·신경과) 상담을 권합니다.';
     }
     return { riskScore: risk, level, label, color, advice };
+  },
+
+  // ════════════════════════════════════════════════════════════════
+  // ★ v21.1: 종합 낙상위험 + 인지건강 통합 평가
+  //
+  // 학술 근거:
+  //  - 낙상 예측: 균형(자세동요) + 보행(가변성) 결합이 단일 지표보다 우수
+  //    (Verghese 2009 J Gerontol; Montero-Odasso 2012)
+  //  - 운동인지위험(MCR): 보행속도 + 가변성 결합 (Verghese 2013)
+  //  - 신뢰도: 측정 횟수↑ = 추세 안정성↑ (Pieruccini-Faria 2021)
+  //
+  // 여러 측정(보행+균형)의 최근값을 결합 + 측정 횟수로 신뢰도 산출
+  // ════════════════════════════════════════════════════════════════
+  _computeBrainBalanceHealth() {
+    const w = this.state.wellness || {};
+    const gaitH = this._historyGet ? this._historyGet('gait') : [];
+    const balH  = this._historyGet ? this._historyGet('balance') : [];
+    const profile = this._getUserProfile ? this._getUserProfile() : {};
+    const age = profile.age || 50;
+
+    // 최근 측정값
+    const lastGait = gaitH.length ? gaitH[gaitH.length-1] : null;
+    const lastBal  = balH.length  ? balH[balH.length-1]  : null;
+
+    // 데이터 가용성
+    const hasGaitCV = lastGait && lastGait.cvStepTime != null;
+    const hasBalance = lastBal && lastBal.fallRiskScore != null;
+
+    if (!hasGaitCV && !hasBalance) {
+      return { available: false };
+    }
+
+    // ── 측정 횟수 기반 신뢰도 ──
+    const gaitCVCount = gaitH.filter(h => h.cvStepTime != null).length;
+    const balCount = balH.filter(h => h.fallRiskScore != null).length;
+    const totalMeasures = gaitCVCount + balCount;
+    let confidence, confLabel;
+    if (totalMeasures >= 6)      { confidence = 'high';   confLabel = '높음'; }
+    else if (totalMeasures >= 3) { confidence = 'medium'; confLabel = '보통'; }
+    else                         { confidence = 'low';    confLabel = '낮음 (반복 측정 권장)'; }
+
+    // ── 종합 낙상 위험 (균형 + 보행 결합) ──
+    let fallRiskScore = null, fallLevel = null, fallColor = null, fallLabel = null;
+    {
+      let parts = [], weights = [];
+      if (hasBalance) { parts.push(lastBal.fallRiskScore); weights.push(0.6); }
+      if (hasGaitCV) {
+        // 보행 가변성 → 낙상 기여 (CV 높을수록 위험)
+        const gaitFall = Math.min(100, Math.max(0, (lastGait.cvStepTime - 2) * 12));
+        parts.push(gaitFall); weights.push(0.4);
+      }
+      if (parts.length) {
+        const wSum = weights.reduce((a,b)=>a+b,0);
+        fallRiskScore = Math.round(parts.reduce((s,p,i)=>s+p*weights[i],0) / wSum);
+        if (age >= 75) fallRiskScore = Math.min(100, fallRiskScore + 5);
+        if (fallRiskScore < 25)      { fallLevel='low';      fallColor='#16a34a'; fallLabel='낮음'; }
+        else if (fallRiskScore < 50) { fallLevel='mild';     fallColor='#f59e0b'; fallLabel='경계'; }
+        else if (fallRiskScore < 70) { fallLevel='moderate'; fallColor='#ea580c'; fallLabel='주의'; }
+        else                         { fallLevel='high';     fallColor='#dc2626'; fallLabel='높음'; }
+      }
+    }
+
+    // ── 인지건강(치매 선별) — 보행 가변성 + MCR ──
+    let cogScore = null, cogLevel = null, cogColor = null, cogLabel = null;
+    if (hasGaitCV) {
+      // CV 낮을수록 인지건강 양호 (역방향 점수화)
+      const cv = lastGait.cvStepTime;
+      cogScore = Math.round(Math.max(0, Math.min(100, 100 - (cv - 2) * 11)));
+      // MCR 단계 반영
+      if (lastGait.mcrLevel === 'watch') cogScore = Math.min(cogScore, 55);
+      else if (lastGait.mcrLevel === 'normal') cogScore = Math.min(cogScore, 72);
+      if (cogScore >= 80)      { cogLevel='good';   cogColor='#16a34a'; cogLabel='양호'; }
+      else if (cogScore >= 60) { cogLevel='normal'; cogColor='#f59e0b'; cogLabel='경계'; }
+      else                     { cogLevel='watch';  cogColor='#dc2626'; cogLabel='추적 권장'; }
+    }
+
+    // ── 추세 방향 (최근 3회 vs 이전) ──
+    let cvTrend = null;
+    const cvSeries = gaitH.filter(h => h.cvStepTime != null).map(h => h.cvStepTime);
+    if (cvSeries.length >= 4) {
+      const recent = cvSeries.slice(-2).reduce((a,b)=>a+b,0)/2;
+      const older = cvSeries.slice(0,-2).reduce((a,b)=>a+b,0)/(cvSeries.length-2);
+      const delta = recent - older;
+      if (delta > 0.8)       cvTrend = { dir:'up', text:'가변성 증가 — 주의 관찰', color:'#dc2626' };
+      else if (delta < -0.8) cvTrend = { dir:'down', text:'가변성 개선 — 안정화', color:'#16a34a' };
+      else                   cvTrend = { dir:'stable', text:'안정적 유지', color:'#6b7280' };
+    }
+
+    return {
+      available: true,
+      confidence, confLabel, totalMeasures,
+      fallRiskScore, fallLevel, fallColor, fallLabel,
+      cogScore, cogLevel, cogColor, cogLabel,
+      cvTrend,
+      cvStepTime: hasGaitCV ? lastGait.cvStepTime : null,
+      hasGait: hasGaitCV, hasBalance,
+    };
   },
 
   // ★ v21.0: 낙상 위험 카드 렌더
