@@ -10995,6 +10995,213 @@ body::before {
   border: 1px solid rgba(15,23,42,.04) !important;
   box-shadow: 0 2px 8px rgba(15,23,42,.04) !important;
 }
+
+/* ════════════════════════════════════════════════════════════
+   ★ v23.1: 측정 결과 화면 정돈 (CLEAN SOL 일관성)
+   ════════════════════════════════════════════════════════════ */
+/* 결과 카드 — 넉넉한 흰 카드 */
+.bt-result-card {
+  padding: 24px 20px !important;
+  margin: 12px 16px !important;
+}
+/* 결과 타이틀 — 깔끔한 라벨 */
+.bt-result-title {
+  font-size: 14px !important; font-weight: 800 !important;
+  color: #6B7684 !important; letter-spacing: 0 !important;
+  margin-bottom: 12px !important;
+}
+/* 핵심 수치 — 크고 시원하게 */
+.bt-result-value {
+  font-size: 44px !important; font-weight: 900 !important;
+  color: #1A2B45 !important; letter-spacing: -.03em !important;
+  margin-bottom: 6px !important;
+}
+.bt-result-unit {
+  font-size: 15px !important; color: #8B95A1 !important;
+  font-weight: 600 !important;
+}
+/* 등급 pill — SOL 톤 */
+.bt-result-grade {
+  font-size: 12px !important; font-weight: 800 !important;
+  padding: 5px 14px !important; border-radius: 999px !important;
+  margin-bottom: 16px !important;
+}
+/* 결과 행 — 구분선 약하게, 패딩 넉넉 */
+.bt-result-row {
+  padding: 11px 0 !important;
+  border-bottom: 1px solid rgba(15,23,42,.05) !important;
+}
+.bt-result-row-label {
+  font-size: 14px !important; color: #6B7684 !important; font-weight: 600 !important;
+}
+.bt-result-row-value {
+  font-size: 14px !important; color: #1A2B45 !important; font-weight: 800 !important;
+}
+/* 코멘트 — 부드러운 회색 박스 */
+.bt-result-cmt {
+  font-size: 13px !important; color: #4B5563 !important;
+  line-height: 1.65 !important; padding: 14px 16px !important;
+  background: #F1F3F6 !important; border-radius: 14px !important;
+  margin-top: 14px !important;
+}
+/* 다시 측정 버튼 — 깔끔한 아웃라인 */
+.bt-redo {
+  border-radius: 16px !important;
+  border: 1.5px solid rgba(45,124,255,.3) !important;
+  padding: 15px !important; margin: 16px !important;
+  width: calc(100% - 32px) !important;
+}
+/* 측정 중 화면 — 회색 배경 위 정돈 */
+.bt-running { padding: 36px 24px !important; }
+.bt-stage { padding: 28px 24px !important; }
+
+/* ════════════════════════════════════════════════════════════
+   ★ v23.1: 트렌드 페이지 정돈 (CLEAN SOL 일관성)
+   ════════════════════════════════════════════════════════════ */
+/* 섹션 타이틀 통일 */
+.trends-section-title {
+  font-size: 17px !important; font-weight: 800 !important;
+  color: #1A2B45 !important; margin: 24px 20px 12px !important;
+  letter-spacing: -.02em !important;
+}
+/* 종합 요약 — 컬러 그라데 → 깔끔한 흰 카드 + 블루 포인트 */
+.trends-summary {
+  margin: 16px 16px 14px !important;
+  padding: 20px !important;
+  background: #FFFFFF !important;
+  border: 1px solid rgba(15,23,42,.04) !important;
+  border-left: 4px solid #2D7CFF !important;
+  box-shadow: 0 2px 10px rgba(15,23,42,.05) !important;
+  border-radius: 18px !important;
+}
+/* 모든 트렌드 카드 흰색 통일 */
+.trend-heatmap-card, .trend-week-bar-card, .tms-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(15,23,42,.04) !important;
+  box-shadow: 0 2px 10px rgba(15,23,42,.05) !important;
+  border-radius: 18px !important;
+}
+.trend-heatmap-card, .trend-week-bar-card {
+  margin: 0 16px 14px !important;
+  padding: 18px !important;
+}
+.trend-monthly-summary {
+  margin: 0 16px 14px !important;
+  gap: 12px !important;
+}
+/* 인사이트 칩 정돈 */
+.trends-insights {
+  margin: 0 16px 14px !important;
+  gap: 8px !important;
+}
+/* 성취 배지 행 */
+.trend-achievement-row {
+  margin: 0 16px 14px !important;
+  gap: 8px !important;
+}
+/* 기간 탭 정돈 */
+.trend-period-tabs, .period-tabs {
+  margin: 0 16px 16px !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   ★ v23.1: 결과 페이지 정돈 (CLEAN SOL 일관성)
+   ════════════════════════════════════════════════════════════ */
+/* 섹션 타이틀 통일 */
+.res-section-title {
+  font-size: 17px !important; font-weight: 800 !important;
+  color: #1A2B45 !important; margin: 24px 20px 12px !important;
+  letter-spacing: -.02em !important;
+}
+/* 종합 점수 그래프 카드 — 깔끔한 흰 카드 */
+.res-graph-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(15,23,42,.04) !important;
+  box-shadow: 0 4px 16px rgba(15,23,42,.06) !important;
+  border-radius: 22px !important;
+  margin: 12px 16px 16px !important;
+  padding: 24px 20px !important;
+}
+/* 나이 카드 그리드 */
+.res-age-grid { gap: 12px !important; margin: 0 16px 16px !important; }
+.res-age-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(15,23,42,.05) !important;
+  box-shadow: 0 2px 8px rgba(15,23,42,.04) !important;
+  border-radius: 18px !important;
+  padding: 18px 14px !important;
+}
+.res-age-num { color: #1A2B45 !important; }
+/* 스트릭 카드 */
+.res-streak {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(15,23,42,.04) !important;
+  box-shadow: 0 2px 8px rgba(15,23,42,.04) !important;
+  border-radius: 18px !important;
+  margin: 0 16px 14px !important;
+}
+/* 미니 측정 항목 바 */
+.res-mini-bar {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(15,23,42,.04) !important;
+  border-radius: 14px !important;
+}
+/* 배지 카드 */
+.res-badges {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(15,23,42,.04) !important;
+  box-shadow: 0 2px 8px rgba(15,23,42,.04) !important;
+  border-radius: 18px !important;
+  margin: 0 16px 14px !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   ★ v23.1: 상세 페이지(detail) 정돈
+   ════════════════════════════════════════════════════════════ */
+.detail-section, .detail-card, .ppg-card, .cardio-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(15,23,42,.04) !important;
+  box-shadow: 0 2px 10px rgba(15,23,42,.05) !important;
+  border-radius: 18px !important;
+}
+
+/* ════════════════════════════════════════════════════════════
+   ★ v23.1: 얼굴/손가락 결과 탭·카드 정돈
+   ════════════════════════════════════════════════════════════ */
+/* 결과 탭 — SOL식 깔끔한 탭 */
+.result-tabs {
+  gap: 0 !important; margin: 12px 16px 16px !important;
+  background: #FFFFFF !important;
+  border-radius: 14px !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(15,23,42,.05) !important;
+  padding: 4px !important;
+}
+.r-tab {
+  border-radius: 10px !important;
+  padding: 10px 6px !important;
+  font-size: 13px !important; font-weight: 800 !important;
+}
+.r-tab.on {
+  background: #2D7CFF !important;
+  color: #FFFFFF !important;
+}
+/* 통합 카디오 카드 */
+.unified-cardio-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(15,23,42,.05) !important;
+  box-shadow: 0 2px 10px rgba(15,23,42,.05) !important;
+  border-radius: 18px !important;
+  margin: 0 16px 14px !important;
+}
+/* PPG/고급 분석 카드 통일 */
+.ppg-card, .advanced-ppg-card, .pupil-au-card, .mental-card,
+.vitals-card, .metric-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(15,23,42,.04) !important;
+  box-shadow: 0 2px 10px rgba(15,23,42,.05) !important;
+  border-radius: 18px !important;
+}
 </style>
 </head>
 <body>
@@ -11014,7 +11221,7 @@ body::before {
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v23.0 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v23.1 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
