@@ -9463,7 +9463,27 @@ const App = {
 
   // ─── Step 4: 통합 결과 화면 ───
   _renderIntegratedResult(container) {
-    const result = this._computeIntegratedEmotion();
+    // ★ v23.2: 방어적 강화 — 손상된 데이터로도 멈추지 않도록
+    let result;
+    try {
+      result = this._computeIntegratedEmotion();
+    } catch (e) {
+      console.warn('[감정결과] 계산 실패, 안전값 사용:', e.message);
+      result = null;
+    }
+    // result 또는 card가 비정상이면 안전한 중립 카드로 폴백
+    if (!result || !result.card) {
+      const cards = this._emotionCards || {};
+      const fallbackCard = cards.neutral || cards.calm ||
+        { ko: '평온', en: 'Neutral', desc: '잔잔하고 차분한 상태예요.', v: 0, a: 0, color: '#94A3B8' };
+      result = Object.assign({
+        cardId: 'neutral', card: fallbackCard,
+        valence: 0, arousal: 0, panasV: 0, panasA: 0,
+        paAvg: 3, naAvg: 3, autoA: null, autoV: null,
+        hasAuto: false, confidence: 0.5, weights: {},
+      }, result || {});
+      result.card = result.card || fallbackCard;
+    }
     this._lastEmotionResult = result; // ★ v20.2: Late Fusion 결과 캐시
     const card = result.card;
 
