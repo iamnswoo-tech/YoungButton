@@ -1,5 +1,5 @@
-// 건강 측정 v12.0 ME-rPPG — Service Worker
-const CACHE_NAME = 'healthmeas-v23-s03';
+// 건강 측정 ME-rPPG — Service Worker
+const CACHE_NAME = 'healthmeas-v23-s04';
 const ASSETS = [
   './',
   './index.html',
@@ -24,15 +24,38 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-  ));
-  self.clients.claim();
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  );
 });
+
+// ★ v23.3: app.js / index.html / sw.js 는 네트워크 우선 (최신 코드 보장)
+// 나머지(모델·아이콘 등 대용량 정적자원)는 캐시 우선
+function isCodeFile(url) {
+  return url.endsWith('/app.js') || url.endsWith('/index.html') ||
+         url.endsWith('/') || url.endsWith('/manifest.json');
+}
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
-  );
+  const url = e.request.url;
+
+  if (isCodeFile(url)) {
+    // 네트워크 우선 → 실패 시 캐시 폴백
+    e.respondWith(
+      fetch(e.request).then(res => {
+        // 최신본을 캐시에 갱신
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(e.request, clone)).catch(()=>{});
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
+  } else {
+    // 정적 자원 — 캐시 우선
+    e.respondWith(
+      caches.match(e.request).then(r => r || fetch(e.request))
+    );
+  }
 });

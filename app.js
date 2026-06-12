@@ -9023,10 +9023,24 @@ const App = {
       </div>
     `;
 
-    if (step === 'panas') this._renderPanasStep(container, headerHTML);
-    else if (step === 'color') this._renderColorQuick(container, headerHTML);
-    else if (step === 'mirror1') this._renderMirrorQuick(container, headerHTML);
-    else if (step === 'result') this._renderIntegratedResult(container);
+    // ★ v23.3: 단계 분기 방어 — 알 수 없는 단계면 결과로
+    try {
+      if (step === 'panas') this._renderPanasStep(container, headerHTML);
+      else if (step === 'color') this._renderColorQuick(container, headerHTML);
+      else if (step === 'mirror1') this._renderMirrorQuick(container, headerHTML);
+      else if (step === 'result') this._renderIntegratedResult(container);
+      else {
+        // 단계 배열 범위 초과 등 → 결과 렌더
+        console.warn('[감정] 알 수 없는 단계:', step, '→ 결과로 진행');
+        this._renderIntegratedResult(container);
+      }
+    } catch (e) {
+      console.error('[감정] 단계 렌더 실패:', step, e);
+      // 실패해도 결과는 보여주기
+      try { this._renderIntegratedResult(container); } catch (e2) {
+        console.error('[감정] 결과 폴백도 실패:', e2);
+      }
+    }
   },
 
   // ─── Step 1: 단축 PANAS — 카드 선택 UX (한 화면에 한 질문) ───
@@ -9253,11 +9267,39 @@ const App = {
   },
 
   _quickMirrorPick(v, a, emoji, label) {
-    this._moodState.mirrorChoice = { v, a, emoji, label };
-    setTimeout(() => {
-      this._moodState.stepIdx++;
-      this._renderIntegratedStep(document.getElementById('mood-container'));
-    }, 200);
+    // ★ v23.3: 방어적 강화 — 선택이 무조건 다음 단계로 진행되도록
+    try {
+      if (!this._moodState) {
+        console.warn('[감정] moodState 없음 — 복구');
+        this._moodState = { steps: ['panas','color','mirror1','result'], stepIdx: 2, panasScores: {}, panasIdx: 0, colorChoice: null, mirrorChoice: null };
+      }
+      this._moodState.mirrorChoice = { v, a, emoji, label };
+    } catch (e) {
+      console.warn('[감정] mirrorChoice 저장 실패:', e.message);
+    }
+    // setTimeout 없이 즉시 진행 (콜백 유실 방지) + 에러 방어
+    const advance = () => {
+      try {
+        this._moodState.stepIdx++;
+        const container = document.getElementById('mood-container');
+        if (!container) {
+          console.warn('[감정] mood-container 없음');
+          return;
+        }
+        this._renderIntegratedStep(container);
+      } catch (e) {
+        console.error('[감정] 다음 단계 진행 실패:', e);
+        // 최후의 폴백 — 결과를 직접 렌더
+        try {
+          const container = document.getElementById('mood-container');
+          if (container) this._renderIntegratedResult(container);
+        } catch (e2) {
+          console.error('[감정] 결과 렌더도 실패:', e2);
+        }
+      }
+    };
+    // 짧은 시각 피드백 후 진행 (실패해도 즉시 진행 보장)
+    setTimeout(advance, 180);
   },
 
   // ─── 통합 점수 계산 ───
