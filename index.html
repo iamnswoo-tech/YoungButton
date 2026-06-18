@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>건강 측정 v23 — ME-rPPG</title>
+<title>건강 측정 v24 — ME-rPPG</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -340,6 +340,7 @@ html, body {
   background: var(--bg);
   color: var(--text-strong);
   font-family: var(--sans);
+  min-height: 100vh;
   min-height: 100dvh;
   overflow-x: hidden;
   font-size: 15px;
@@ -388,6 +389,7 @@ body::before {
   background: rgba(255,255,255,.22);
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255,255,255,.35);
   font-size: 20px;
 }
@@ -414,6 +416,7 @@ body::before {
   border-radius: 999px;
   font-weight: 800;
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255,255,255,.3);
   letter-spacing: .03em;
 }
@@ -2940,6 +2943,7 @@ body::before {
   letter-spacing: .03em;
   position: relative;
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 /* ★ v16.4: 감정 분석 섹션 */
@@ -4942,6 +4946,7 @@ body::before {
   border-radius: 999px;
   margin-bottom: 8px;
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 .mood-card-icon { font-size: 16px; }
 .mood-card-game-name {
@@ -5784,6 +5789,7 @@ body::before {
   left: 16px;
   background: rgba(0,0,0,.7);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 12px;
   padding: 6px 14px;
   color: #fff;
@@ -5802,6 +5808,7 @@ body::before {
   right: 16px;
   background: rgba(0,0,0,.7);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 12px;
   padding: 8px 12px;
   width: 130px;
@@ -6761,6 +6768,7 @@ body::before {
   padding: 14px 16px;
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1.5px solid rgba(255, 255, 255, 0.9);
   border-radius: 14px;
   cursor: pointer;
@@ -7995,6 +8003,7 @@ body::before {
   display: inline-block;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: #BE185D;
   font-size: 11px;
   font-weight: 800;
@@ -8035,6 +8044,7 @@ body::before {
   padding: 12px 14px;
   background: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 14px;
   margin-bottom: 16px;
   border: 1px solid rgba(255, 255, 255, 0.7);
@@ -8402,6 +8412,7 @@ body::before {
   position: fixed; inset: 0; z-index: 9500;
   background: rgba(10, 14, 26, .55);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex; align-items: flex-end;
   opacity: 0; transition: opacity 240ms ease;
 }
@@ -10024,6 +10035,7 @@ footer { padding: 14px 16px max(20px, env(safe-area-inset-bottom)); text-align: 
   display: flex; align-items: center; gap: 12px;
   background: rgba(255,255,255,.75);
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   border-radius: 14px; padding: 11px 14px;
   border: 1px solid rgba(255,255,255,.9);
   cursor: pointer;
@@ -11202,6 +11214,32 @@ body::before {
   box-shadow: 0 2px 10px rgba(15,23,42,.05) !important;
   border-radius: 18px !important;
 }
+
+/* ★ v24.0: 익명 통계 옵트아웃 토글 */
+.privacy-optout {
+  margin-top: 10px; padding-top: 12px;
+  border-top: 1px solid rgba(15,23,42,.06);
+}
+.privacy-optout-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 700; color: #4B5563;
+  cursor: pointer; position: relative;
+}
+.privacy-optout-label span:first-child { flex: 1; }
+.privacy-optout-label input { display: none; }
+.privacy-switch {
+  width: 40px; height: 22px; border-radius: 999px;
+  background: #CBD5E1; position: relative; flex-shrink: 0;
+  transition: background .2s;
+}
+.privacy-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; transition: transform .2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+.privacy-optout-label input:checked ~ .privacy-switch { background: #22c55e; }
+.privacy-optout-label input:checked ~ .privacy-switch::after { transform: translateX(18px); }
 </style>
 </head>
 <body>
@@ -11217,11 +11255,11 @@ body::before {
       </svg>
     </div>
     <div>
-      <div class="hd-title">ResetButton For You</div>
+      <div class="hd-title">Reset Button For You</div>
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v23.3 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v24.0 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -11451,13 +11489,20 @@ body::before {
         <span>모든 측정 데이터는 <strong>이 기기 안에만</strong> 저장됩니다.</span>
       </div>
       <div class="privacy-row">
-        <span class="privacy-icon">🚫</span>
-        <span>외부 서버로 <strong>전송되지 않으며</strong>, 누구도 열람할 수 없습니다.</span>
-      </div>
-      <div class="privacy-row">
         <span class="privacy-icon">🔐</span>
         <span>회원가입·로그인이 없어 <strong>개인을 식별하지 않습니다.</strong></span>
       </div>
+      <div class="privacy-row">
+        <span class="privacy-icon">📊</span>
+        <span>서비스 개선을 위해 <strong>개인 식별이 불가능한 익명 통계</strong>(측정 종류·점수)만 수집되며, 아래에서 끌 수 있습니다.</span>
+      </div>
+    </div>
+    <div class="privacy-optout">
+      <label class="privacy-optout-label">
+        <span>익명 통계 수집 허용</span>
+        <input type="checkbox" id="analytics-toggle" onchange="App.toggleAnalytics(this.checked)" checked>
+        <span class="privacy-switch"></span>
+      </label>
     </div>
     <div class="privacy-actions">
       <button type="button" class="privacy-btn export" onclick="App.exportMyData()">
@@ -12475,13 +12520,15 @@ body::before {
 </nav>
 
 <footer>
-  <div style="font-size:10px;color:#6b7280;var(--muted);text-align:center;line-height:1.5;padding:0 16px">
-    🚀 Reset Button - 기획/개발:남승우 ‍🚀<br>
+  <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.5;padding:0 16px">
+    🚀 Reset Button - 기획/개발‍🚀<br>
     rPPG 엔진: ME-rPPG (Apache 2.0)<br>
     얼굴 검출: MediaPipe BlazeFace · ONNX Runtime Web<br>
-    <span style="color:#6b7280">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
+    <span style="color:#9ca3af">⚠️ 본 앱은 의료기기가 아닌 건강 참고용 도구입니다.</span>
   </div>
-  <span style="color:#6b7280">✉ Reset Button 문의: iamnsw@naver.com</span>
+
+  v24 · 얼굴/손가락/심리 + 신체 측정 분리<br>
+  ✉ Reset Button
 </footer>
 
 <script src="app.js"></script>

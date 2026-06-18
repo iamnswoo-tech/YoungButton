@@ -1,5 +1,5 @@
 // 건강 측정 ME-rPPG — Service Worker
-const CACHE_NAME = 'healthmeas-v23-s04';
+const CACHE_NAME = 'healthmeas-v24-s01';
 const ASSETS = [
   './',
   './index.html',
@@ -41,6 +41,11 @@ function isCodeFile(url) {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = e.request.url;
+
+  // ★ v24.0: API/관리자 경로는 서비스워커가 가로채지 않음 (항상 네트워크 직접)
+  if (url.indexOf('/api/') !== -1 || url.indexOf('/admin') !== -1) {
+    return; // 브라우저 기본 fetch
+  }
 
   if (isCodeFile(url)) {
     // 네트워크 우선 → 실패 시 캐시 폴백

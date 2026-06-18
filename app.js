@@ -3,6 +3,67 @@
 // 알고리즘: POS (Wang et al. 2017, IEEE TBME) + 다중 ROI
 // ════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════
+// ★ v24.0: YoungButton Analytics SDK (익명 통계 — 옵트아웃 가능)
+//   수집: 측정 종류 + 점수 + 익명 세션ID만. 개인식별정보·원시측정값 없음.
+//   사용자가 끄면(yb_analytics_off=1) 전송하지 않음.
+// ════════════════════════════════════════════════════════════════════
+const YB_BEACON_URL = 'https://YOUR-DASHBOARD.vercel.app/api/beacon';
+
+const YB_SID = (() => {
+  try {
+    let s = localStorage.getItem('yb_analytics_sid');
+    if (!s) {
+      s = 'yb-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+      localStorage.setItem('yb_analytics_sid', s);
+    }
+    return s;
+  } catch (_) { return 'yb-unknown'; }
+})();
+
+// 사용자 옵트아웃 여부 (기본: 수집 동의 / 끄면 전송 안 함)
+function ybAnalyticsEnabled() {
+  try { return localStorage.getItem('yb_analytics_off') !== '1'; }
+  catch (_) { return false; }
+}
+
+function ybBeacon(payload) {
+  // ★ 옵트아웃 시 전송 안 함 + URL 미설정 시 비활성
+  if (!ybAnalyticsEnabled()) return;
+  if (!YB_BEACON_URL || YB_BEACON_URL.indexOf('YOUR-DASHBOARD') !== -1) return; // 미배포 시 무동작
+  try {
+    const data = JSON.stringify({ ...payload, sid: YB_SID, t: Date.now() });
+    if (navigator.sendBeacon) {
+      const ok = navigator.sendBeacon(YB_BEACON_URL, new Blob([data], { type: 'application/json' }));
+      if (!ok) _ybEnqueue(data);
+    } else {
+      fetch(YB_BEACON_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true }).catch(() => _ybEnqueue(data));
+    }
+  } catch (_) {}
+}
+
+function _ybEnqueue(data) {
+  try {
+    const q = JSON.parse(localStorage.getItem('yb_beacon_q') || '[]');
+    q.push(data);
+    if (q.length > 30) q.shift();
+    localStorage.setItem('yb_beacon_q', JSON.stringify(q));
+  } catch (_) {}
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    if (!ybAnalyticsEnabled()) return;
+    try {
+      const q = JSON.parse(localStorage.getItem('yb_beacon_q') || '[]');
+      if (!q.length) return;
+      localStorage.removeItem('yb_beacon_q');
+      q.forEach(d => fetch(YB_BEACON_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: d, keepalive: true }).catch(() => {}));
+    } catch (_) {}
+  });
+}
+// ════════════════════════════════════════════════════════════════════
+
 // ★ v14.5: 프로덕션 모드 시스템 — 외부 베타 준비
 // URL에 ?debug=1 또는 localStorage에 debug=true 설정 시 디버그 모드
 // 기본은 BETA 모드 (콘솔 출력 최소화, 에러는 자동 수집)
@@ -624,6 +685,13 @@ const App = {
       // 최대 200개 유지
       if (events.length > 200) events.splice(0, events.length - 200);
       localStorage.setItem('beta_events', JSON.stringify(events));
+
+      // ★ v24.0: 익명 통계 비콘 (옵트아웃 시 자동 미전송)
+      if (typeof ybBeacon === 'function') {
+        if (name === 'measurement_complete') ybBeacon({ type: 'measurement_complete', category: props && props.category, score: props && props.score });
+        else if (name === 'app_open')        ybBeacon({ type: 'app_open' });
+        else if (name === 'page_view')       ybBeacon({ type: 'page_view', page: props && props.page });
+      }
     } catch (e) {}
   },
 
@@ -2155,6 +2223,7 @@ const App = {
       this._safeStep('homeHero', () => this._renderHomeHero()); // ★ v22.0
       this._safeStep('basicInfoCard', () => this._renderBasicInfoCard()); // ★ v20.5
       this._safeStep('brainBalanceCard', () => this._renderBrainBalanceCard()); // ★ v21.1
+      this._safeStep('analyticsToggle', () => this._syncAnalyticsToggle()); // ★ v24.0
       this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
     }
     // ★ v16.2: 가족 공유 페이지
@@ -8089,6 +8158,27 @@ const App = {
   // ★ v20.6: 개인정보 데이터 관리 (백업/복원/처리방침)
   // ════════════════════════════════════════════════════
 
+  // ★ v24.0: 익명 통계 수집 켜기/끄기
+  toggleAnalytics(enabled) {
+    try {
+      if (enabled) {
+        localStorage.removeItem('yb_analytics_off');
+        this._toast('✓ 익명 통계 수집을 허용했어요');
+      } else {
+        localStorage.setItem('yb_analytics_off', '1');
+        this._toast('익명 통계 수집을 껐어요');
+      }
+    } catch (e) {}
+  },
+
+  // 토글 초기 상태 반영 (홈 렌더 시 호출)
+  _syncAnalyticsToggle() {
+    try {
+      const el = document.getElementById('analytics-toggle');
+      if (el) el.checked = localStorage.getItem('yb_analytics_off') !== '1';
+    } catch (e) {}
+  },
+
   // 내 데이터 전체를 JSON 파일로 내보내기 (기기에 다운로드)
   exportMyData() {
     try {
@@ -8187,7 +8277,7 @@ const App = {
 
         <div class="privacy-modal-section">
           <div class="privacy-modal-h">📱 데이터 저장 위치</div>
-          <div class="privacy-modal-p">측정한 모든 건강 데이터(심박·심박변이도·혈관나이·감정·신체지수 등)는 <strong>사용자 본인의 기기 안(브라우저 로컬 저장소)에만</strong> 저장됩니다. 외부 서버나 클라우드로 전송되거나 업로드되지 않습니다.</div>
+          <div class="privacy-modal-p">측정한 모든 건강 데이터(심박·심박변이도·혈관나이·감정·신체지수 등 <strong>원시 측정값</strong>)는 <strong>사용자 본인의 기기 안(브라우저 로컬 저장소)에만</strong> 저장되며, 외부로 전송되지 않습니다. 단, 서비스 개선을 위해 <strong>개인을 식별할 수 없는 익명 통계</strong>(측정 종류·점수·익명 세션ID)만 별도로 수집되며, 홈 화면 보안 카드에서 언제든 끌 수 있습니다.</div>
         </div>
 
         <div class="privacy-modal-section">
@@ -14037,6 +14127,10 @@ const App = {
       });
 
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // ★ v23.4: iOS Safari 대응 — AudioContext가 suspended로 시작되면 resume 필수
+      if (audioCtx.state === 'suspended') {
+        try { await audioCtx.resume(); } catch (e) { console.warn('[음성] AudioContext resume 실패:', e); }
+      }
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 2048;
       const source = audioCtx.createMediaStreamSource(stream);

@@ -1,0 +1,166 @@
+/**
+ * YoungButton Analytics Beacon API
+ * POST /api/beacon  — 앱에서 측정 완료 시 익명 이벤트 수신
+ * GET  /api/beacon  — 대시보드용 집계 데이터 반환
+ *
+ * 저장소: Vercel KV (Redis) 또는 환경변수 없을 때 메모리 fallback
+ * 개인정보: 수집하지 않음 — 익명 세션ID + 측정 카테고리 + 점수만 저장
+ */
+
+// ── Vercel KV 연동 (없으면 메모리 fallback) ──────────────────────
+// ★ top-level await 제거 — Vercel 호환성 (handler 내부에서 지연 로드)
+let kv = null;
+let _kvTried = false;
+async function ensureKV() {
+  if (_kvTried) return kv;
+  _kvTried = true;
+  // KV 환경변수가 있을 때만 로드 시도
+  if (process.env.KV_REST_API_URL || process.env.KV_URL) {
+    try {
+      const mod = await import('@vercel/kv');
+      kv = mod.kv;
+    } catch (_) { kv = null; }
+  }
+  return kv;
+}
+
+// 메모리 fallback (서버 재시작 시 초기화 — 프로덕션에서는 KV 사용)
+const MEM = { events: [], sessions: new Set(), daily: {} };
+
+// ── CORS helper ───────────────────────────────────────────────────
+function cors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-YB-Token');
+}
+
+// ── 관리자 토큰 검증 ──────────────────────────────────────────────
+function isAdmin(req) {
+  const token = req.headers['x-yb-token'] || req.query?.token;
+  return token === (process.env.ADMIN_TOKEN || 'yb-admin-2026');
+}
+
+// ── 날짜 키 ──────────────────────────────────────────────────────
+function dateKey(ts) {
+  return new Date(ts).toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+// ── 저장 helpers ─────────────────────────────────────────────────
+async function saveEvent(ev) {
+  if (kv) {
+    const day = dateKey(ev.t);
+    // 일별 이벤트 리스트 (최대 5000개/일)
+    await kv.lpush(`events:${day}`, JSON.stringify(ev));
+    await kv.ltrim(`events:${day}`, 0, 4999);
+    await kv.expire(`events:${day}`, 60 * 60 * 24 * 90); // 90일 보관
+    // 집계 카운터
+    await kv.incr(`cnt:events:${day}`);
+    await kv.incr(`cnt:category:${ev.category}:${day}`);
+    if (ev.sid) await kv.sadd(`sessions:${day}`, ev.sid);
+    await kv.expire(`sessions:${day}`, 60 * 60 * 24 * 90);
+    // 전체 카운터
+    await kv.incr('cnt:total_events');
+    await kv.incr('cnt:total_measurements');
+  } else {
+    MEM.events.push(ev);
+    if (MEM.events.length > 10000) MEM.events.shift();
+    if (ev.sid) MEM.sessions.add(ev.sid);
+    const day = dateKey(ev.t);
+    if (!MEM.daily[day]) MEM.daily[day] = { count: 0, categories: {}, sessions: new Set() };
+    MEM.daily[day].count++;
+    MEM.daily[day].categories[ev.category] = (MEM.daily[day].categories[ev.category] || 0) + 1;
+    if (ev.sid) MEM.daily[day].sessions.add(ev.sid);
+  }
+}
+
+async function getStats(days = 30) {
+  const result = { daily: [], totals: {}, categories: {}, recent: [] };
+
+  if (kv) {
+    // 최근 N일 집계
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      const day = d.toISOString().slice(0, 10);
+      const count = parseInt(await kv.get(`cnt:events:${day}`) || '0');
+      const sessions = await kv.scard(`sessions:${day}`);
+      result.daily.push({ date: day, measurements: count, users: sessions || 0 });
+    }
+    result.totals.measurements = parseInt(await kv.get('cnt:total_measurements') || '0');
+    result.totals.sessions = parseInt(await kv.get('cnt:total_sessions') || '0');
+    // 카테고리별 오늘
+    const today = new Date().toISOString().slice(0, 10);
+    for (const cat of ['face', 'finger', 'balance', 'gait', 'tremor', 'reaction', 'posture', 'bodycomp', 'mood']) {
+      result.categories[cat] = parseInt(await kv.get(`cnt:category:${cat}:${today}`) || '0');
+    }
+    // 최근 이벤트 20개
+    const todayEvents = await kv.lrange(`events:${today}`, 0, 19);
+    result.recent = todayEvents.map(e => JSON.parse(e)).reverse();
+  } else {
+    // 메모리 fallback
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      const day = d.toISOString().slice(0, 10);
+      const dayData = MEM.daily[day] || { count: 0, sessions: new Set() };
+      result.daily.push({ date: day, measurements: dayData.count, users: dayData.sessions.size });
+    }
+    result.totals.measurements = MEM.events.length;
+    result.totals.sessions = MEM.sessions.size;
+    result.recent = MEM.events.slice(-20).reverse();
+    // 카테고리 집계
+    for (const ev of MEM.events) {
+      result.categories[ev.category] = (result.categories[ev.category] || 0) + 1;
+    }
+  }
+  return result;
+}
+
+// ── Main handler ─────────────────────────────────────────────────
+export default async function handler(req, res) {
+  cors(res);
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  await ensureKV(); // ★ KV 지연 초기화
+
+  // POST: 앱에서 이벤트 수신
+  if (req.method === 'POST') {
+    try {
+      const body = req.body;
+      if (!body || !body.type) return res.status(400).json({ ok: false, error: 'missing type' });
+
+      // 수신 가능한 이벤트 화이트리스트
+      const ALLOWED = ['measurement_complete', 'app_open', 'page_view'];
+      if (!ALLOWED.includes(body.type)) return res.status(400).json({ ok: false, error: 'unknown event' });
+
+      // 익명 이벤트만 저장 — 개인식별정보 없음
+      const ev = {
+        t:        Date.now(),
+        type:     body.type,
+        category: body.category || 'unknown',  // face/finger/balance 등
+        score:    typeof body.score === 'number' ? Math.round(body.score) : null,
+        page:     body.page || null,
+        sid:      body.sid || null,  // 앱이 생성한 익명 세션ID (UUID)
+        ua_short: (req.headers['user-agent'] || '').substring(0, 40),  // 기기 타입 파악용
+        region:   req.headers['x-vercel-ip-country'] || null,  // 국가 코드만
+      };
+
+      await saveEvent(ev);
+      return res.status(200).json({ ok: true });
+    } catch (e) {
+      console.error('[beacon POST]', e);
+      return res.status(500).json({ ok: false });
+    }
+  }
+
+  // GET: 대시보드 집계 데이터 (관리자 토큰 필요)
+  if (req.method === 'GET') {
+    if (!isAdmin(req)) return res.status(401).json({ ok: false, error: 'unauthorized' });
+    try {
+      const days = parseInt(req.query?.days || '30');
+      const stats = await getStats(Math.min(days, 90));
+      return res.status(200).json({ ok: true, ...stats });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: e.message });
+    }
+  }
+
+  return res.status(405).json({ ok: false });
+}
