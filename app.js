@@ -8226,26 +8226,35 @@ const App = {
   _renderMeasurerCard() {
     const el = document.getElementById('measurer-card');
     if (!el) return;
-    let orgMode = false, org = '', label = '';
+    let orgMode = false, org = '', label = '', collapsed = false;
     try {
       orgMode = localStorage.getItem('yb_org_mode') === '1';
       org = localStorage.getItem('yb_org_code') || '';
       label = localStorage.getItem('yb_user_label') || '';
+      collapsed = localStorage.getItem('yb_measurer_collapsed') === '1';
     } catch (e) {}
 
-    // 기관 모드가 아니면 숨김 (일반 개인 사용자에게는 안 보임)
-    if (!orgMode) { el.style.display = 'none'; return; }
-
-    el.style.display = 'block';
     const hasLabel = label && label.trim();
+    el.style.display = 'block';
+
+    // 개인 사용자(기관모드 OFF)이고 라벨도 없고 접은 적 있으면 → 작은 링크만
+    if (!orgMode && !hasLabel && collapsed) {
+      el.innerHTML = `
+        <div class="measurer-collapsed" onclick="App.expandMeasurer()">
+          🪪 측정자 번호 입력 (기관·회원용) <span style="opacity:.6">›</span>
+        </div>`;
+      return;
+    }
+
     el.innerHTML = `
       <div class="measurer-card">
         <div class="measurer-head">
           <span class="measurer-icon">🪪</span>
-          <div>
-            <div class="measurer-title">측정자 번호</div>
-            <div class="measurer-sub">${org ? org + ' · ' : ''}측정 전 본인 번호를 입력하세요</div>
+          <div style="flex:1">
+            <div class="measurer-title">측정자 번호 ${orgMode ? '' : '<span style="font-size:11px;font-weight:600;color:#9AA5B1">(선택)</span>'}</div>
+            <div class="measurer-sub">${org ? org + ' · ' : ''}안내받은 번호·회원번호를 입력하세요</div>
           </div>
+          ${!orgMode ? `<button type="button" class="measurer-x" onclick="App.collapseMeasurer()" title="접기">✕</button>` : ''}
         </div>
         <div class="measurer-input-row">
           <input type="text" id="measurer-input" class="measurer-input"
@@ -8256,6 +8265,15 @@ const App = {
         </div>
         ${hasLabel ? `<div class="measurer-current">현재 측정자: <strong>${this._esc(label)}</strong> <button type="button" class="measurer-clear" onclick="App.clearMeasurer()">변경</button></div>` : ''}
       </div>`;
+  },
+
+  collapseMeasurer() {
+    try { localStorage.setItem('yb_measurer_collapsed', '1'); } catch (e) {}
+    this._renderMeasurerCard();
+  },
+  expandMeasurer() {
+    try { localStorage.removeItem('yb_measurer_collapsed'); } catch (e) {}
+    this._renderMeasurerCard();
   },
 
   saveMeasurer() {

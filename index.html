@@ -11280,6 +11280,22 @@ body::before {
   border-radius: 8px; padding: 5px 12px; font-size: 12px;
   font-weight: 700; color: #6B7684; cursor: pointer; font-family: inherit;
 }
+
+/* ★ v24.5: 측정자 카드 접기/펼치기 */
+.measurer-collapsed {
+  margin: 0 16px 12px; padding: 11px 16px;
+  background: #FFFFFF; border: 1px dashed #C5CEDB;
+  border-radius: 14px; font-size: 13px; font-weight: 600;
+  color: #6B7684; cursor: pointer; text-align: center;
+  transition: border-color .15s;
+}
+.measurer-collapsed:active { border-color: #2D7CFF; }
+.measurer-x {
+  background: none; border: none; font-size: 15px;
+  color: #C5CEDB; cursor: pointer; padding: 4px 8px;
+  font-family: inherit; align-self: flex-start;
+}
+.measurer-x:active { color: #6B7684; }
 </style>
 </head>
 <body>
@@ -11299,7 +11315,7 @@ body::before {
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v24.4 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v24.5 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
