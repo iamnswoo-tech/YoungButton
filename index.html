@@ -11296,6 +11296,41 @@ body::before {
   font-family: inherit; align-self: flex-start;
 }
 .measurer-x:active { color: #6B7684; }
+
+/* ★ v24.6: 하단 고정 측정자 입력 (개인정보 카드 내) */
+.privacy-measurer {
+  margin-top: 4px; margin-bottom: 12px;
+  padding-bottom: 12px; border-bottom: 1px solid rgba(15,23,42,.06);
+}
+.privacy-measurer-label {
+  display: block; font-size: 13px; font-weight: 700;
+  color: #374151; margin-bottom: 8px;
+}
+.privacy-measurer-row { display: flex; gap: 8px; }
+.privacy-measurer-input {
+  flex: 1; padding: 11px 13px;
+  border: 1.5px solid #E2E8F0; border-radius: 11px;
+  font-size: 14px; font-family: inherit; color: #1A2B45;
+  outline: none; transition: border-color .15s; background: #fff;
+}
+.privacy-measurer-input:focus { border-color: #2D7CFF; }
+.privacy-measurer-btn {
+  padding: 11px 18px; background: #2D7CFF; color: #fff;
+  border: none; border-radius: 11px; font-size: 14px;
+  font-weight: 800; font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+.privacy-measurer-btn:active { transform: scale(.96); }
+.privacy-measurer-status {
+  font-size: 12px; color: #4B5563; margin-top: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.privacy-measurer-status:empty { display: none; }
+.privacy-measurer-status strong { color: #2D7CFF; font-weight: 800; }
+.measurer-clear {
+  background: #F1F3F6; border: none; border-radius: 7px;
+  padding: 4px 10px; font-size: 11px; font-weight: 700;
+  color: #6B7684; cursor: pointer; font-family: inherit;
+}
 </style>
 </head>
 <body>
@@ -11315,7 +11350,7 @@ body::before {
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v24.5 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v24.6 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -11329,8 +11364,6 @@ body::before {
     <div class="hero-sub"><strong>ME-rPPG 딥러닝 AI</strong>가 10초 만에<br>심박·혈관·감정·자율신경을 분석합니다.</div>
   </div>
 
-  <!-- ★ v24.4: 측정자 입력 카드 (기관 모드 시 표시) -->
-  <div id="measurer-card" style="display:none"></div>
 
   <!-- ★ v13: 종합 Wellness Score 카드 (측정 후 자동 표시) -->
   <div id="wellness-card" class="wellness-card" style="display:none"></div>
@@ -11555,6 +11588,16 @@ body::before {
         <span class="privacy-icon">📊</span>
         <span>서비스 개선을 위해 <strong>개인 식별이 불가능한 익명 통계</strong>(측정 종류·점수)만 수집되며, 아래에서 끌 수 있습니다.</span>
       </div>
+    </div>
+    <div class="privacy-measurer">
+      <label class="privacy-measurer-label" for="measurer-input-fixed">🪪 측정자 번호 <span style="font-weight:600;color:#9AA5B1;font-size:11px">(기관·회원용 · 선택)</span></label>
+      <div class="privacy-measurer-row">
+        <input type="text" id="measurer-input-fixed" class="privacy-measurer-input"
+               placeholder="예: 301호 / 회원번호 / 별칭"
+               onkeydown="if(event.key==='Enter')App.saveMeasurerFixed()">
+        <button type="button" class="privacy-measurer-btn" onclick="App.saveMeasurerFixed()">확인</button>
+      </div>
+      <div id="measurer-status" class="privacy-measurer-status"></div>
     </div>
     <div class="privacy-optout">
       <label class="privacy-optout-label">
@@ -12587,7 +12630,7 @@ body::before {
   </div>
 
   v24 · 얼굴/손가락/심리 + 신체 측정 분리<br>
-  ✉ Reset Button
+  ✉ Reset Button 
 </footer>
 
 <script src="app.js"></script>

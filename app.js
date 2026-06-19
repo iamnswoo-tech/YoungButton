@@ -2250,7 +2250,7 @@ const App = {
       this._safeStep('basicInfoCard', () => this._renderBasicInfoCard()); // ★ v20.5
       this._safeStep('brainBalanceCard', () => this._renderBrainBalanceCard()); // ★ v21.1
       this._safeStep('analyticsToggle', () => this._syncAnalyticsToggle()); // ★ v24.0
-      this._safeStep('measurerCard', () => this._renderMeasurerCard()); // ★ v24.4
+      this._safeStep('measurerFixed', () => this._syncMeasurerFixed()); // ★ v24.6
       this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
     }
     // ★ v16.2: 가족 공유 페이지
@@ -8192,7 +8192,7 @@ const App = {
       if (orgCode) localStorage.setItem('yb_org_code', orgCode);
       if (userLabel != null) localStorage.setItem('yb_user_label', userLabel);
       this._toast('✓ 기관 측정 정보가 설정되었어요');
-      this._renderMeasurerCard();
+      this._syncMeasurerFixed();
     } catch (e) {}
   },
 
@@ -8203,7 +8203,7 @@ const App = {
       localStorage.removeItem('yb_org_code');
       localStorage.removeItem('yb_user_label');
       this._toast('기관 모드를 해제했어요');
-      this._renderMeasurerCard();
+      this._syncMeasurerFixed();
     } catch (e) {}
   },
   // 측정자만 변경 (다음 사람 측정 전에 호출)
@@ -8223,76 +8223,38 @@ const App = {
   },
 
   // ★ v24.4: 측정자 입력 카드 렌더 (기관 모드 시 홈에 표시)
-  _renderMeasurerCard() {
-    const el = document.getElementById('measurer-card');
-    if (!el) return;
-    let orgMode = false, org = '', label = '', collapsed = false;
+  // ★ v24.6: 하단 고정 측정자 입력칸 동기화
+  _syncMeasurerFixed() {
     try {
-      orgMode = localStorage.getItem('yb_org_mode') === '1';
-      org = localStorage.getItem('yb_org_code') || '';
-      label = localStorage.getItem('yb_user_label') || '';
-      collapsed = localStorage.getItem('yb_measurer_collapsed') === '1';
+      const input = document.getElementById('measurer-input-fixed');
+      const status = document.getElementById('measurer-status');
+      const label = localStorage.getItem('yb_user_label') || '';
+      if (input && !document.activeElement?.isSameNode(input)) input.value = label;
+      if (status) {
+        status.innerHTML = label
+          ? `현재 측정자: <strong>${this._esc(label)}</strong> <button type="button" class="measurer-clear" onclick="App.clearMeasurerFixed()">지우기</button>`
+          : '';
+      }
     } catch (e) {}
-
-    const hasLabel = label && label.trim();
-    el.style.display = 'block';
-
-    // 개인 사용자(기관모드 OFF)이고 라벨도 없고 접은 적 있으면 → 작은 링크만
-    if (!orgMode && !hasLabel && collapsed) {
-      el.innerHTML = `
-        <div class="measurer-collapsed" onclick="App.expandMeasurer()">
-          🪪 측정자 번호 입력 (기관·회원용) <span style="opacity:.6">›</span>
-        </div>`;
-      return;
-    }
-
-    el.innerHTML = `
-      <div class="measurer-card">
-        <div class="measurer-head">
-          <span class="measurer-icon">🪪</span>
-          <div style="flex:1">
-            <div class="measurer-title">측정자 번호 ${orgMode ? '' : '<span style="font-size:11px;font-weight:600;color:#9AA5B1">(선택)</span>'}</div>
-            <div class="measurer-sub">${org ? org + ' · ' : ''}안내받은 번호·회원번호를 입력하세요</div>
-          </div>
-          ${!orgMode ? `<button type="button" class="measurer-x" onclick="App.collapseMeasurer()" title="접기">✕</button>` : ''}
-        </div>
-        <div class="measurer-input-row">
-          <input type="text" id="measurer-input" class="measurer-input"
-                 placeholder="예: 301호 / 회원번호 / 별칭"
-                 value="${hasLabel ? this._esc(label) : ''}"
-                 onkeydown="if(event.key==='Enter')App.saveMeasurer()">
-          <button class="measurer-btn" type="button" onclick="App.saveMeasurer()">확인</button>
-        </div>
-        ${hasLabel ? `<div class="measurer-current">현재 측정자: <strong>${this._esc(label)}</strong> <button type="button" class="measurer-clear" onclick="App.clearMeasurer()">변경</button></div>` : ''}
-      </div>`;
   },
 
-  collapseMeasurer() {
-    try { localStorage.setItem('yb_measurer_collapsed', '1'); } catch (e) {}
-    this._renderMeasurerCard();
-  },
-  expandMeasurer() {
-    try { localStorage.removeItem('yb_measurer_collapsed'); } catch (e) {}
-    this._renderMeasurerCard();
-  },
-
-  saveMeasurer() {
+  saveMeasurerFixed() {
     try {
-      const input = document.getElementById('measurer-input');
+      const input = document.getElementById('measurer-input-fixed');
       if (!input) return;
       const val = input.value.trim();
       if (!val) { this._toast('번호를 입력해주세요'); return; }
       localStorage.setItem('yb_user_label', val);
       this._toast('✓ 측정자: ' + val);
-      this._renderMeasurerCard();
+      this._syncMeasurerFixed();
     } catch (e) {}
   },
 
-  clearMeasurer() {
+  clearMeasurerFixed() {
     try {
       localStorage.removeItem('yb_user_label');
-      this._toast('측정자를 초기화했어요');
-      this._renderMeasurerCard();
+      this._toast('측정자를 지웠어요');
+      this._syncMeasurerFixed();
     } catch (e) {}
   },
 
