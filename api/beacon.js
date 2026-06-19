@@ -57,6 +57,7 @@ async function saveEvent(ev) {
     await kv.incr(`cnt:events:${day}`);
     await kv.incr(`cnt:category:${ev.category}:${day}`);
     if (ev.sid) await kv.sadd(`sessions:${day}`, ev.sid);
+    if (ev.org) { await kv.incr(`cnt:org:${ev.org}:${day}`); if (ev.label) await kv.sadd(`org:${ev.org}:users:${day}`, ev.label); }
     await kv.expire(`sessions:${day}`, 60 * 60 * 24 * 90);
     // 전체 카운터
     await kv.incr('cnt:total_events');
@@ -138,6 +139,8 @@ export default async function handler(req, res) {
         score:    typeof body.score === 'number' ? Math.round(body.score) : null,
         page:     body.page || null,
         sid:      body.sid || null,  // 앱이 생성한 익명 세션ID (UUID)
+        org:      body.org ? String(body.org).substring(0, 40) : null,    // 기관 코드 (기관이 설정 시)
+        label:    body.label ? String(body.label).substring(0, 30) : null, // 측정자 별칭/번호 (기관이 입력 시)
         ua_short: (req.headers['user-agent'] || '').substring(0, 40),  // 기기 타입 파악용
         region:   req.headers['x-vercel-ip-country'] || null,  // 국가 코드만
       };

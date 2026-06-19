@@ -27,12 +27,23 @@ function ybAnalyticsEnabled() {
   catch (_) { return false; }
 }
 
+// ★ v24.1: 기관모드 — 기관코드/측정자 라벨 (기관이 설정 시에만 포함)
+function ybOrgInfo() {
+  try {
+    return {
+      org: localStorage.getItem('yb_org_code') || null,     // 기관 코드 (예: gangnam-health)
+      label: localStorage.getItem('yb_user_label') || null, // 측정자 별칭/번호 (예: 301호, 2024-015)
+    };
+  } catch (_) { return { org: null, label: null }; }
+}
+
 function ybBeacon(payload) {
   // ★ 옵트아웃 시 전송 안 함 + URL 미설정 시 비활성
   if (!ybAnalyticsEnabled()) return;
   if (!YB_BEACON_URL || YB_BEACON_URL.indexOf('YOUR-DASHBOARD') !== -1) return; // 미배포 시 무동작
   try {
-    const data = JSON.stringify({ ...payload, sid: YB_SID, t: Date.now() });
+    const oi = ybOrgInfo();
+    const data = JSON.stringify({ ...payload, sid: YB_SID, org: oi.org, label: oi.label, t: Date.now() });
     if (navigator.sendBeacon) {
       const ok = navigator.sendBeacon(YB_BEACON_URL, new Blob([data], { type: 'application/json' }));
       if (!ok) _ybEnqueue(data);
@@ -8157,6 +8168,30 @@ const App = {
   // ════════════════════════════════════════════════════
   // ★ v20.6: 개인정보 데이터 관리 (백업/복원/처리방침)
   // ════════════════════════════════════════════════════
+
+  // ★ v24.1: 기관 모드 설정 (기관에서 측정자 추적용)
+  setOrgMode(orgCode, userLabel) {
+    try {
+      if (orgCode) localStorage.setItem('yb_org_code', orgCode);
+      if (userLabel != null) localStorage.setItem('yb_user_label', userLabel);
+      this._toast('✓ 기관 측정 정보가 설정되었어요');
+    } catch (e) {}
+  },
+  // 측정자만 변경 (다음 사람 측정 전에 호출)
+  setMeasurer(userLabel) {
+    try {
+      if (userLabel) localStorage.setItem('yb_user_label', userLabel);
+      else localStorage.removeItem('yb_user_label');
+    } catch (e) {}
+  },
+  getOrgMode() {
+    try {
+      return {
+        org: localStorage.getItem('yb_org_code') || '',
+        label: localStorage.getItem('yb_user_label') || '',
+      };
+    } catch (e) { return { org:'', label:'' }; }
+  },
 
   // ★ v24.0: 익명 통계 수집 켜기/끄기
   toggleAnalytics(enabled) {

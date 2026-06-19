@@ -418,7 +418,7 @@ tbody td{padding:10px 14px;font-size:13px;color:var(--text2)}
         </div>
         <table>
           <thead><tr>
-            <th>시간</th><th>카테고리</th><th>점수</th><th>세션ID</th><th>기기</th>
+            <th>시간</th><th>카테고리</th><th>점수</th><th>측정자</th><th>기관</th>
           </tr></thead>
           <tbody id="recent-tbody"><tr><td colspan="5"><div class="empty-state"><i class="ti ti-loader"></i><p>데이터 로딩 중...</p></div></td></tr></tbody>
         </table>
@@ -837,8 +837,11 @@ function renderRecentTable(events) {
     const cat = ev.category || 'unknown';
     const score = ev.score != null ? ev.score : '—';
     const scoreColor = ev.score >= 80 ? 'var(--green)' : ev.score >= 60 ? 'var(--orange)' : 'var(--red)';
-    const sid = (ev.sid || '').slice(0,12) + '…';
-    const ua = ev.ua_short || '알 수 없음';
+    // 측정자: 기관이 입력한 라벨 우선, 없으면 익명 세션ID
+    const measurer = ev.label
+      ? `<span style="font-weight:700;color:var(--text)">${ev.label}</span>`
+      : `<span style="font-family:monospace;font-size:11px;color:var(--text3)">${(ev.sid||'').slice(0,10)}… <span style="font-style:italic">(익명)</span></span>`;
+    const orgName = ev.org || '<span style="color:var(--text3)">—</span>';
     return `<tr>
       <td class="td-main">${dateStr} ${timeStr}</td>
       <td><span class="badge b-${cat}">${CAT_LABELS[cat]||cat}</span></td>
@@ -846,8 +849,8 @@ function renderRecentTable(events) {
         <div class="score-bar"><div class="score-fill" style="width:${score}%;background:${scoreColor}"></div></div>
         <span class="score-val" style="color:${scoreColor}">${score}</span>
       </div></td>
-      <td style="font-family:monospace;font-size:11px;color:var(--text3)">${sid}</td>
-      <td>${ua}</td>
+      <td>${measurer}</td>
+      <td style="font-size:12px;color:var(--text2)">${orgName}</td>
     </tr>`;
   }).join('');
 }
@@ -960,31 +963,49 @@ function renderUsersPage() {
 // ════════════════════════════════════════════════════════════════
 // ORGS PAGE
 // ════════════════════════════════════════════════════════════════
-const DEMO_ORGS = [
-  { icon:'🏥', name:'서울 강남 보건소', type:'보건소', status:'active', measurements:1284, since:'2026-03' },
-  { icon:'🏫', name:'중랑구 노인복지관', type:'노인복지관', status:'active', measurements:847, since:'2026-04' },
-  { icon:'🏢', name:'(주)신한은행 복지팀', type:'기업복지', status:'active', measurements:3201, since:'2026-02' },
-  { icon:'🎓', name:'연세대학교 건강센터', type:'대학', status:'inactive', measurements:0, since:'2026-06' },
+// 기관 목록 — localStorage에 저장 (새로고침해도 유지)
+const SAMPLE_ORGS = [
+  { icon:'🏥', name:'(예시) 서울 강남 보건소', type:'보건소', status:'active', measurements:1284, since:'2026-03', sample:true },
+  { icon:'🏫', name:'(예시) 중랑구 노인복지관', type:'노인복지관', status:'active', measurements:847, since:'2026-04', sample:true },
 ];
+
+function loadOrgs() {
+  try {
+    const saved = localStorage.getItem('yb_orgs');
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return SAMPLE_ORGS.slice(); // 최초 1회만 예시 표시
+}
+function saveOrgs() {
+  try { localStorage.setItem('yb_orgs', JSON.stringify(ORGS)); } catch(e) {}
+}
+let ORGS = loadOrgs();
 
 function renderOrgs() {
   const list = document.getElementById('org-list');
-  list.innerHTML = DEMO_ORGS.map((o,i) => `
+  if (!ORGS.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)">등록된 기관이 없습니다.<br>오른쪽 위 "기관 추가" 버튼으로 등록하세요.</div>';
+    return;
+  }
+  list.innerHTML = ORGS.map((o,i) => `
     <div class="org-card">
       <div class="org-icon">${o.icon}</div>
       <div>
-        <div class="org-name">${o.name}</div>
+        <div class="org-name">${o.name} ${o.sample?'<span style=\"font-size:10px;color:var(--text3);font-weight:400\">예시</span>':''}</div>
         <div class="org-meta">
           <span class="status-dot ${o.status==='active'?'s-active':'s-inactive'}"></span>
           ${o.type} · 도입 ${o.since}
         </div>
       </div>
       <div class="org-stats">
-        <div class="org-stat-val">${o.measurements.toLocaleString()}</div>
+        <div class="org-stat-val">${(o.measurements||0).toLocaleString()}</div>
         <div class="org-stat-label">누적 측정 수</div>
       </div>
-      <button onclick="editOrg(${i})" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;color:var(--text3);display:flex;align-items:center;gap:4px;font-size:12px;margin-left:8px">
+      <button onclick="editOrg(${i})" title="이름/상태 수정" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;color:var(--text3);display:flex;align-items:center;gap:4px;font-size:12px;margin-left:8px">
         <i class="ti ti-edit" style="font-size:14px"></i>편집
+      </button>
+      <button onclick="deleteOrg(${i})" title="기관 삭제" style="background:#FEF2F2;border:1px solid #FECACA;border-radius:var(--r);padding:6px 10px;color:#DC2626;display:flex;align-items:center;gap:4px;font-size:12px;margin-left:6px">
+        <i class="ti ti-trash" style="font-size:14px"></i>삭제
       </button>
     </div>
   `).join('');
@@ -993,12 +1014,24 @@ function renderOrgs() {
 function addOrg() {
   const name = prompt('기관 이름을 입력하세요:');
   if (!name) return;
-  DEMO_ORGS.push({ icon:'🏛️', name, type:'기타', status:'active', measurements:0, since:new Date().toISOString().slice(0,7) });
-  renderOrgs();
+  const type = prompt('기관 유형 (예: 보건소, 노인복지관, 기업복지, 대학):', '보건소') || '기타';
+  ORGS.push({ icon:'🏛️', name, type, status:'active', measurements:0, since:new Date().toISOString().slice(0,7) });
+  saveOrgs(); renderOrgs();
 }
 
 function editOrg(i) {
-  alert(`기관 편집: ${DEMO_ORGS[i].name}\n(실제 배포 시 편집 폼으로 연결됩니다)`);
+  const o = ORGS[i];
+  const name = prompt('기관 이름:', o.name);
+  if (name === null) return;
+  const status = confirm('이 기관을 "운영중(활성)" 상태로 둘까요?\n확인=운영중, 취소=중지') ? 'active' : 'inactive';
+  ORGS[i] = { ...o, name: name || o.name, status, sample:false };
+  saveOrgs(); renderOrgs();
+}
+
+function deleteOrg(i) {
+  if (!confirm(`"${ORGS[i].name}" 기관을 삭제할까요?`)) return;
+  ORGS.splice(i, 1);
+  saveOrgs(); renderOrgs();
 }
 
 // ════════════════════════════════════════════════════════════════
