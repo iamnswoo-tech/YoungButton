@@ -112,6 +112,21 @@ async function getStats(days = 30) {
       result.categories[ev.category] = (result.categories[ev.category] || 0) + 1;
     }
   }
+  // ★ v24.3: 사용자(코드)별 집계 — 기관이 "누가 몇 번 썼는지" 파악용
+  // recent 이벤트 기반으로 코드별 측정 횟수/최근 시각/라벨 집계
+  try {
+    const userMap = {};
+    const source = (kv ? result.recent : MEM.events) || [];
+    for (const ev of source) {
+      const key = ev.label || ev.sid || 'unknown';
+      if (!userMap[key]) userMap[key] = { code: ev.sid || '', label: ev.label || null, org: ev.org || null, count: 0, last: 0, cats: {} };
+      userMap[key].count++;
+      if (ev.t > userMap[key].last) userMap[key].last = ev.t;
+      if (ev.category) userMap[key].cats[ev.category] = (userMap[key].cats[ev.category] || 0) + 1;
+    }
+    result.users = Object.values(userMap).sort((a, b) => b.last - a.last).slice(0, 100);
+  } catch (_) { result.users = []; }
+
   return result;
 }
 

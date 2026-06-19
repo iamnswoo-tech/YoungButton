@@ -316,7 +316,6 @@ tbody td{padding:10px 14px;font-size:13px;color:var(--text2)}
   <div class="sb-section">분석</div>
   <div class="sb-item" onclick="goPage('analytics',this)"><i class="ti ti-chart-line"></i>측정 분석</div>
   <div class="sb-item" onclick="goPage('users',this)"><i class="ti ti-users"></i>사용자 현황</div>
-  <div class="sb-item" onclick="goPage('orgs',this)"><i class="ti ti-building"></i>납품 기관</div>
 
   <div class="sb-section">시스템</div>
   <div class="sb-item" onclick="goPage('integration',this)"><i class="ti ti-plug"></i>앱 연동 설정</div>
@@ -474,19 +473,16 @@ tbody td{padding:10px 14px;font-size:13px;color:var(--text2)}
         <div class="chart-head"><div><div class="chart-title">DAU / MAU 추이</div><div class="chart-sub">최근 30일</div></div></div>
         <div style="position:relative;height:220px"><canvas id="chart-dau"></canvas></div>
       </div>
+      <div class="chart-card full-row">
+        <div class="chart-head"><div><div class="chart-title">측정자(코드)별 현황</div><div class="chart-sub">다운로드한 사용자별 측정 기록 — 라벨이 없으면 익명 코드로 표시</div></div></div>
+        <table>
+          <thead><tr><th>측정자 / 코드</th><th>측정 횟수</th><th>최근 측정</th><th>주요 측정</th></tr></thead>
+          <tbody id="users-tbody"><tr><td colspan="4"><div class="empty-state"><i class="ti ti-loader"></i><p>데이터 로딩 중...</p></div></td></tr></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ── 납품 기관 ── -->
-    <div class="page" id="page-orgs">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div class="sec-title">납품·파일럿 기관 관리</div>
-        <button class="save-btn" onclick="addOrg()" style="margin:0;display:flex;align-items:center;gap:6px"><i class="ti ti-plus" style="font-size:14px"></i>기관 추가</button>
-      </div>
-      <div id="org-list">
-        <!-- 데모 데이터 -->
-      </div>
-    </div>
-
     <!-- ── 연동 설정 ── -->
     <div class="page" id="page-integration">
       <div class="setting-group">
@@ -556,8 +552,9 @@ if (name === 'page_view') {
         <input type="password" class="setting-input" id="new-pw" placeholder="새 비밀번호">
         <label class="setting-label" style="margin-top:10px">비콘 API URL (배포 후 입력)</label>
         <input type="text" class="setting-input" id="api-url-setting" placeholder="https://your-vercel-app.vercel.app/api/beacon">
-        <label class="setting-label" style="margin-top:10px">서비스 이름 (납품 기관명)</label>
-        <input type="text" class="setting-input" id="service-name" placeholder="YoungButton 건강관리 서비스">
+        <label class="setting-label" style="margin-top:10px">우리 기관 이름</label>
+        <input type="text" class="setting-input" id="service-name" placeholder="예: 강남구 보건소">
+        <p style="font-size:12px;color:var(--text3);margin-top:6px;line-height:1.6">이 대시보드를 운영하는 기관 이름입니다. 측정 기록에 기관명으로 함께 표시됩니다.</p>
         <button class="save-btn" onclick="saveSettings()">설정 저장</button>
       </div>
 
@@ -631,7 +628,6 @@ function goPage(id, el) {
   document.getElementById('page-' + id).classList.add('active');
   if (el) el.classList.add('active');
   document.getElementById('topbar-title').textContent = PAGE_TITLES[id] || id;
-  if (id === 'orgs') renderOrgs();
   if (id === 'analytics') renderAnalyticsPage();
   if (id === 'users') renderUsersPage();
   if (id === 'settings') {
@@ -822,6 +818,30 @@ function renderOverview(data) {
 
   // Recent table
   renderRecentTable(d.recent || []);
+  renderUsersTable(d.users || []);
+}
+
+function renderUsersTable(users) {
+  const tbody = document.getElementById('users-tbody');
+  if (!tbody) return;
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><i class="ti ti-inbox"></i><p>아직 측정한 사용자가 없습니다</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(u => {
+    const name = u.label
+      ? `<span style="font-weight:700;color:var(--text)">${u.label}</span>`
+      : `<span style="font-family:monospace;font-size:12px;color:var(--text2)">${u.code || '알수없음'} <span style="color:var(--text3);font-style:italic">(익명)</span></span>`;
+    const last = u.last ? new Date(u.last).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+    const topCats = Object.entries(u.cats||{}).sort((a,b)=>b[1]-a[1]).slice(0,3)
+      .map(([k])=>`<span class="badge b-${k}" style="margin-right:4px">${CAT_LABELS[k]||k}</span>`).join('');
+    return `<tr>
+      <td>${name}</td>
+      <td><span style="font-weight:800;color:var(--blue2)">${u.count}</span>회</td>
+      <td style="font-size:12px;color:var(--text2)">${last}</td>
+      <td>${topCats||'—'}</td>
+    </tr>`;
+  }).join('');
 }
 
 function renderRecentTable(events) {
@@ -1125,7 +1145,6 @@ function refreshData() {
 function initDashboard() {
   renderOverview(DEMO);
   startRealtimeSim();
-  renderOrgs();
   // 5분마다 자동 새로고침
   setInterval(refreshData, 5 * 60 * 1000);
 }

@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>건강 측정 24 — ME-rPPG</title>
+<title>건강 측정 v24 — ME-rPPG</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -11240,6 +11240,46 @@ body::before {
 }
 .privacy-optout-label input:checked ~ .privacy-switch { background: #22c55e; }
 .privacy-optout-label input:checked ~ .privacy-switch::after { transform: translateX(18px); }
+
+/* ★ v24.4: 측정자 입력 카드 (기관 모드) */
+.measurer-card {
+  margin: 0 16px 12px;
+  background: #FFFFFF;
+  border: 1.5px solid #2D7CFF;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 2px 12px rgba(45,124,255,.10);
+}
+.measurer-head { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
+.measurer-icon { font-size: 26px; }
+.measurer-title { font-size: 15px; font-weight: 800; color: #1A2B45; }
+.measurer-sub { font-size: 12px; color: #6B7684; margin-top: 1px; }
+.measurer-input-row { display: flex; gap: 8px; }
+.measurer-input {
+  flex: 1; padding: 12px 14px;
+  border: 1.5px solid #E2E8F0; border-radius: 12px;
+  font-size: 15px; font-family: inherit; color: #1A2B45;
+  outline: none; transition: border-color .15s;
+}
+.measurer-input:focus { border-color: #2D7CFF; }
+.measurer-btn {
+  padding: 12px 20px;
+  background: #2D7CFF; color: #fff; border: none;
+  border-radius: 12px; font-size: 14px; font-weight: 800;
+  font-family: inherit; cursor: pointer; white-space: nowrap;
+  transition: transform .12s;
+}
+.measurer-btn:active { transform: scale(.96); }
+.measurer-current {
+  margin-top: 10px; font-size: 13px; color: #4B5563;
+  display: flex; align-items: center; gap: 8px;
+}
+.measurer-current strong { color: #2D7CFF; font-weight: 800; }
+.measurer-clear {
+  margin-left: auto; background: #F1F3F6; border: none;
+  border-radius: 8px; padding: 5px 12px; font-size: 12px;
+  font-weight: 700; color: #6B7684; cursor: pointer; font-family: inherit;
+}
 </style>
 </head>
 <body>
@@ -11259,7 +11299,7 @@ body::before {
       <div class="hd-sub">FACE + BODY + MIND</div>
     </div>
   </div>
-  <span class="hd-ver" onclick="App._toggleDebugMode()">v24.2 · BETA</span>
+  <span class="hd-ver" onclick="App._toggleDebugMode()">v24.4 · BETA</span>
 </header>
 
 <!-- ═══════════ HOME PAGE ═══════════ -->
@@ -11272,6 +11312,9 @@ body::before {
     <div class="hero-title">나를 찾는 건강습관,<br>내 몸과 마음의 리셋버튼.</div>
     <div class="hero-sub"><strong>ME-rPPG 딥러닝 AI</strong>가 10초 만에<br>심박·혈관·감정·자율신경을 분석합니다.</div>
   </div>
+
+  <!-- ★ v24.4: 측정자 입력 카드 (기관 모드 시 표시) -->
+  <div id="measurer-card" style="display:none"></div>
 
   <!-- ★ v13: 종합 Wellness Score 카드 (측정 후 자동 표시) -->
   <div id="wellness-card" class="wellness-card" style="display:none"></div>

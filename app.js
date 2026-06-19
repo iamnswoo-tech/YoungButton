@@ -305,6 +305,21 @@ const App = {
     Console.init();
     console.log('[App v18.0] 초기화 - 모드:', APP_MODE);
 
+    // ★ v24.4: URL 파라미터로 기관 모드 자동 설정
+    // 예: https://기관주소/?org=강남보건소&setup=1 → 기관 모드 ON
+    this._safeStep('orgSetup', () => {
+      try {
+        const params = new URLSearchParams(location.search);
+        if (params.get('setup') === '1' || params.get('org')) {
+          localStorage.setItem('yb_org_mode', '1');
+          const org = params.get('org');
+          if (org) localStorage.setItem('yb_org_code', decodeURIComponent(org));
+          // URL에서 파라미터 제거 (깔끔하게)
+          if (history.replaceState) history.replaceState(null, '', location.pathname);
+        }
+      } catch (e) {}
+    });
+
     // 1. 핵심 렌더링 인프라 (실패 시에도 나머지 계속)
     this._safeStep('canvas', () => this._setupCanvas());
     this._safeStep('faceButton', () => this._bindFaceButton());
@@ -2235,6 +2250,7 @@ const App = {
       this._safeStep('basicInfoCard', () => this._renderBasicInfoCard()); // ★ v20.5
       this._safeStep('brainBalanceCard', () => this._renderBrainBalanceCard()); // ★ v21.1
       this._safeStep('analyticsToggle', () => this._syncAnalyticsToggle()); // ★ v24.0
+      this._safeStep('measurerCard', () => this._renderMeasurerCard()); // ★ v24.4
       this._safeStep('recommendCard', () => this._renderRecommendCard()); // ★ v20.0
     }
     // ★ v16.2: 가족 공유 페이지
@@ -8172,9 +8188,22 @@ const App = {
   // ★ v24.1: 기관 모드 설정 (기관에서 측정자 추적용)
   setOrgMode(orgCode, userLabel) {
     try {
+      localStorage.setItem('yb_org_mode', '1'); // 기관 모드 ON → 측정자 카드 표시
       if (orgCode) localStorage.setItem('yb_org_code', orgCode);
       if (userLabel != null) localStorage.setItem('yb_user_label', userLabel);
       this._toast('✓ 기관 측정 정보가 설정되었어요');
+      this._renderMeasurerCard();
+    } catch (e) {}
+  },
+
+  // 기관 모드 끄기 (개인 사용자로 전환)
+  clearOrgMode() {
+    try {
+      localStorage.removeItem('yb_org_mode');
+      localStorage.removeItem('yb_org_code');
+      localStorage.removeItem('yb_user_label');
+      this._toast('기관 모드를 해제했어요');
+      this._renderMeasurerCard();
     } catch (e) {}
   },
   // 측정자만 변경 (다음 사람 측정 전에 호출)
@@ -8191,6 +8220,62 @@ const App = {
         label: localStorage.getItem('yb_user_label') || '',
       };
     } catch (e) { return { org:'', label:'' }; }
+  },
+
+  // ★ v24.4: 측정자 입력 카드 렌더 (기관 모드 시 홈에 표시)
+  _renderMeasurerCard() {
+    const el = document.getElementById('measurer-card');
+    if (!el) return;
+    let orgMode = false, org = '', label = '';
+    try {
+      orgMode = localStorage.getItem('yb_org_mode') === '1';
+      org = localStorage.getItem('yb_org_code') || '';
+      label = localStorage.getItem('yb_user_label') || '';
+    } catch (e) {}
+
+    // 기관 모드가 아니면 숨김 (일반 개인 사용자에게는 안 보임)
+    if (!orgMode) { el.style.display = 'none'; return; }
+
+    el.style.display = 'block';
+    const hasLabel = label && label.trim();
+    el.innerHTML = `
+      <div class="measurer-card">
+        <div class="measurer-head">
+          <span class="measurer-icon">🪪</span>
+          <div>
+            <div class="measurer-title">측정자 번호</div>
+            <div class="measurer-sub">${org ? org + ' · ' : ''}측정 전 본인 번호를 입력하세요</div>
+          </div>
+        </div>
+        <div class="measurer-input-row">
+          <input type="text" id="measurer-input" class="measurer-input"
+                 placeholder="예: 301호 / 회원번호 / 별칭"
+                 value="${hasLabel ? this._esc(label) : ''}"
+                 onkeydown="if(event.key==='Enter')App.saveMeasurer()">
+          <button class="measurer-btn" type="button" onclick="App.saveMeasurer()">확인</button>
+        </div>
+        ${hasLabel ? `<div class="measurer-current">현재 측정자: <strong>${this._esc(label)}</strong> <button type="button" class="measurer-clear" onclick="App.clearMeasurer()">변경</button></div>` : ''}
+      </div>`;
+  },
+
+  saveMeasurer() {
+    try {
+      const input = document.getElementById('measurer-input');
+      if (!input) return;
+      const val = input.value.trim();
+      if (!val) { this._toast('번호를 입력해주세요'); return; }
+      localStorage.setItem('yb_user_label', val);
+      this._toast('✓ 측정자: ' + val);
+      this._renderMeasurerCard();
+    } catch (e) {}
+  },
+
+  clearMeasurer() {
+    try {
+      localStorage.removeItem('yb_user_label');
+      this._toast('측정자를 초기화했어요');
+      this._renderMeasurerCard();
+    } catch (e) {}
   },
 
   // ★ v24.0: 익명 통계 수집 켜기/끄기
