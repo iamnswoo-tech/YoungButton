@@ -8,7 +8,7 @@
 //   수집: 측정 종류 + 점수 + 익명 세션ID만. 개인식별정보·원시측정값 없음.
 //   사용자가 끄면(yb_analytics_off=1) 전송하지 않음.
 // ════════════════════════════════════════════════════════════════════
-const YB_BEACON_URL = 'https://YOUR-DASHBOARD.vercel.app/api/beacon';
+const YB_BEACON_URL = '/api/beacon';
 
 const YB_SID = (() => {
   try {
