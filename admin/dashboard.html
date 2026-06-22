@@ -361,7 +361,7 @@ tbody td{padding:10px 14px;font-size:13px;color:var(--text2)}
             <span class="kpi-change up" id="kpi-change-users">+0%</span>
           </div>
           <div class="kpi-val" id="kpi-users">—</div>
-          <div class="kpi-label">누적 세션 수</div>
+          <div class="kpi-label">누적 설치자 수</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-top">
@@ -456,7 +456,7 @@ tbody td{padding:10px 14px;font-size:13px;color:var(--text2)}
         <div class="kpi-card">
           <div class="kpi-top"><div class="kpi-icon" style="background:rgba(45,124,255,.15)"><i class="ti ti-users" style="color:var(--blue2);font-size:20px"></i></div></div>
           <div class="kpi-val" id="u-total-sessions">—</div>
-          <div class="kpi-label">전체 세션 수</div>
+          <div class="kpi-label">누적 설치자 수</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-top"><div class="kpi-icon" style="background:rgba(0,196,140,.12)"><i class="ti ti-calendar-stats" style="color:var(--green);font-size:20px"></i></div></div>
@@ -762,10 +762,11 @@ function mkDoughnut(id, labels, data, colors) {
 // ════════════════════════════════════════════════════════════════
 function renderOverview(data) {
   const d = data || DEMO;
+  window.__lastStats = d; // ★ v24.7: 실제 데이터 전역 저장 (다른 페이지 공유)
 
   // KPIs
   document.getElementById('kpi-total').textContent = d.totals.measurements.toLocaleString();
-  document.getElementById('kpi-users').textContent = d.totals.sessions.toLocaleString();
+  document.getElementById('kpi-users').textContent = (d.totals.devices != null ? d.totals.devices : d.totals.sessions || 0).toLocaleString();
   document.getElementById('kpi-today').textContent = (d.today?.measurements || d.daily.at(-1)?.measurements || 0).toLocaleString();
   const avg = Math.round(d.daily.reduce((a,x)=>a+x.measurements,0)/d.daily.length);
   document.getElementById('kpi-avg').textContent = avg.toLocaleString();
@@ -966,12 +967,14 @@ function renderAnalyticsPage() {
 // USERS PAGE
 // ════════════════════════════════════════════════════════════════
 function renderUsersPage() {
-  document.getElementById('u-total-sessions').textContent = DEMO.totals.sessions.toLocaleString();
-  document.getElementById('u-today-sessions').textContent = (DEMO.today?.users || DEMO.daily.at(-1)?.users || 0);
-  const avg = (DEMO.totals.measurements / Math.max(DEMO.totals.sessions,1)).toFixed(1);
+  const d = window.__lastStats || DEMO;
+  const devices = (d.totals.devices != null ? d.totals.devices : d.totals.sessions) || 0;
+  document.getElementById('u-total-sessions').textContent = devices.toLocaleString();
+  document.getElementById('u-today-sessions').textContent = (d.today?.users || d.daily.at(-1)?.users || 0);
+  const avg = (d.totals.measurements / Math.max(devices,1)).toFixed(1);
   document.getElementById('u-avg-per-session').textContent = avg + '회';
 
-  const dl = DEMO.daily.slice(-30);
+  const dl = d.daily.slice(-30);
   mkLine('chart-dau',
     dl.map(x=>x.date.slice(5)),
     [
