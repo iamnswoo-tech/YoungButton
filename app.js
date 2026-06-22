@@ -5556,7 +5556,7 @@ const App = {
     //   - AI: ME-rPPG 신경망 출력
     const aiAvailable = f.aiSamples && f.aiSamples.length >= 100;
     this._flog(`v16.1: 다채널 분석 시작 (R/G${aiAvailable ? '/AI' : ''})`);
-    this._flog(`측정 모드: ${f.torchOn ? '플래시 ON (R채널 우선)' : '외부 조명 (G채널 우선)'}`);
+    this._flog(`측정 모드: ${f.torchOn ? '플래시 ON' : '외부 조명'} (신호 강한 채널 자동 선택)`);
 
     // 1) R 채널 분석
     let resultR = null;
@@ -5582,14 +5582,29 @@ const App = {
       } catch (e) { this._flog(`AI채널 예외: ${e.message}`, 'error'); }
     }
 
+    // ★ v24.8: 채널별 평균 밝기 계산 — 손가락 측정 시 신호 유효성 판단
+    // 손가락으로 카메라를 덮으면 R은 포화(빨강만 통과), G/B는 거의 0이 됨
+    // → 밝기가 너무 낮은 채널(G<25)은 심박 신호가 없으므로 신뢰 불가
+    let avgR = 0, avgG = 0;
+    try {
+      const n = Math.min(samples.length, 600);
+      for (let i = 0; i < n; i++) { avgR += (samples[i].r || 0); avgG += (samples[i].g || 0); }
+      if (n > 0) { avgR /= n; avgG /= n; }
+    } catch (e) {}
+    this._flog(`채널 밝기: avgR=${avgR.toFixed(0)} avgG=${avgG.toFixed(0)}`);
+    const gTooDark = avgG < 25;   // G채널이 거의 0 → 손가락이 빛을 막음 (R 신호만 유효)
+    const rSaturated = avgR > 240; // R 완전 포화 → R도 신호 약할 수 있음
+
     // 4) 각 결과 점수 계산 — 신뢰도 + HR 합리성 복합
-    const scoreOf = (r) => {
+    const scoreOf = (r, channel) => {
       if (!r || !r.ok) return 0;
       // 학술적으로 비정상적 RMSSD/SDNN은 신호 오류
       if (r.rmssd > 100 && r.sdnn > 150) return 0; // 비정상치 패널티
       // ★ v18.1: HR 합리성 패널티 — 150BPM 초과는 오측정 가능성
       if (r.hr > 150) return 0;
       if (r.hr > 130) return (r.ibiCount * (r.cleanRate / 100)) * 0.2; // 심한 감점
+      // ★ v24.8: 채널 밝기 기반 패널티 — 어두운 채널은 신호 신뢰 불가
+      if (channel === 'G' && gTooDark) return 0;   // G가 거의 0이면 무효
       // 점수: 채택률 × IBI 수
       let s = r.ibiCount * (r.cleanRate / 100);
       // RMSSD가 너무 높으면 감점 (정상 0-80ms)
@@ -5598,9 +5613,9 @@ const App = {
       return s;
     };
 
-    const sR = scoreOf(resultR);
-    const sG = scoreOf(resultG);
-    const sAI = scoreOf(resultAI);
+    const sR = scoreOf(resultR, 'R');
+    const sG = scoreOf(resultG, 'G');
+    const sAI = scoreOf(resultAI, 'AI');
     this._flog(`채널 점수: R=${sR.toFixed(1)} G=${sG.toFixed(1)} AI=${sAI.toFixed(1)}`);
 
     // 5) 최적 채널 선택 — 토치 상태에 따라 선호도 조정
@@ -5618,12 +5633,23 @@ const App = {
         signalSource = chosen === resultG ? 'G-channel' : chosen === resultAI ? 'AI' : 'R-channel';
       }
     } else {
-      // 플래시 OFF: G 우선 (Verkruysse 2008), R이 50%+ 좋아야 R 사용
-      if (sR > sG * 1.5 && resultR) {
+      // 플래시 OFF: 기본은 G 우선 (Verkruysse 2008)
+      // ★ v24.8: 단, G채널이 너무 어두우면(손가락이 빛 차단) R채널 우선 — 오측정 방지
+      if (gTooDark) {
+        this._flog('G채널 신호 약함 → R채널 우선 (손가락 측정 환경)', 'info');
+        if (resultR && resultR.ok && sR > 0) {
+          chosen = resultR; signalSource = 'R-channel';
+        } else if (resultAI && resultAI.ok && sAI > 0) {
+          chosen = resultAI; signalSource = 'AI';
+        } else {
+          chosen = resultR || resultAI || resultG;
+          signalSource = chosen === resultR ? 'R-channel' : chosen === resultAI ? 'AI' : 'G-channel';
+        }
+      } else if (sR > sG * 1.5 && resultR) {
         chosen = resultR; signalSource = 'R-channel';
       } else if (sAI > sG * 1.5 && resultAI) {
         chosen = resultAI; signalSource = 'AI';
-      } else if (resultG && resultG.ok) {
+      } else if (resultG && resultG.ok && sG > 0) {
         chosen = resultG; signalSource = 'G-channel';
       } else {
         chosen = resultR || resultAI || resultG;
