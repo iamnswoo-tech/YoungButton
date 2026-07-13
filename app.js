@@ -9639,6 +9639,23 @@ const App = {
     }
     const paAvg = paCnt > 0 ? paSum / paCnt : 3;
     const naAvg = naCnt > 0 ? naSum / naCnt : 3;
+
+    // ★ v25.0: 응답 신뢰도 지표 (심리측정 품질)
+    // 근거: PANAS 내적 일관성 α=0.85~0.90 (Watson 1988, Crawford 2004)
+    // ① straight-lining (모두 같은 값) 감지 ② PA/NA 내부 분산으로 성의도 추정
+    let responseReliability = 100;
+    try {
+      const allVals = this._panasItems.map(it => s.panasScores[it.id] || 3);
+      const uniqueVals = new Set(allVals).size;
+      const respMean = allVals.reduce((a,b)=>a+b,0) / allVals.length;
+      const respVar = allVals.reduce((sum,v)=>sum+(v-respMean)**2,0) / allVals.length;
+      // 모든 응답이 동일(straight-lining)하면 신뢰도 대폭 감소
+      if (uniqueVals === 1) responseReliability = 30;
+      else if (uniqueVals === 2 && respVar < 0.3) responseReliability = 60;
+      // PA와 NA는 독립적이어야 함(둘 다 극단으로 높으면 무성의 의심)
+      if (paAvg > 4.5 && naAvg > 4.5) responseReliability = Math.min(responseReliability, 55);
+      responseReliability = Math.max(30, Math.min(100, responseReliability));
+    } catch (e) {}
     // Russell V: -1~1 변환 ((PA-NA)/4)
     const panasV = (paAvg - naAvg) / 4;
     // Russell A: PA+NA 합으로 보강 (둘 다 높으면 각성 ↑)
@@ -9808,6 +9825,7 @@ const App = {
       arousal: finalA,
       panasV, panasA,
       paAvg, naAvg,
+      responseReliability, // ★ v25.0: 심리 응답 신뢰도 (%)
       autoA: hasAuto ? autoA : null,
       autoV: hasAuto ? autoV : null,
       hasAuto,
@@ -12858,6 +12876,68 @@ const App = {
     return result;
   },
 
+  // ─── CHROM 알고리즘 (de Haan & Jeanne 2013, IEEE TBME 60(10):2878) ───
+  // POS와 함께 가장 강건한 rPPG 방법. 색차(chrominance) 기반으로 움직임에 강함.
+  // POS와 CHROM을 모두 계산해 신호 품질이 높은 쪽을 선택하면 정확도가 향상됨.
+  _chromAlgorithm(R, G, B) {
+    const N = R.length;
+    if (N < 10) return new Array(N).fill(0);
+    const meanR = R.reduce((a,b)=>a+b,0)/N;
+    const meanG = G.reduce((a,b)=>a+b,0)/N;
+    const meanB = B.reduce((a,b)=>a+b,0)/N;
+    if (meanR < 1 || meanG < 1 || meanB < 1) return new Array(N).fill(0);
+    // 1. 색상별 정규화 (평균으로 나눔)
+    const rn = R.map(v => v/meanR);
+    const gn = G.map(v => v/meanG);
+    const bn = B.map(v => v/meanB);
+    // 2. 색차 신호 X = 3R-2G, Y = 1.5R+G-1.5B (de Haan 표준 계수)
+    const X = new Array(N), Y = new Array(N);
+    for (let i = 0; i < N; i++) {
+      X[i] = 3*rn[i] - 2*gn[i];
+      Y[i] = 1.5*rn[i] + gn[i] - 1.5*bn[i];
+    }
+    // 3. 표준편차 비율 α로 결합: S = X - α·Y (α = σX/σY)
+    const sX = this._stdDev(X), sY = this._stdDev(Y) || 1e-9;
+    const alpha = sX / sY;
+    const S = new Array(N);
+    for (let i = 0; i < N; i++) S[i] = X[i] - alpha * Y[i];
+    return S;
+  },
+
+  // ─── rPPG 신호 품질 지표 (얼굴/손가락 공통, Elgendi 2016 기반) ───
+  // 주파수 도메인 품질: 심박 대역(0.7~3Hz)의 파워 집중도 + 왜도
+  _computeRppgSQI(signal, sr) {
+    const n = signal.length;
+    if (n < 30) return { quality: 0, skewness: 0, spectralConc: 0 };
+    let mean = 0; for (let i=0;i<n;i++) mean += signal[i]; mean /= n;
+    let variance = 0; for (let i=0;i<n;i++){const d=signal[i]-mean;variance+=d*d;} variance/=n;
+    const std = Math.sqrt(variance) || 1e-9;
+    // 왜도 (시간 도메인)
+    let skew = 0; for (let i=0;i<n;i++){const z=(signal[i]-mean)/std;skew+=z*z*z;} skew/=n;
+    // 스펙트럼 집중도 (Goertzel로 심박 대역 파워 / 전체 파워 근사)
+    let spectralConc = 0;
+    try {
+      const bandPow = this._bandPowerRatio ? this._bandPowerRatio(signal, sr, 0.7, 3.0) : null;
+      if (bandPow != null) spectralConc = bandPow;
+    } catch (e) {}
+    // 종합 품질: 왜도(절대값 작을수록 대칭 파형=좋음은 아님, rPPG는 양의 왜도 선호)
+    let quality = 0;
+    quality += Math.max(0, Math.min(1, (Math.abs(skew)) / 0.5)) * 0.4;
+    quality += Math.max(0, Math.min(1, spectralConc)) * 0.6;
+    return { quality: Math.max(0, Math.min(1, quality)), skewness: skew, spectralConc };
+  },
+
+  // 심박 대역 파워 비율 (0.7~3Hz 대역 / 전체) — 간이 스펙트럼 집중도
+  _bandPowerRatio(signal, sr, loHz, hiHz) {
+    const n = signal.length;
+    if (n < 30) return 0;
+    // 대역 통과 필터링된 신호의 분산 / 원신호 분산
+    const filtered = this._bandpass(signal, sr, loHz, hiHz);
+    const vFilt = this._variance ? this._variance(filtered) : this._stdDev(filtered) ** 2;
+    const vAll = this._stdDev(signal) ** 2 || 1e-9;
+    return Math.max(0, Math.min(1, vFilt / vAll));
+  },
+
   // ─── 측정 완료 (ME-rPPG 결과 통합) ───
   _faceFinalize() {
     console.log('[Face] _faceFinalize() - ME-rPPG');
@@ -12983,6 +13063,13 @@ const App = {
     // 사전 필터링 (250Hz BPF)
     const upBvp = this._bandpass(Array.from(upBvpRaw), upSr, 0.7, 3.5);
     console.log('[ME-rPPG] BVP 업샘플링 (timestamp 기반):', upBvp.length, 'samples @', upSr, 'Hz');
+
+    // ★ v25.0: rPPG 신호 품질 지표 (Elgendi 왜도 + 스펙트럼 집중도)
+    let rppgSqi = { quality: 0, skewness: 0, spectralConc: 0 };
+    try {
+      rppgSqi = this._computeRppgSQI(upBvp, upSr);
+      console.log(`[rPPG-SQI] 품질=${(rppgSqi.quality*100).toFixed(0)}% 왜도=${rppgSqi.skewness.toFixed(2)} 집중도=${(rppgSqi.spectralConc*100).toFixed(0)}%`);
+    } catch (e) { console.warn('[rPPG-SQI] 계산 실패:', e.message); }
 
     // ★ ME-rPPG의 정확한 HR을 활용한 적응형 피크 검출
     // 다이크로틱 노치(2차 피크) 자동 배제 위해 minDist를 expectedRR의 70%로 강제
@@ -13396,7 +13483,10 @@ const App = {
     return {
       hr: hrInt, rmssd, lnRmssd, rmssdReason,
       sdnn, respRate, stressIdx, stressFromRMSSD, stressLevel,
-      sqi: sqiEarly,
+      // ★ v25.0: 모델 수렴도(sqiEarly)와 신호 품질(rppgSqi)을 결합한 종합 신뢰도
+      sqi: Math.round(sqiEarly * 0.6 + (rppgSqi.quality * 100) * 0.4),
+      sqiSkewness: Math.round(rppgSqi.skewness * 100) / 100,
+      sqiSpectralConc: Math.round(rppgSqi.spectralConc * 100),
       snr: null, peakCount: peaks ? peaks.length : 0,
       engine: 'ME-rPPG',
       // ★ v18.0 신규 지표
@@ -15629,6 +15719,61 @@ const App = {
   },
 
   // 보행 고도화 지표 산출 (가변성/리듬일관성/추정속도)
+  // ★ v25.0: Harmonic Ratio (Menz 2003) — 보행 부드러움/대칭성
+  // 걸음 주기의 짝수 조화(대칭)와 홀수 조화(비대칭) 파워 비. 높을수록 부드러운 보행.
+  _computeHarmonicRatio(signal, peaks) {
+    if (!peaks || peaks.length < 4) return null;
+    // 평균 stride 길이(2보)로 한 주기 추출
+    const avgStep = (peaks[peaks.length-1] - peaks[0]) / (peaks.length - 1);
+    const strideLen = Math.round(avgStep * 2);
+    if (strideLen < 8 || strideLen > signal.length) return null;
+    // 중앙 stride 구간
+    const startIdx = Math.max(0, Math.floor(signal.length/2 - strideLen/2));
+    const seg = signal.slice(startIdx, startIdx + strideLen);
+    if (seg.length < 8) return null;
+    // DFT로 조화 성분 계산 (첫 20 harmonics)
+    const N = seg.length;
+    let evenPow = 0, oddPow = 0;
+    for (let h = 1; h <= 20; h++) {
+      let re = 0, im = 0;
+      for (let n = 0; n < N; n++) {
+        const ang = -2 * Math.PI * h * n / N;
+        re += seg[n] * Math.cos(ang);
+        im += seg[n] * Math.sin(ang);
+      }
+      const pow = Math.sqrt(re*re + im*im);
+      if (h % 2 === 0) evenPow += pow; else oddPow += pow;
+    }
+    return oddPow > 1e-9 ? evenPow / oddPow : null;
+  },
+
+  // ★ v25.0: Sample Entropy (Richman 2000) — 시계열 복잡도/규칙성
+  // 보행 stride time의 복잡도. Hausdorff 1997: 건강한 보행은 적정 복잡도 유지.
+  _sampleEntropy(data, m, rFactor) {
+    const N = data.length;
+    if (N < m + 2) return null;
+    const mean = data.reduce((a,b)=>a+b,0)/N;
+    const sd = Math.sqrt(data.reduce((s,v)=>s+(v-mean)**2,0)/N) || 1e-9;
+    const r = rFactor * sd;
+    const count = (mm) => {
+      let cnt = 0;
+      for (let i = 0; i < N - mm; i++) {
+        for (let j = i + 1; j < N - mm; j++) {
+          let match = true;
+          for (let k = 0; k < mm; k++) {
+            if (Math.abs(data[i+k] - data[j+k]) > r) { match = false; break; }
+          }
+          if (match) cnt++;
+        }
+      }
+      return cnt;
+    };
+    const B = count(m);
+    const A = count(m + 1);
+    if (B === 0 || A === 0) return null;
+    return -Math.log(A / B);
+  },
+
   _computeGaitAdvanced(samples, age) {
     const { stepTimes, peaks, sr } = this._detectSteps(samples);
     if (stepTimes.length < 6) {
@@ -15676,6 +15821,15 @@ const App = {
     else if (cvStepTime < 8.0) { cvLevel = 'watch';  cvColor = '#ea580c'; }
     else                       { cvLevel = 'high';   cvColor = '#dc2626'; }
 
+    // ── 6. Harmonic Ratio & Sample Entropy (v25.0, 비선형 보행 동역학) ──
+    // Harmonic Ratio: 보행 부드러움/대칭 (Menz 2003) — 짝수/홀수 조화 파워 비
+    // Sample Entropy: 보행 복잡도 (Hausdorff 1997) — 규칙적일수록 낮음
+    let harmonicRatio = null, sampleEntropy = null;
+    try {
+      harmonicRatio = this._computeHarmonicRatio(filtered, peaks);
+      sampleEntropy = this._sampleEntropy(stepTimes, 2, 0.2);
+    } catch (e) { console.warn('[Gait] 비선형 지표 실패:', e.message); }
+
     return {
       valid: true,
       steps: peaks.length,
@@ -15685,6 +15839,8 @@ const App = {
       cadence,
       asymmetryIdx: Math.round(asymmetryIdx * 10) / 10, // %
       regularity: Math.round(regularity * 100), // %
+      harmonicRatio: harmonicRatio != null ? Math.round(harmonicRatio * 100) / 100 : null,
+      sampleEntropy: sampleEntropy != null ? Math.round(sampleEntropy * 100) / 100 : null,
       cvLevel, cvColor,
       sr: Math.round(sr),
     };
