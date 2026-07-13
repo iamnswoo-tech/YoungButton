@@ -5610,6 +5610,15 @@ const App = {
       // RMSSD가 너무 높으면 감점 (정상 0-80ms)
       if (r.rmssd > 80) s *= 0.5;
       if (r.rmssd > 150) s *= 0.3;
+      // ★ v24.9: Elgendi SQI 통합 — 신호 품질로 가중 (왜도·박동 상관 반영)
+      // 검증된 품질 지표가 낮은 채널은 감점 → 진짜 심박 신호 우선 채택
+      if (typeof r.sqiQuality === 'number') {
+        const qFactor = 0.5 + (r.sqiQuality / 100) * 0.5; // 품질 0%→0.5배, 100%→1.0배
+        s *= qFactor;
+      }
+      if (typeof r.beatValidRatio === 'number' && r.beatValidRatio < 40) {
+        s *= 0.6; // 유효 박동 비율 40% 미만이면 감점 (템플릿 불일치)
+      }
       return s;
     };
 
@@ -5719,6 +5728,13 @@ const App = {
       return { valid: false, reason: `신호 채택률 ${result.cleanRate}%로 신뢰도 낮음` };
     }
 
+    // ★ v24.9: Elgendi SQI 기반 검증 — 신호 품질/박동 일관성
+    // 검증된 왜도 기반 품질이 매우 낮거나, 박동 템플릿 상관이 낮으면 노이즈 의심
+    if (typeof result.sqiQuality === 'number' && result.sqiQuality < 30 &&
+        typeof result.beatValidRatio === 'number' && result.beatValidRatio < 35) {
+      return { valid: false, reason: `신호 품질이 낮습니다 (품질 ${result.sqiQuality}%, 박동 일관성 ${result.beatValidRatio}%). 손가락을 가만히 대고 다시 측정해주세요.` };
+    }
+
     // 신뢰도 레벨
     let confidence = 'high';
     if (result.cleanRate < 75 || result.rmssd > 80) confidence = 'medium';
@@ -5728,6 +5744,79 @@ const App = {
   },
 
   // ★ v15.9: 신호 → HR/HRV 계산 (재사용 가능)
+  // ★ v24.9: PPG 신호 품질 지표 (Elgendi 2016, Bioengineering 3(4):21)
+  // 검증: 8개 SQI 중 Skewness가 최고 성능 (F1 86%, p<10⁻¹⁰)
+  // 깨끗한 PPG는 양의 왜도, 손상 신호는 음의 왜도를 보임
+  _computePpgSQI(signal) {
+    const n = signal.length;
+    if (n < 30) return { skewness: 0, perfusion: 0, snr: 0, quality: 0 };
+    // 평균/표준편차
+    let mean = 0;
+    for (let i = 0; i < n; i++) mean += signal[i];
+    mean /= n;
+    let variance = 0;
+    for (let i = 0; i < n; i++) { const d = signal[i] - mean; variance += d * d; }
+    variance /= n;
+    const std = Math.sqrt(variance) || 1e-9;
+
+    // Skewness SQI (Elgendi 식 3) — 3차 표준화 적률
+    let skew = 0;
+    for (let i = 0; i < n; i++) { const z = (signal[i] - mean) / std; skew += z * z * z; }
+    skew /= n;
+
+    // Perfusion SQI (Elgendi 식 2, Philips/Masimo 골드스탠다드)
+    // PI = (max - min) / |mean| × 100 — 관류 강도
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < n; i++) { if (signal[i] < mn) mn = signal[i]; if (signal[i] > mx) mx = signal[i]; }
+    const perfusion = Math.abs(mean) > 1e-6 ? ((mx - mn) / Math.abs(mean)) * 100 : 0;
+
+    // SNR (신호 분산 / 노이즈 분산의 근사 — 1차 차분을 노이즈로 간주)
+    let noiseVar = 0;
+    for (let i = 1; i < n; i++) { const d = signal[i] - signal[i - 1]; noiseVar += d * d; }
+    noiseVar = (noiseVar / (n - 1)) || 1e-9;
+    const snr = variance / noiseVar;
+
+    // 종합 품질 (0~1) — 왜도가 양수이고 클수록, perfusion·SNR 높을수록 우수
+    // Elgendi 기준: 깨끗한 신호 skew ≈ +0.1, 손상 ≈ -0.2
+    let quality = 0;
+    quality += Math.max(0, Math.min(1, (skew + 0.3) / 0.6)) * 0.6; // 왜도 60% 비중 (최우수 지표)
+    quality += Math.max(0, Math.min(1, snr / 3)) * 0.25;           // SNR 25%
+    quality += Math.max(0, Math.min(1, perfusion / 50)) * 0.15;    // 관류 15%
+    return { skewness: skew, perfusion, snr, quality: Math.max(0, Math.min(1, quality)) };
+  },
+
+  // ★ v24.9: 템플릿 매칭 SQI (Orphanidou/Warren 방식)
+  // 각 박동을 평균 템플릿과 상관 비교 → 손상된 박동 비율 산출
+  _computeBeatTemplateSQI(signal, peaks) {
+    if (!peaks || peaks.length < 5) return { corr: 0, validRatio: 0 };
+    // 각 peak 주변 고정 창(전후 동일)으로 박동 조각 추출 후 z-정규화
+    const beats = [];
+    const half = 15; // peak 전후 샘플
+    for (const pk of peaks) {
+      const p = Math.round(pk);
+      if (p - half < 0 || p + half >= signal.length) continue;
+      const seg = signal.slice(p - half, p + half + 1);
+      let m = 0; for (const v of seg) m += v; m /= seg.length;
+      let sd = 0; for (const v of seg) sd += (v - m) * (v - m); sd = Math.sqrt(sd / seg.length) || 1e-9;
+      beats.push(seg.map(v => (v - m) / sd));
+    }
+    if (beats.length < 4) return { corr: 0, validRatio: 0 };
+    // 평균 템플릿
+    const L = beats[0].length;
+    const tmpl = new Array(L).fill(0);
+    for (const b of beats) for (let i = 0; i < L; i++) tmpl[i] += b[i] / beats.length;
+    // 각 박동과 템플릿의 상관계수
+    let valid = 0, sumCorr = 0;
+    for (const b of beats) {
+      let num = 0, db = 0, dt = 0;
+      for (let i = 0; i < L; i++) { num += b[i] * tmpl[i]; db += b[i] * b[i]; dt += tmpl[i] * tmpl[i]; }
+      const corr = num / (Math.sqrt(db * dt) || 1e-9);
+      sumCorr += corr;
+      if (corr > 0.8) valid++; // Orphanidou 기준: r>0.8 정상 박동
+    }
+    return { corr: sumCorr / beats.length, validRatio: valid / beats.length };
+  },
+
   _fingerAnalyzeFromSignal(samples, key, sourceLabel) {
     const f = this._finger;
 
@@ -5911,6 +6000,16 @@ const App = {
       } catch (e) { this._flog('[v18 Arrhythmia-Finger] 실패: ' + e.message, 'warn'); }
     }
 
+    // ★ v24.9: PPG 신호 품질 지표 계산 (Elgendi 2016 + 템플릿 매칭)
+    let sqi = { skewness: 0, perfusion: 0, snr: 0, quality: 0 };
+    let beatSQI = { corr: 0, validRatio: 0 };
+    try {
+      const sig = samples.map(s => s.r);
+      sqi = this._computePpgSQI(sig);
+      beatSQI = this._computeBeatTemplateSQI(sig, peaks);
+      this._flog(`[SQI] skew=${sqi.skewness.toFixed(2)} PI=${sqi.perfusion.toFixed(0)} SNR=${sqi.snr.toFixed(1)} 박동상관=${beatSQI.corr.toFixed(2)} 품질=${(sqi.quality*100).toFixed(0)}%`);
+    } catch (e) { this._flog('[SQI] 계산 실패: ' + e.message, 'warn'); }
+
     return {
       ok: true,
       // ★ v18.1: 중앙값 기반 정제 HR이 있으면 우선 사용
@@ -5925,6 +6024,13 @@ const App = {
       totalPeaks: peaks.length,
       cleanRate: Math.round(recoveryRate * 100),
       signalQuality,
+      // ★ v24.9: 신호 품질 지표 (Elgendi SQI)
+      sqiSkewness: Math.round(sqi.skewness * 100) / 100,
+      sqiPerfusion: Math.round(sqi.perfusion),
+      sqiSnr: Math.round(sqi.snr * 10) / 10,
+      sqiQuality: Math.round(sqi.quality * 100),
+      beatCorr: Math.round(beatSQI.corr * 100) / 100,
+      beatValidRatio: Math.round(beatSQI.validRatio * 100),
       sampleCount: samples.length,
       duration: f.duration,
       score: this._fingerComputeScore(hr, rmssd, signalQuality),
